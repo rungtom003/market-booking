@@ -50,8 +50,8 @@
 | 1.3 | ↳ Admin Auth & RBAC | ✅ DONE | 2026-10-31 | 2026-10-31 |
 | 1.4 | ↳ Vendor Auth (OTP + LINE) | ✅ DONE | 2026-10-31 | 2026-10-31 |
 | 1.5 | ↳ Settings Module | ✅ DONE | 2026-10-31 | 2026-10-31 |
-| 2 | Member Registration & Approval | ⬜ TODO | | |
-| 2.1 | ↳ Vendor API & File Upload | ⬜ TODO | | |
+| 2 | Member Registration & Approval | 🟨 IN PROGRESS | 2026-10-31 | |
+| 2.1 | ↳ Vendor API & File Upload | ✅ DONE | 2026-10-31 | 2026-10-31 |
 | 2.2 | ↳ Vendor Web: สมัครสมาชิก | ⬜ TODO | | |
 | 2.3 | ↳ Admin Web: Shell + อนุมัติสมาชิก + Settings | ⬜ TODO | | |
 | 3 | Market Setup | ⬜ TODO | | |
@@ -268,26 +268,40 @@
 ---
 
 ## Phase 2 — Member Registration & Approval
-**สถานะ:** ⬜ TODO · **Dependencies:** Phase 1
+**สถานะ:** 🟨 IN PROGRESS · **Dependencies:** Phase 1
 
 ### 2.1 Vendor API & File Upload
-**สถานะ:** ⬜ TODO · **Dependencies:** 1.4, 1.5 · **เริ่ม:** – · **เสร็จ:** –
+**สถานะ:** ✅ DONE · **Dependencies:** 1.4, 1.5 · **เริ่ม:** 2026-10-31 · **เสร็จ:** 2026-10-31
 
 **Tasks**
-- [ ] `StorageModule` (MinIO): presigned PUT/GET, ตรวจ content-type และขนาด ≤ 5MB
-- [ ] `POST /vendors/register` (ใช้ `registrationToken`) — สถานะตาม `registration_mode`, บังคับรูปตาม setting, บังคับ PDPA consent
-- [ ] `GET/PATCH /vendors/me` — REJECTED แก้แล้วกลับเป็น PENDING
-- [ ] `GET /admin/vendors` (filter status, ค้นหาชื่อ/เบอร์, pagination)
-- [ ] `approve`, `reject` (บังคับเหตุผล), `suspend` (ระบุวันสิ้นสุด), `unsuspend`, `bulk-approve`
-- [ ] ทุก action ลง audit log; ใส่ hook ว่าง `NotifyService.vendorStatusChanged()` ไว้ให้ Phase 7
-- [ ] Guard `VendorApprovedGuard` สำหรับ endpoint ที่ต้องอนุมัติแล้ว
+- [x] `StorageModule` (MinIO): presigned PUT/GET, ตรวจ content-type และขนาด ≤ 5MB
+- [x] `POST /vendors/register` (ใช้ `registrationToken`) — สถานะตาม `registration_mode`, บังคับรูปตาม setting, บังคับ PDPA consent
+- [x] `GET/PATCH /vendors/me` — REJECTED แก้แล้วกลับเป็น PENDING
+- [x] `GET /admin/vendors` (filter status, ค้นหาชื่อ/เบอร์, pagination)
+- [x] `approve`, `reject` (บังคับเหตุผล), `suspend` (ระบุวันสิ้นสุด), `unsuspend`, `bulk-approve`
+- [x] ทุก action ลง audit log; ใส่ hook ว่าง `NotifyService.vendorStatusChanged()` ไว้ให้ Phase 7
+- [x] Guard `VendorApprovedGuard` สำหรับ endpoint ที่ต้องอนุมัติแล้ว
 
 **Acceptance Criteria**
 - AUTO → สมัครแล้ว `APPROVED`; MANUAL → `PENDING`
 - เปลี่ยน AUTO ไม่ทำให้รายการ PENDING เดิมถูกอนุมัติ
 - Transition ผิด (เช่น approve คนที่ APPROVED แล้ว) → `INVALID_STATE_TRANSITION`
 
-**Agent Notes:** –
+**Agent Notes:**
+- ✅ AC ข้อ 1: AUTO → สมัครแล้ว `APPROVED` (reviewed_by ว่าง = ระบบอนุมัติ); MANUAL → `PENDING`
+- ✅ AC ข้อ 2: เปลี่ยนเป็น AUTO แล้วผู้ค้า PENDING เดิมยัง PENDING
+- ✅ AC ข้อ 3: approve คนที่ APPROVED แล้ว → 409 `INVALID_STATE_TRANSITION` (`details: { from, action }`); admin สองคนกดพร้อมกัน → สำเร็จ 1, อีกคน 409
+- Test: unit 117, integration 126 (`test/integration/vendor.int-spec.ts` อัปโหลดจริงเข้า MinIO — ลายเซ็นกันไฟล์ใหญ่/คนละชนิด, ไฟล์ปลอมถูกลบ, key ของคนอื่นใช้ไม่ได้); ลองบน dev แล้ว (OTP → อัปโหลด → สมัคร, CORS preflight จาก :5173 ผ่าน) — **มีผู้ค้าทดสอบ "ทดสอบ ระบบ" (0897777001) ค้างใน DB dev**
+- ไฟล์สำคัญ: `apps/api/src/modules/storage/`, `modules/vendor/` (`vendor.service.ts` สมัคร/โปรไฟล์, `vendor-admin.service.ts`, `vendor-status.service.ts` state machine, `vendor-image.service.ts` ตรวจไฟล์, `vendor-approved.guard.ts`), `modules/notify/notify.service.ts` (hook ว่าง), `packages/shared/src/vendor.ts`
+- **วิธีใช้ใน Phase ถัดไป**: endpoint ที่ต้องเป็นผู้ค้าที่อนุมัติแล้ว (จอง, waitlist) ใส่ `@RequireApprovedVendor()` และ module นั้นต้อง `imports: [VendorModule]`; เปลี่ยนสถานะผู้ค้า (No-show Phase 10) ใช้ `VendorStatusService.transition(id, 'suspend', { actorType: 'SYSTEM', data: { suspendedUntil } })`
+- **Phase 2.2 (web)**:
+  - อัปโหลดรูป: บีบอัด/แปลงเป็น JPEG (HEIC ต้องแปลงก่อน) → `POST /vendors/register/uploads` หรือ `/vendors/me/images` ด้วย `size` = ขนาดจริง → `fetch(url, { method: 'PUT', headers, body: file })` → ส่ง `key`
+  - หน้าสถานะใช้ `GET /vendors/me`: `status`, `rejectReason`, `suspendedUntil`
+  - ต้องรู้ว่าบังคับแนบรูปไหม (`require_*_image`) — ยังไม่มี endpoint สาธารณะ: เพิ่ม `GET /vendors/register/requirements` (หรือคืนมากับ registrationToken) ตอนทำหน้าสมัคร
+  - สมัครซ้ำด้วยเบอร์ที่มีบัญชี → `PHONE_ALREADY_REGISTERED` ให้พาไปหน้า OTP
+- **Phase 2.3 (admin)**: badge ใช้ `GET /admin/vendors/counts`; รูปบัตรมากับ `GET /admin/vendors/:id` เป็น presigned URL อายุ 5 นาที (โหลดใหม่เมื่อหมด)
+- **Phase 6**: ตั้ง `MINIO_PUBLIC_URL` เป็น URL ที่ browser เข้าถึงได้ และให้ Nginx ส่ง header CORS/Host ของ MinIO ผ่าน; ลบผู้ค้า (PDPA) ต้องลบไฟล์ใต้ `vendors/<id>/` และ `vendors/reg-…` ด้วย (ยังไม่ได้ทำ — Phase 11)
+- ไฟล์ที่อัปโหลดแล้วแต่ไม่ได้ใช้ (ยกเลิกสมัคร/เปลี่ยนรูป) ยังค้างใน bucket — ควรเพิ่ม lifecycle rule ลบ `vendors/reg-*` ที่เก่ากว่า 1 วัน (Phase 6)
 
 ### 2.2 Vendor Web: สมัครสมาชิก
 **สถานะ:** ⬜ TODO · **Dependencies:** 2.1 · **เริ่ม:** – · **เสร็จ:** –
@@ -646,3 +660,4 @@
 | 2026-10-31 | 1.4 | ✅ DONE | OTP (SMS mock, HMAC ใน Redis, cooldown 60 วินาที/5 ต่อชั่วโมง/ผิดได้ 5 ครั้ง), LINE login ผ่าน verifier ที่ mock ได้, registrationToken, ผูก LINE ภายหลัง — unit 94 / integration 77 ผ่าน — ถัดไป: 1.5 Settings Module |
 | 2026-10-31 | 1.5 | ✅ DONE | schema ทุก key ใน shared, `SettingsService.get<K>()`, cache Redis แบบ version, `PUT /admin/settings` + audit เฉพาะ key ที่เปลี่ยน — unit 109 / integration 89 ผ่าน |
 | 2026-10-31 | 1 | ✅ DONE | Backend Foundation ครบทุก sub-phase (1.1–1.5) — ถัดไป: 2.1 Vendor API & File Upload |
+| 2026-10-31 | 2.1 | ✅ DONE | StorageModule (MinIO presigned PUT/GET + ตรวจไฟล์), สมัครด้วย registrationToken ตาม registration_mode, `/vendors/me`, admin list/counts/detail/approve/reject/suspend/unsuspend/bulk-approve + audit, VendorApprovedGuard, CI เพิ่ม MinIO — unit 117 / integration 126 ผ่าน — ถัดไป: 2.2 Vendor Web |

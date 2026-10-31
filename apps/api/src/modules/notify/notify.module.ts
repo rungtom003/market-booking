@@ -1,4 +1,5 @@
 import { Global, Module } from '@nestjs/common';
+import { NotifyService } from './notify.service';
 import { MockSmsProvider } from './sms/mock-sms.provider';
 import { SMS_PROVIDER } from './sms/sms.provider';
 
@@ -8,7 +9,11 @@ import { SMS_PROVIDER } from './sms/sms.provider';
  */
 @Global()
 @Module({
-  providers: [MockSmsProvider, { provide: SMS_PROVIDER, useExisting: MockSmsProvider }],
-  exports: [SMS_PROVIDER],
+  providers: [
+    NotifyService,
+    MockSmsProvider,
+    { provide: SMS_PROVIDER, useExisting: MockSmsProvider },
+  ],
+  exports: [NotifyService, SMS_PROVIDER],
 })
 export class NotifyModule {}

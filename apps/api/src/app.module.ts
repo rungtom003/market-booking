@@ -16,6 +16,8 @@ import { HealthModule } from './modules/health/health.module';
 import { MarketModule } from './modules/market/market.module';
 import { NotifyModule } from './modules/notify/notify.module';
 import { SettingsModule } from './modules/settings/settings.module';
+import { StorageModule } from './modules/storage/storage.module';
+import { VendorModule } from './modules/vendor/vendor.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { REDIS, RedisModule } from './redis/redis.module';
 
@@ -37,10 +39,12 @@ import { REDIS, RedisModule } from './redis/redis.module';
     AuditModule,
     MarketModule,
     NotifyModule,
+    StorageModule,
     AuthModule,
     HealthModule,
     AdminUserModule,
     SettingsModule,
+    VendorModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

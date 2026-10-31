@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ErrorCode } from '@market-booking/shared';
@@ -10,6 +11,8 @@ import { JWT_AUDIENCE, JWT_ISSUER, REGISTRATION_TOKEN_TTL_SECONDS } from './auth
  * แทนการเชื่อข้อมูลจาก client
  */
 export interface RegistrationClaims {
+  /** id ของการสมัครครั้งนี้ — ไฟล์ที่อัปโหลดก่อนสมัครอยู่ใต้ prefix นี้ (คนอื่นอ้างไฟล์ไม่ได้) */
+  registrationId: string;
   marketId: string;
   /** มีค่า = เบอร์นี้ยืนยัน OTP แล้ว */
   verifiedPhone?: string;
@@ -19,6 +22,7 @@ export interface RegistrationClaims {
 
 interface RegistrationPayload {
   typ: 'REGISTRATION';
+  rid: string;
   mkt: string;
   phn?: string;
   lid?: string;
@@ -32,9 +36,11 @@ export class RegistrationTokenService {
     private readonly config: AppConfigService,
   ) {}
 
-  sign(claims: RegistrationClaims): string {
+  /** ไม่ส่ง registrationId = เริ่มการสมัครใหม่ */
+  sign(claims: Omit<RegistrationClaims, 'registrationId'> & { registrationId?: string }): string {
     const payload: RegistrationPayload = {
       typ: 'REGISTRATION',
+      rid: claims.registrationId ?? randomUUID(),
       mkt: claims.marketId,
       phn: claims.verifiedPhone,
       lid: claims.lineUserId,
@@ -58,8 +64,14 @@ export class RegistrationTokenService {
         audience: JWT_AUDIENCE.REGISTRATION,
         algorithms: ['HS256'],
       });
-      if (p.typ !== 'REGISTRATION') throw new Error('wrong type');
-      return { marketId: p.mkt, verifiedPhone: p.phn, lineUserId: p.lid, lineDisplayName: p.lnm };
+      if (p.typ !== 'REGISTRATION' || !p.rid) throw new Error('wrong type');
+      return {
+        registrationId: p.rid,
+        marketId: p.mkt,
+        verifiedPhone: p.phn,
+        lineUserId: p.lid,
+        lineDisplayName: p.lnm,
+      };
     } catch {
       throw new AppException(
         ErrorCode.UNAUTHORIZED,

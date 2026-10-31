@@ -21,7 +21,23 @@ describe('RegistrationTokenService', () => {
       lineDisplayName: 'A',
     };
 
-    expect(registration.verify(registration.sign(claims))).toEqual(claims);
+    expect(registration.verify(registration.sign(claims))).toEqual({
+      ...claims,
+      registrationId: expect.stringMatching(/^[0-9a-f-]{36}$/),
+    });
+  });
+
+  it('keeps the registration id when re-signed (LINE → OTP)', () => {
+    const first = registration.verify(registration.sign({ marketId: 'm1', lineUserId: 'U1' }));
+    const second = registration.verify(
+      registration.sign({
+        registrationId: first.registrationId,
+        marketId: 'm1',
+        verifiedPhone: '0812345678',
+      }),
+    );
+
+    expect(second.registrationId).toBe(first.registrationId);
   });
 
   it('cannot be used as an access token (different audience)', () => {

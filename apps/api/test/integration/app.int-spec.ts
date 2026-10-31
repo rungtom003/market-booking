@@ -3,6 +3,7 @@ import { Test } from '@nestjs/testing';
 import { ErrorCode, paginationQuerySchema } from '@market-booking/shared';
 import Redis from 'ioredis';
 import { createZodDto } from 'nestjs-zod';
+import { Throttle } from '@nestjs/throttler';
 import request from 'supertest';
 import { z } from 'zod';
 import { AppModule } from '../../src/app.module';
@@ -27,6 +28,13 @@ class ProbeController {
   @Post('echo')
   echo(@Body() body: EchoDto) {
     return body;
+  }
+
+  /** limit ต่ำเฉพาะ route นี้ — ทดสอบ rate limit โดยไม่ต้องยิงเป็นร้อยครั้ง */
+  @Throttle({ default: { limit: 3, ttl: 60_000 } })
+  @Get('limited')
+  limited() {
+    return { ok: true };
   }
 
   @Get('page')
@@ -149,11 +157,11 @@ describe('HTTP pipeline (integration)', () => {
     });
   });
 
-  describe('rate limit (RATE_LIMIT_PER_MINUTE=5 in tests)', () => {
+  describe('rate limit (per-route limit of 3 on /probe/limited)', () => {
     it('returns 429 RATE_LIMITED after the limit is exceeded', async () => {
-      for (let i = 0; i < 5; i++) await http().get('/api/v1/probe').expect(200);
+      for (let i = 0; i < 3; i++) await http().get('/api/v1/probe/limited').expect(200);
 
-      const res = await http().get('/api/v1/probe').expect(429);
+      const res = await http().get('/api/v1/probe/limited').expect(429);
       expect(res.body.error.code).toBe(ErrorCode.RATE_LIMITED);
     });
 

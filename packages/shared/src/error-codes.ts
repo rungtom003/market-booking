@@ -18,6 +18,10 @@ export const ErrorCode = {
   USERNAME_TAKEN: 'USERNAME_TAKEN',
   OTP_EXPIRED: 'OTP_EXPIRED',
   LINE_ALREADY_LINKED: 'LINE_ALREADY_LINKED',
+  /** เบอร์นี้มีบัญชีแล้ว — ให้ยืนยัน OTP เพื่อ login แทนการสมัครใหม่ */
+  PHONE_ALREADY_REGISTERED: 'PHONE_ALREADY_REGISTERED',
+  /** ไฟล์ที่อ้างถึงไม่มี / ไม่ใช่ของผู้ใช้นี้ / ชนิดหรือขนาดไม่ถูกต้อง */
+  UPLOAD_INVALID: 'UPLOAD_INVALID',
 
   // ธุรกิจ
   ROUND_NOT_OPEN: 'ROUND_NOT_OPEN',

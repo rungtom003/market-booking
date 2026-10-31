@@ -23,6 +23,12 @@ export const envSchema = z.object({
   MINIO_ACCESS_KEY: z.string().min(1),
   MINIO_SECRET_KEY: z.string().min(1),
   MINIO_BUCKET: z.string().min(1),
+  MINIO_USE_SSL: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
+  /** URL ของ MinIO ที่ browser เข้าถึง (ใช้ลงลายเซ็น presigned URL) — ไม่ตั้ง = ใช้ endpoint ภายใน */
+  MINIO_PUBLIC_URL: z.url().optional(),
 
   // ใช้ใน Phase 1.4 / 7 — ยังไม่บังคับ
   LINE_LOGIN_CHANNEL_ID: z.string().optional(),

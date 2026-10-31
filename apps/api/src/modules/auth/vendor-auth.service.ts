@@ -64,6 +64,7 @@ export class VendorAuthService {
 
     if (!vendor) {
       return this.registrationRequired({
+        registrationId: fromLine?.registrationId,
         marketId,
         verifiedPhone: input.phone,
         lineUserId: fromLine?.lineUserId,
@@ -162,7 +163,9 @@ export class VendorAuthService {
     };
   }
 
-  private registrationRequired(claims: RegistrationClaims): VendorAuthOutcome {
+  private registrationRequired(
+    claims: Omit<RegistrationClaims, 'registrationId'> & { registrationId?: string },
+  ): VendorAuthOutcome {
     return {
       status: 'REGISTRATION_REQUIRED',
       registrationToken: this.registrationTokens.sign(claims),

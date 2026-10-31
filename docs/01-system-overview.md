@@ -413,6 +413,8 @@ suspend │ unsuspend / หมดเวลาระงับ                  �
 SUSPENDED
 ```
 - จองได้เฉพาะ `APPROVED` และ `suspended_until` ว่างหรือผ่านไปแล้ว
+- ระงับ = `status = SUSPENDED` + `suspended_until` (วันสิ้นสุด) — ทั้ง admin ระงับและระบบ No-show (Phase 10) ใช้แบบเดียวกัน; เมื่อเลยวันสิ้นสุด ระบบเปลี่ยนกลับเป็น `APPROVED` เองตอนอ่านสถานะครั้งถัดไป (guard / หน้าโปรไฟล์ / รายการ admin) พร้อม audit `SYSTEM`
+- ทุกการเปลี่ยนสถานะผ่าน `VendorStatusService.transition()` (`UPDATE … WHERE status IN (…)`) — transition ที่ไม่อยู่ในแผนภาพ → `INVALID_STATE_TRANSITION`
 
 ### 8.2 Booking
 ```
@@ -578,9 +580,10 @@ Vendor กด "ยืนยันการจอง" → POST /bookings/:id/conf
 ### Vendor (ผู้ค้า)
 | Method | Path | หมายเหตุ |
 |---|---|---|
-| POST | `/vendors/register` | |
+| POST | `/vendors/register/uploads` | public — ขอ URL อัปโหลดรูประหว่างสมัคร (ใช้ `registrationToken`) |
+| POST | `/vendors/register` | public — ใช้ `registrationToken` จาก OTP/LINE |
 | GET / PATCH | `/vendors/me` | แก้ไขข้อมูล (REJECTED → ส่งใหม่เป็น PENDING) |
-| POST | `/vendors/me/images` | presigned upload |
+| POST | `/vendors/me/images` | presigned upload — ได้ `{ key, url, headers }` แล้ว PUT ไฟล์ตรงไป MinIO แล้วส่ง `key` ไปกับ `PATCH /vendors/me` |
 | GET | `/rounds/current` | รอบที่กำลังจะเปิด/เปิดอยู่ |
 | GET | `/market-days/:id/stalls` | snapshot ผัง + สถานะ |
 | POST | `/bookings/hold` | `{ stallId, marketDayId }` |
@@ -597,7 +600,8 @@ Vendor กด "ยืนยันการจอง" → POST /bookings/:id/conf
 |---|---|
 | GET | `/admin/vendors?status=&q=&page=` |
 | POST | `/admin/vendors/:id/approve` · `/reject` · `/suspend` · `/unsuspend` |
-| POST | `/admin/vendors/bulk-approve` |
+| POST | `/admin/vendors/bulk-approve` (`{ ids }` หรือ `{ allPending: true }`) |
+| GET | `/admin/vendors/counts` (จำนวนต่อสถานะ — badge) |
 | GET / PUT | `/admin/settings` |
 | CRUD | `/admin/zones`, `/admin/stalls`, `/admin/product-categories` |
 | PUT | `/admin/stalls/layout` (บันทึกตำแหน่งจาก Map Editor ทั้งชุด) |
@@ -620,15 +624,17 @@ Code ทั่วไป (เพิ่มใน Phase 1.2): `VALIDATION_ERROR`, `
 
 Code ของ Auth (เพิ่มใน Phase 1.3–1.4): `INVALID_CREDENTIALS`, `ACCOUNT_LOCKED` (`details.retryAfterSeconds`), `USERNAME_TAKEN`, `OTP_EXPIRED` (หมดอายุ/ใช้แล้ว/ถูกยกเลิก/ยังไม่ได้ขอ), `LINE_ALREADY_LINKED`, `SERVICE_UNAVAILABLE` (SMS/LINE ใช้ไม่ได้หรือยังไม่ตั้งค่า)
 
+Code ของผู้ค้า (เพิ่มใน Phase 2.1): `PHONE_ALREADY_REGISTERED` (สมัครซ้ำ → ให้ยืนยัน OTP เพื่อ login), `UPLOAD_INVALID` (`details.field`)
+
 `OTP_INVALID` มี `details.attemptsLeft`; ขอ OTP ถี่เกิน → `RATE_LIMITED` พร้อม `details.retryAfterSeconds`
 
 | HTTP | Code |
 |---|---|
-| 400 | `VALIDATION_ERROR` (`details` = `[{ path, message, code }]` รายฟิลด์), `BAD_REQUEST`, `OTP_INVALID`, `OTP_EXPIRED` |
+| 400 | `VALIDATION_ERROR` (`details` = `[{ path, message, code }]` รายฟิลด์), `BAD_REQUEST`, `OTP_INVALID`, `OTP_EXPIRED`, `UPLOAD_INVALID` |
 | 401 | `UNAUTHORIZED` (token หาย/ผิด/หมดอายุ → client ลอง refresh), `INVALID_CREDENTIALS` |
 | 403 | `FORBIDDEN`, `VENDOR_NOT_APPROVED`, `VENDOR_SUSPENDED` |
 | 404 | `NOT_FOUND` |
-| 409 | `CONFLICT`, `USERNAME_TAKEN`, `LINE_ALREADY_LINKED`, `ROUND_NOT_OPEN`, `STALL_TAKEN`, `STALL_UNAVAILABLE`, `QUOTA_EXCEEDED`, `HOLD_EXPIRED`, `INVALID_STATE_TRANSITION`, `CANCEL_WINDOW_PASSED` |
+| 409 | `CONFLICT`, `USERNAME_TAKEN`, `LINE_ALREADY_LINKED`, `PHONE_ALREADY_REGISTERED`, `ROUND_NOT_OPEN`, `STALL_TAKEN`, `STALL_UNAVAILABLE`, `QUOTA_EXCEEDED`, `HOLD_EXPIRED`, `INVALID_STATE_TRANSITION`, `CANCEL_WINDOW_PASSED` |
 | 422 | `CATEGORY_NOT_ALLOWED` |
 | 429 | `RATE_LIMITED`, `ACCOUNT_LOCKED` |
 | 500 | `INTERNAL_ERROR` (ไม่ส่งข้อความจริงออกไป — ดูใน log ด้วย `x-request-id`) |
@@ -718,6 +724,9 @@ MINIO_PORT=9000
 MINIO_ACCESS_KEY=
 MINIO_SECRET_KEY=
 MINIO_BUCKET=market-booking
+MINIO_USE_SSL=false
+# MINIO_PUBLIC_URL=        (URL ที่ browser ใช้ — presigned URL ผูกกับ host นี้)
+# TEST_MINIO_BUCKET=market-booking-test
 LINE_LOGIN_CHANNEL_ID=
 LINE_LIFF_ID=
 LINE_MESSAGING_ACCESS_TOKEN=
@@ -774,6 +783,13 @@ SEED_ADMIN_PASSWORD=
 | 2026-10-31 | Cache settings ใน Redis แบบมี version (`settings:v:<market>` + `settings:<market>:<v>`, TTL 5 นาที) — แก้ค่าแล้ว `INCR` version หลัง commit | การ `DEL` cache อย่างเดียวมี race: request ที่อ่าน DB ก่อน commit เขียนค่าเก่ากลับหลังลบแล้วค้าง; Redis ล่ม → อ่าน DB ตรง |
 | 2026-10-31 | กำหนดช่วงค่าที่รับของแต่ละ setting (§12) และ `PUT /admin/settings` เป็นแบบ partial | กันค่าที่ทำให้ระบบเพี้ยน (เช่น hold 0 นาที); ส่งเฉพาะที่แก้ ลดการเขียนทับค่าที่ admin อีกคนเพิ่งแก้ |
 | 2026-10-31 | ค่าใน DB ที่ไม่ผ่าน schema (แก้มือ/schema เปลี่ยน) ใช้ค่า default แทน + log เตือน | ระบบไม่ล่มเพราะข้อมูล settings เสียแถวเดียว |
+| 2026-10-31 | เชื่อม MinIO ด้วย AWS SDK v3 (`@aws-sdk/client-s3` + presigner, path-style) | S3 API มาตรฐาน — ย้ายไป S3/R2 ได้โดยไม่แก้โค้ด; ปิด checksum อัตโนมัติ (`WHEN_REQUIRED`) เพราะ browser ส่ง CRC32 ไม่ได้ |
+| 2026-10-31 | อัปโหลด = presigned **PUT** ที่ลงลายเซ็น Content-Type + Content-Length และตรวจซ้ำตอนใช้ key (HEAD ≤ 5 MB + magic bytes ของ JPEG/PNG/WebP, ไม่ผ่านลบทิ้ง) | ไฟล์ใหญ่/คนละชนิดกับที่ขอไว้ PUT ไม่ผ่านตั้งแต่ MinIO; ไฟล์ปลอม Content-Type ถูกจับตอนสมัคร |
+| 2026-10-31 | key ของไฟล์ผูกเจ้าของ: `vendors/reg-<registrationId>/…` (ก่อนสมัคร) / `vendors/<vendorId>/…`; เพิ่ม `registrationId` ใน registrationToken; เพิ่ม endpoint `/vendors/register/uploads` | ผู้สมัครอัปโหลดรูปได้ก่อนมีบัญชี และอ้าง key ของคนอื่นเป็นรูปบัตรตัวเองไม่ได้ |
+| 2026-10-31 | ระงับ = `SUSPENDED` + `suspended_until`, หมดเวลาแล้วปลดเองตอนอ่าน (lazy) แทน cron | ไม่ต้องมี worker เพิ่มตอนนี้; สถานะถูกต้องทุกครั้งที่ระบบตัดสิน (guard อ่าน DB ทุก request) |
+| 2026-10-31 | ผู้ค้า APPROVED แก้โปรไฟล์ได้โดยไม่ต้องตรวจใหม่; เปลี่ยนเบอร์ยังไม่รองรับ (ต้องผ่าน OTP) | §8.1 กำหนดให้ส่งตรวจใหม่เฉพาะ REJECTED; เบอร์เป็นตัวระบุตัวตนสำหรับ login |
+| 2026-10-31 | ไม่มี CORS config ของ MinIO แยก — MinIO ตอบ preflight ให้ทุก origin โดย default (ตรวจแล้วกับ origin ของ web) | presigned URL เป็นตัวคุมสิทธิ์อยู่แล้ว; production ที่วาง MinIO หลัง Nginx ต้องผ่าน header เหล่านี้ด้วย (Phase 6) |
+| 2026-10-31 | CI เปิด MinIO ด้วย `docker run` (ไม่ใช่ `services`) | services ของ GitHub Actions กำหนด command `server /data` ไม่ได้ |
 
 ### Open Questions
 - [ ] ใช้กับตลาดเดียวหรือหลายตลาด (ตอนนี้ schema รองรับแล้ว แต่ UI ยังเป็นตลาดเดียว)
