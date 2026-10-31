@@ -563,6 +563,7 @@ Vendor กด "ยืนยันการจอง" → POST /bookings/:id/conf
 | POST | `/auth/otp/request` | public |
 | POST | `/auth/otp/verify` | public |
 | POST | `/auth/line` | public (ส่ง LIFF id token) |
+| POST | `/auth/line/link` | vendor (ผูก LINE กับบัญชีที่ login อยู่) |
 | POST | `/auth/admin/login` | public |
 | POST | `/auth/refresh` | cookie |
 | POST | `/auth/logout` | any |
@@ -570,6 +571,9 @@ Vendor กด "ยืนยันการจอง" → POST /bookings/:id/conf
 - `/auth/refresh` และ `/auth/logout` รับ body `{ actorType: 'ADMIN' | 'VENDOR' }` เพื่อเลือก cookie: `mb_admin_rt` / `mb_vendor_rt` (httpOnly, SameSite=Strict, Path=`/api/v1/auth`, Secure บน production)
 - Access token ส่งใน header `Authorization: Bearer …`; ทุก endpoint ต้อง login ยกเว้นที่ระบุว่า public
 - Refresh token เป็นค่าสุ่ม (ไม่ใช่ JWT) เก็บ HMAC ใน Redis; ใช้ได้ครั้งเดียว — ใช้ token ที่ rotate แล้วซ้ำ = revoke ทั้ง session family
+- `/auth/otp/verify` และ `/auth/line` ตอบ `{ status: 'LOGGED_IN', accessToken, vendor }` (+ cookie `mb_vendor_rt`) หรือ `{ status: 'REGISTRATION_REQUIRED', registrationToken, prefill }` — `registrationToken` (JWT อายุ 30 นาที, audience แยกจาก access token) เก็บสิ่งที่ยืนยันแล้ว: เบอร์ที่ผ่าน OTP และ/หรือ LINE user id
+- ส่ง `registrationToken` ของขั้นตอน LINE มากับ `/auth/otp/verify` ได้ — ถ้าเบอร์นั้นมีบัญชีอยู่แล้วจะผูก LINE เข้าบัญชีเดิมแล้ว login
+- เบอร์โทรเก็บรูปแบบเดียว `0XXXXXXXXX` (รับ `+66`, ขีด, ช่องว่าง) — schema `thaiMobilePhoneSchema` ใน `packages/shared`
 
 ### Vendor (ผู้ค้า)
 | Method | Path | หมายเหตุ |
@@ -614,18 +618,21 @@ Vendor กด "ยืนยันการจอง" → POST /bookings/:id/conf
 
 Code ทั่วไป (เพิ่มใน Phase 1.2): `VALIDATION_ERROR`, `BAD_REQUEST`, `UNAUTHORIZED`, `FORBIDDEN`, `NOT_FOUND`, `CONFLICT`, `INTERNAL_ERROR`
 
-Code ของ Auth (เพิ่มใน Phase 1.3): `INVALID_CREDENTIALS`, `ACCOUNT_LOCKED` (`details.retryAfterSeconds`), `USERNAME_TAKEN`
+Code ของ Auth (เพิ่มใน Phase 1.3–1.4): `INVALID_CREDENTIALS`, `ACCOUNT_LOCKED` (`details.retryAfterSeconds`), `USERNAME_TAKEN`, `OTP_EXPIRED` (หมดอายุ/ใช้แล้ว/ถูกยกเลิก/ยังไม่ได้ขอ), `LINE_ALREADY_LINKED`, `SERVICE_UNAVAILABLE` (SMS/LINE ใช้ไม่ได้หรือยังไม่ตั้งค่า)
+
+`OTP_INVALID` มี `details.attemptsLeft`; ขอ OTP ถี่เกิน → `RATE_LIMITED` พร้อม `details.retryAfterSeconds`
 
 | HTTP | Code |
 |---|---|
-| 400 | `VALIDATION_ERROR` (`details` = `[{ path, message, code }]` รายฟิลด์), `BAD_REQUEST`, `OTP_INVALID` |
+| 400 | `VALIDATION_ERROR` (`details` = `[{ path, message, code }]` รายฟิลด์), `BAD_REQUEST`, `OTP_INVALID`, `OTP_EXPIRED` |
 | 401 | `UNAUTHORIZED` (token หาย/ผิด/หมดอายุ → client ลอง refresh), `INVALID_CREDENTIALS` |
 | 403 | `FORBIDDEN`, `VENDOR_NOT_APPROVED`, `VENDOR_SUSPENDED` |
 | 404 | `NOT_FOUND` |
-| 409 | `CONFLICT`, `USERNAME_TAKEN`, `ROUND_NOT_OPEN`, `STALL_TAKEN`, `STALL_UNAVAILABLE`, `QUOTA_EXCEEDED`, `HOLD_EXPIRED`, `INVALID_STATE_TRANSITION`, `CANCEL_WINDOW_PASSED` |
+| 409 | `CONFLICT`, `USERNAME_TAKEN`, `LINE_ALREADY_LINKED`, `ROUND_NOT_OPEN`, `STALL_TAKEN`, `STALL_UNAVAILABLE`, `QUOTA_EXCEEDED`, `HOLD_EXPIRED`, `INVALID_STATE_TRANSITION`, `CANCEL_WINDOW_PASSED` |
 | 422 | `CATEGORY_NOT_ALLOWED` |
 | 429 | `RATE_LIMITED`, `ACCOUNT_LOCKED` |
 | 500 | `INTERNAL_ERROR` (ไม่ส่งข้อความจริงออกไป — ดูใน log ด้วย `x-request-id`) |
+| 503 | `SERVICE_UNAVAILABLE` |
 
 - รายการ code อยู่ที่ `packages/shared/src/error-codes.ts`, ตาราง status ที่ `apps/api/src/common/exceptions/error-status.ts`
 - `message` เป็นภาษาอังกฤษสำหรับ developer — frontend แสดงข้อความไทยจาก `code`
@@ -755,6 +762,11 @@ SEED_ADMIN_PASSWORD=
 | 2026-10-31 | ล็อค login ต่อ username (5 ครั้ง/15 นาที → ล็อค 15 นาที) + rate limit login 10 ครั้ง/นาที/IP | ตาม §1.3; ข้อแลกเปลี่ยน: คนอื่นทำให้บัญชีถูกล็อคได้ (ยอมรับ — เป็นบัญชี admin จำนวนน้อย) |
 | 2026-10-31 | ปิดบัญชี/เปลี่ยน role มีผลทันทีกับ refresh token แต่ access token เดิมใช้ได้จนหมดอายุ (≤ 15 นาที) | ไม่ต้องอ่าน DB ทุก request; ถ้าต้องการตัดทันทีค่อยเพิ่ม denylist ใน Redis |
 | 2026-10-31 | เพิ่ม `GET /admin/settings` (อ่านอย่างเดียว) ตั้งแต่ Phase 1.3 | ใช้ตรวจ AC "STAFF → 403" กับ route จริง — Phase 1.5 เพิ่ม PUT, cache, validate |
+| 2026-10-31 | OTP เก็บ HMAC (ผูกกับเบอร์) ใน Redis, นับครั้งกรอกด้วย `INCR` ก่อนเทียบ, cooldown ด้วย `SET NX` | ยิงเดาพร้อมกันก็ได้ไม่เกิน 5 ครั้ง; Redis รั่วก็ไม่เห็นรหัส; ส่ง SMS ไม่ออกจะคืนโควต้าให้ |
+| 2026-10-31 | เพิ่ม code `OTP_EXPIRED` แยกจาก `OTP_INVALID` | หน้าจอบอกผู้ใช้ได้ถูก: "รหัสผิด เหลือ N ครั้ง" กับ "รหัสหมดอายุ ขอใหม่" |
+| 2026-10-31 | ผลยืนยันตัวตนของผู้ค้าใหม่ส่งต่อเป็น `registrationToken` (JWT audience `registration`) | `/vendors/register` เชื่อเบอร์/LINE จาก token ที่ server ออกเอง ไม่ใช่ค่าที่ client ส่ง |
+| 2026-10-31 | LINE ตรวจผ่าน interface `LineIdTokenVerifier` (ตัวจริงเรียก `api.line.me/oauth2/v2.1/verify`); ไม่ได้ตั้ง `LINE_LOGIN_CHANNEL_ID` → 503 | test ใช้ mock ได้ (AC 1.4); ไม่มีโหมด "mock อัตโนมัติ" ที่อาจหลุดไป production |
+| 2026-10-31 | `MockSmsProvider` แสดง OTP ใน log เฉพาะ `NODE_ENV=development`; บน production โยน `SERVICE_UNAVAILABLE` | ไม่มีทาง log OTP บน production; บังคับเลือกผู้ให้บริการ SMS จริงก่อนเปิดใช้ OTP |
 
 ### Open Questions
 - [ ] ใช้กับตลาดเดียวหรือหลายตลาด (ตอนนี้ schema รองรับแล้ว แต่ UI ยังเป็นตลาดเดียว)

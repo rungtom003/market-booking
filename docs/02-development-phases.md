@@ -48,7 +48,7 @@
 | 1.1 | ↳ Database Schema & Seed | ✅ DONE | 2026-10-31 | 2026-10-31 |
 | 1.2 | ↳ Core Infrastructure (config, error, logging, audit) | ✅ DONE | 2026-10-31 | 2026-10-31 |
 | 1.3 | ↳ Admin Auth & RBAC | ✅ DONE | 2026-10-31 | 2026-10-31 |
-| 1.4 | ↳ Vendor Auth (OTP + LINE) | ⬜ TODO | | |
+| 1.4 | ↳ Vendor Auth (OTP + LINE) | ✅ DONE | 2026-10-31 | 2026-10-31 |
 | 1.5 | ↳ Settings Module | ⬜ TODO | | |
 | 2 | Member Registration & Approval | ⬜ TODO | | |
 | 2.1 | ↳ Vendor API & File Upload | ⬜ TODO | | |
@@ -217,20 +217,31 @@
 - request context มี `actor` แล้ว (ตั้งโดย JwtAuthGuard) และ log ของ pino-http มี field `actor` (`ADMIN:<id>`)
 
 ### 1.4 Vendor Auth (OTP + LINE)
-**สถานะ:** ⬜ TODO · **Dependencies:** 1.3 · **เริ่ม:** – · **เสร็จ:** –
+**สถานะ:** ✅ DONE · **Dependencies:** 1.3 · **เริ่ม:** 2026-10-31 · **เสร็จ:** 2026-10-31
 
 **Tasks**
-- [ ] `SmsProvider` interface + `MockSmsProvider` (log OTP ใน dev เท่านั้น)
-- [ ] `/auth/otp/request`, `/auth/otp/verify` — OTP hash ใน Redis TTL 5 นาที, จำกัดตาม §10.4, ผิดเกิน 5 ครั้ง OTP ถูกยกเลิก
-- [ ] `/auth/line` — verify LIFF id token กับ LINE API, ผูก `line_user_id`
-- [ ] หลัง verify: ถ้ามี vendor แล้ว → login, ถ้ายังไม่มี → คืน `registrationToken` (อายุสั้น) สำหรับไปหน้าสมัคร
-- [ ] ผูก LINE กับบัญชีที่สมัครด้วยเบอร์ภายหลังได้
+- [x] `SmsProvider` interface + `MockSmsProvider` (log OTP ใน dev เท่านั้น)
+- [x] `/auth/otp/request`, `/auth/otp/verify` — OTP hash ใน Redis TTL 5 นาที, จำกัดตาม §10.4, ผิดเกิน 5 ครั้ง OTP ถูกยกเลิก
+- [x] `/auth/line` — verify LIFF id token กับ LINE API, ผูก `line_user_id`
+- [x] หลัง verify: ถ้ามี vendor แล้ว → login, ถ้ายังไม่มี → คืน `registrationToken` (อายุสั้น) สำหรับไปหน้าสมัคร
+- [x] ผูก LINE กับบัญชีที่สมัครด้วยเบอร์ภายหลังได้
 
 **Acceptance Criteria**
 - Test: OTP หมดอายุ, OTP ผิด, ขอถี่เกิน → error code ถูกต้อง
 - LINE verify ใช้ mock ใน test ได้
 
-**Agent Notes:** –
+**Agent Notes:**
+- ✅ AC ข้อ 1: `test/integration/vendor-auth.int-spec.ts` — OTP หมดอายุ → `OTP_EXPIRED`, ผิด → `OTP_INVALID` (`attemptsLeft`), ผิดครบ 5 → รหัสถูกยกเลิก, ใช้ซ้ำ → `OTP_EXPIRED`, ขอซ้ำใน 60 วินาที / เกิน 5 ครั้งต่อชั่วโมง → `RATE_LIMITED` (`retryAfterSeconds`)
+- ✅ AC ข้อ 2: LINE ตรวจผ่าน `LINE_ID_TOKEN_VERIFIER` — integration test override เป็น mock; ตัวจริง (`HttpLineIdTokenVerifier`) มี unit test ด้วย fetch จำลอง (token ผิด, คนละ channel, หมดอายุ, LINE ล่ม, ยังไม่ตั้งค่า)
+- Test: unit 94, integration 77 ผ่าน; ลองบน dev server แล้ว — OTP ขึ้นใน log ของ api (`[mock SMS → 08…]`)
+- ไฟล์สำคัญ: `apps/api/src/modules/auth/` (`otp.service.ts`, `vendor-auth.service.ts`, `vendor-auth.controller.ts`, `registration-token.service.ts`, `line/line-id-token.verifier.ts`), `modules/notify/` (`SMS_PROVIDER`, `MockSmsProvider`), `packages/shared/src/vendor-auth.ts` (`thaiMobilePhoneSchema`, schema ของ OTP/LINE, `VendorAuthResult`)
+- **Phase 2.1** (`POST /vendors/register`): รับ `registrationToken` → `RegistrationTokenService.verify()` ได้ `{ marketId, verifiedPhone?, lineUserId?, lineDisplayName? }`
+  - มาทาง OTP: ใช้ `verifiedPhone` เป็นเบอร์ (ห้ามรับเบอร์จาก body) และตั้ง `phone_verified_at`
+  - มาทาง LINE อย่างเดียว: เบอร์มาจากฟอร์มและ**ยังไม่ได้ยืนยัน** (`phone_verified_at` = null) — ถ้าเบอร์ซ้ำกับบัญชีเดิมต้องตอบให้ผู้ใช้ไปยืนยัน OTP (ซึ่งจะผูก LINE ให้อัตโนมัติ) แทนการสร้างบัญชีใหม่
+  - สมัครเสร็จ → `AuthService.issue({ actorType: 'VENDOR', … })` + `setRefreshCookie(res, 'VENDOR', …)`
+- **Phase 2.2**: หน้า OTP ใช้ `resendAfter` นับถอยหลัง, แสดง `attemptsLeft`; ปุ่ม LINE ส่ง `liff.getIDToken()` ไป `/auth/line`; ถ้าได้ `REGISTRATION_REQUIRED` จาก LINE แล้วผู้ใช้กรอกเบอร์ ให้ขอ OTP แล้วส่ง `registrationToken` มากับ `/auth/otp/verify`
+- **Phase 6/7**: ต้องเลือกผู้ให้บริการ SMS จริง (Open Question) — production ที่ยังเป็น `SMS_PROVIDER=mock` จะตอบ 503 ตอนขอ OTP; ต้องตั้ง `LINE_LOGIN_CHANNEL_ID` (ตอนนี้ว่าง → `/auth/line` ตอบ 503)
+- access token มี `aud: access` แล้ว (registration token ใช้ `aud: registration`) — token ที่ออกก่อน Phase 1.4 ใช้ไม่ได้ ต้อง login ใหม่ (dev เท่านั้น)
 
 ### 1.5 Settings Module
 **สถานะ:** ⬜ TODO · **Dependencies:** 1.3 · **เริ่ม:** – · **เสร็จ:** –
@@ -624,3 +635,4 @@
 | 2026-10-31 | 1.1 | ✅ DONE | `pnpm db:reset` ผ่าน (ผู้ใช้ยินยอม), lint/format/typecheck/test (13)/test:int (14)/build ผ่าน — Phase ถัดไป: 1.2 Core Infrastructure |
 | 2026-10-31 | 1.2 | ✅ DONE | error format/filter, `{ data, meta }`, Zod pipe (nestjs-zod), pino + request id + redact, Helmet/CORS, throttler บน Redis, AuditService, pagination, Swagger `/api/docs` — unit 45 / integration 33 ผ่าน — ถัดไป: 1.3 Admin Auth & RBAC |
 | 2026-10-31 | 1.3 | ✅ DONE | admin login (bcrypt) + JWT 15 นาที + refresh rotation ใน Redis, ล็อค 5 ครั้ง/15 นาที, global auth/RBAC guard จากตาราง §2, CRUD `/admin/users` + audit, `GET /admin/settings` — unit 70 / integration 56 ผ่าน — ถัดไป: 1.4 Vendor Auth |
+| 2026-10-31 | 1.4 | ✅ DONE | OTP (SMS mock, HMAC ใน Redis, cooldown 60 วินาที/5 ต่อชั่วโมง/ผิดได้ 5 ครั้ง), LINE login ผ่าน verifier ที่ mock ได้, registrationToken, ผูก LINE ภายหลัง — unit 94 / integration 77 ผ่าน — ถัดไป: 1.5 Settings Module |

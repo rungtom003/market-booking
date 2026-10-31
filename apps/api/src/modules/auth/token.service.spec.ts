@@ -34,6 +34,7 @@ describe('TokenService', () => {
       {
         secret: 'attacker-secret',
         issuer: 'market-booking',
+        audience: 'access',
       },
     );
 
@@ -49,6 +50,7 @@ describe('TokenService', () => {
         role: 'SUPER_ADMIN',
         mkt: null,
         iss: 'market-booking',
+        aud: 'access',
       }),
     ).toString('base64url');
 
@@ -64,7 +66,7 @@ describe('TokenService', () => {
         mkt: 'm1',
         exp: Math.floor(Date.now() / 1000) - 10,
       },
-      { secret: 'unit-test-secret', issuer: 'market-booking' },
+      { secret: 'unit-test-secret', issuer: 'market-booking', audience: 'access' },
     );
 
     expect(tokens.verifyAccessToken(expired)).toBeNull();
@@ -72,7 +74,11 @@ describe('TokenService', () => {
 
   it('rejects malformed payloads (admin without role, vendor without market)', () => {
     const sign = (payload: object) =>
-      jwt.sign(payload, { secret: 'unit-test-secret', issuer: 'market-booking' });
+      jwt.sign(payload, {
+        secret: 'unit-test-secret',
+        issuer: 'market-booking',
+        audience: 'access',
+      });
 
     expect(tokens.verifyAccessToken(sign({ sub: 'a1', typ: 'ADMIN', mkt: null }))).toBeNull();
     expect(tokens.verifyAccessToken(sign({ sub: 'v1', typ: 'VENDOR', mkt: null }))).toBeNull();

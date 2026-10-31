@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { AppConfigService } from '../../config/app-config.service';
-import { ACCESS_TOKEN_TTL_SECONDS, JWT_ISSUER } from './auth.constants';
+import { ACCESS_TOKEN_TTL_SECONDS, JWT_AUDIENCE, JWT_ISSUER } from './auth.constants';
 import type { AccessTokenPayload, Principal } from './principal';
 
 @Injectable()
@@ -22,6 +22,7 @@ export class TokenService {
       secret: this.config.get('JWT_ACCESS_SECRET'),
       expiresIn: ACCESS_TOKEN_TTL_SECONDS,
       issuer: JWT_ISSUER,
+      audience: JWT_AUDIENCE.ACCESS,
       algorithm: 'HS256',
     });
   }
@@ -33,6 +34,7 @@ export class TokenService {
       payload = this.jwt.verify<AccessTokenPayload>(token, {
         secret: this.config.get('JWT_ACCESS_SECRET'),
         issuer: JWT_ISSUER,
+        audience: JWT_AUDIENCE.ACCESS,
         // ระบุ algorithm ตายตัว กัน token ที่เปลี่ยน alg (เช่น none)
         algorithms: ['HS256'],
       });

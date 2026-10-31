@@ -14,6 +14,7 @@ import { AuditModule } from './modules/audit/audit.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { HealthModule } from './modules/health/health.module';
 import { MarketModule } from './modules/market/market.module';
+import { NotifyModule } from './modules/notify/notify.module';
 import { SettingsModule } from './modules/settings/settings.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { REDIS, RedisModule } from './redis/redis.module';
@@ -35,6 +36,7 @@ import { REDIS, RedisModule } from './redis/redis.module';
     }),
     AuditModule,
     MarketModule,
+    NotifyModule,
     AuthModule,
     HealthModule,
     AdminUserModule,

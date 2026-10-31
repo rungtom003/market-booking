@@ -22,3 +22,16 @@ export const REFRESH_COOKIE = {
 export const REFRESH_COOKIE_PATH = `${API_PREFIX}/auth`;
 
 export const JWT_ISSUER = 'market-booking';
+/** audience แยก access token กับ registration token — เอาตัวหนึ่งไปใช้แทนอีกตัวไม่ได้ */
+export const JWT_AUDIENCE = { ACCESS: 'access', REGISTRATION: 'registration' } as const;
+
+/** OTP (Overview §9.1): หมดอายุ 5 นาที, ขอใหม่ได้ทุก 60 วินาที สูงสุด 5 ครั้ง/ชั่วโมง, กรอกผิดได้ 5 ครั้ง */
+export const OTP_TTL_SECONDS = 5 * 60;
+export const OTP_RESEND_COOLDOWN_SECONDS = 60;
+export const OTP_MAX_PER_HOUR = 5;
+export const OTP_MAX_ATTEMPTS = 5;
+/** ต่อ IP — กันยิงขอ OTP ไปหลายเบอร์ (SMS pumping) */
+export const OTP_RATE_LIMIT = { limit: 10, ttl: 60_000 };
+
+/** เวลากรอกฟอร์มสมัครหลังยืนยันเบอร์/LINE */
+export const REGISTRATION_TOKEN_TTL_SECONDS = 30 * 60;
