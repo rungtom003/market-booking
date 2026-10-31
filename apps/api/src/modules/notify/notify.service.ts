@@ -12,6 +12,13 @@ export interface VendorStatusChangedEvent {
   suspendedUntil?: Date | null;
 }
 
+/** ผู้ค้าส่งสลิป รอเจ้าหน้าที่การเงินตรวจ (§9.5 ข้อ 2) */
+export interface PaymentSubmittedEvent {
+  paymentId: string;
+  bookingId: string;
+  marketId: string;
+}
+
 /**
  * จุดเดียวที่ business logic เรียกเมื่อต้องแจ้งเตือน — Phase 7 จะใส่ queue + LINE/SMS template
  * ตอนนี้ยังไม่ส่ง LINE/SMS (ห้าม throw: การแจ้งเตือนล้มต้องไม่ทำให้ flow หลักล้ม)
@@ -25,8 +32,22 @@ export class NotifyService {
     this.logger,
   );
 
+  private readonly paymentSubmittedChannel = new EventChannel<PaymentSubmittedEvent>(
+    'payment.submitted',
+    this.logger,
+  );
+
   onVendorStatusChanged(listener: (event: VendorStatusChangedEvent) => void): () => void {
     return this.vendorStatus.on(listener);
+  }
+
+  onPaymentSubmitted(listener: (event: PaymentSubmittedEvent) => void): () => void {
+    return this.paymentSubmittedChannel.on(listener);
+  }
+
+  /** Phase 7: แจ้ง FINANCE ทาง LINE กลุ่ม admin */
+  async paymentSubmitted(event: PaymentSubmittedEvent): Promise<void> {
+    this.paymentSubmittedChannel.emit([event]);
   }
 
   async vendorStatusChanged(event: VendorStatusChangedEvent): Promise<void> {

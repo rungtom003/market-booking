@@ -77,3 +77,9 @@ export interface RoundChangedPayload {
 export interface VendorRegisteredPayload {
   vendorId: string;
 }
+
+/** สลิปใหม่รอตรวจ — ส่งห้อง admin (ไม่มีข้อมูลส่วนตัว) */
+export interface PaymentSubmittedPayload {
+  paymentId: string;
+  bookingId: string;
+}

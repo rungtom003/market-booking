@@ -26,6 +26,7 @@ import {
   BookingEventRow,
   BookingRow,
   SCALAR_FIELDS,
+  newCheckinToken,
   toBooking,
   toEvent,
 } from './booking-mapper';
@@ -194,7 +195,7 @@ export class BookingService {
       needsPayment ? BookingStatus.PENDING_PAYMENT : BookingStatus.CONFIRMED,
       needsPayment
         ? { paymentDueAt: new Date(now.getTime() + settings.payment_deadline_minutes * 60_000) }
-        : { confirmedAt: now },
+        : { confirmedAt: now, checkinToken: newCheckinToken() },
       // hold หมดเวลาระหว่างนี้ → ไม่ยืนยัน
       { holdExpiresAt: { gt: now } },
     );

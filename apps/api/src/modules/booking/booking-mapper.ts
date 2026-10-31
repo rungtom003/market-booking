@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { BookingStatus } from '@market-booking/shared';
 import type { Booking } from '@market-booking/shared';
 import { Prisma } from '../../generated/prisma/client';
@@ -85,4 +86,9 @@ export function toBooking(row: BookingRow, now: Date): Booking {
     cancelledByAdmin: row.cancelledByAdminId !== null,
     createdAt: row.createdAt.toISOString(),
   };
+}
+
+/** token ของ QR check-in (Phase 8) — สร้างทุกครั้งที่การจองเป็น CONFIRMED; 32 ตัวอักษร base64url */
+export function newCheckinToken(): string {
+  return randomBytes(24).toString('base64url');
 }

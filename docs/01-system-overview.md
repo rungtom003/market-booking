@@ -549,7 +549,7 @@ Vendor กด "ยืนยันการจอง" → POST /bookings/:id/conf
 | S → C | `booking:changed` | `{ bookingId, marketDayId, stallId, status, holdExpiresAt, paymentDueAt }` (เฉพาะห้อง vendor ของเจ้าของ) |
 | S → C | `waitlist:offer` | `{ waitlistId, bookingId, expiresAt }` |
 | S → C | `server:time` | `{ now }` (ส่งตอน connect) |
-| S → C (admin) | `vendor:registered` (`{ vendorId }` เมื่อมีผู้ค้ารออนุมัติ — ไม่มีข้อมูลส่วนตัว), `payment:submitted` (Phase 5) | สำหรับ badge แจ้งเตือน |
+| S → C (admin) | `vendor:registered` (`{ vendorId }` เมื่อมีผู้ค้ารออนุมัติ — ไม่มีข้อมูลส่วนตัว), `payment:submitted` (`{ paymentId, bookingId }` เมื่อผู้ค้าส่งสลิป) | สำหรับ badge แจ้งเตือน |
 
 ### 10.3 กติกา
 - `mine` ส่งแยกห้อง: ห้อง `md:` ยกเว้นเจ้าของได้ `mine: false`, ห้อง `vendor:` ของเจ้าของการจองที่ยังมีผลได้ `mine: true` (ห้ามส่งข้อมูลส่วนตัวผู้ค้าคนอื่นใน event สาธารณะ)
@@ -604,7 +604,9 @@ Vendor กด "ยืนยันการจอง" → POST /bookings/:id/conf
 | POST | `/bookings/:id/confirm` | HOLD → `PENDING_PAYMENT` (ตั้ง `paymentDueAt`) หรือ `CONFIRMED` ถ้า `payment_required = false` หรือราคา 0; หมดเวลา → `HOLD_EXPIRED` |
 | POST | `/bookings/:id/cancel` | `{ reason? }` — HOLD ยกเลิกได้ทุกเมื่อ; สถานะอื่นต้องก่อน 00:00 วันขาย − `cancel_before_hours` |
 | GET | `/bookings/me` | วันขายล่าสุดก่อน ≤ 100 รายการ (hold/รอชำระที่หมดเวลาแสดงเป็น `EXPIRED`) |
-| POST | `/bookings/:id/payments` | อัปโหลดสลิป |
+| GET | `/bookings/:id/payment` | ยอด, `paymentDueAt`, `promptpay: { id, payload }` (payload EMVCo สำหรับวาด QR; `null` ถ้ายังไม่ตั้ง `promptpay_id`) และประวัติการชำระทั้งหมด |
+| POST | `/bookings/:id/payments/slip-upload` | `{ contentType, size }` → presigned PUT (key `vendors/<vendorId>/slips/<bookingId>/<uuid>`) — เฉพาะการจองที่รอชำระ |
+| POST | `/bookings/:id/payments` | `{ slipImageKey }` → การจอง `PENDING_VERIFY` + payment `PENDING` (เลยกำหนด → `PAYMENT_DUE_PASSED`) |
 | GET | `/bookings/:id/checkin-qr` | |
 | POST / DELETE | `/waitlists` / `/waitlists/:id` | |
 | GET | `/announcements` | |
@@ -633,8 +635,9 @@ Vendor กด "ยืนยันการจอง" → POST /bookings/:id/conf
 | GET | `/admin/market-days/:id/bookings.xlsx` (รายชื่อผู้ค้าที่จองวันนั้น — ลง audit `booking.export`) |
 | POST | `/admin/bookings/:id/cancel` (`{ reason }` บังคับ, สิทธิ์ `BOOKINGS_CANCEL`, ลง audit `booking.cancel`) |
 | POST | `/admin/bookings` (จองแทนผู้ค้า `{ vendorId, stallId, marketDayId, status: CONFIRMED|PENDING_PAYMENT, amount? }` — ข้ามรอบ/โควตา/ล็อคสงวน/ปิดเฉพาะวัน/ประเภทสินค้าได้ แต่ผู้ค้าต้อง APPROVED, ล็อคต้องเปิดใช้งาน, วันขายไม่ถูกยกเลิก และไม่ข้าม unique index) |
-| GET | `/admin/payments?status=PENDING` |
-| POST | `/admin/payments/:id/approve` · `/reject` |
+| GET | `/admin/payments?status=PENDING&page=` (รอตรวจ: เก่าสุดก่อน, มี URL รูปสลิปอายุสั้น — สิทธิ์ `PAYMENTS_VERIFY`) |
+| POST | `/admin/payments/:id/approve` (→ `CONFIRMED` + `checkin_token`) · `/reject` (`{ reason }` → `PENDING_PAYMENT` + กำหนดชำระใหม่) |
+| POST | `/admin/payments/cash` (`{ bookingId, amount? }` รับเงินสด — การจอง HOLD/รอชำระ/รอตรวจ → `CONFIRMED`) |
 | POST | `/admin/checkin/scan` |
 | GET | `/admin/reports/revenue`, `/occupancy`, `/noshow` (+ `?format=xlsx`) |
 | CRUD | `/admin/users`, `/admin/announcements` |
@@ -651,6 +654,8 @@ Code ของผู้ค้า (เพิ่มใน Phase 2.1): `PHONE_ALREA
 
 Code ของการตั้งค่าตลาด (เพิ่มใน Phase 3.1): `STALL_CODE_TAKEN` (`details.codes`), `RESOURCE_IN_USE` (ลบไม่ได้เพราะมีข้อมูลอ้างถึง — `details` เป็นจำนวน เช่น `{ bookings, waitlists }`)
 
+Code ของการชำระเงิน (เพิ่มใน Phase 5.1): `PAYMENT_DUE_PASSED` (ส่งสลิปหลังเลย `payment_due_at` — การจองเป็น EXPIRED); สลิปผิด → `UPLOAD_INVALID` (`details.field = slipImageKey`)
+
 Code ของรอบการจอง (เพิ่มใน Phase 3.2): `MARKET_DATE_TAKEN` (`details.dates`), `ROUND_ALREADY_OPENED`; publish/cancel/ลบ/แก้รอบผิดสถานะ → `INVALID_STATE_TRANSITION` (`details.status`); `ROUND_NOT_OPEN` มี `details: { phase, openAt, closeAt, marketDayCancelled }`
 
 รายละเอียดของ code การจอง (Phase 4.1): `QUOTA_EXCEEDED` → `details.limit`, `STALL_TAKEN` → `details.mine`, `HOLD_EXPIRED` → `details.holdExpiresAt`, `CANCEL_WINDOW_PASSED` → `details: { deadline, cancelBeforeHours }`, `INVALID_STATE_TRANSITION` → `details.status` (สถานะปัจจุบัน)
@@ -663,7 +668,7 @@ Code ของรอบการจอง (เพิ่มใน Phase 3.2): `MA
 | 401 | `UNAUTHORIZED` (token หาย/ผิด/หมดอายุ → client ลอง refresh), `INVALID_CREDENTIALS` |
 | 403 | `FORBIDDEN`, `VENDOR_NOT_APPROVED`, `VENDOR_SUSPENDED` |
 | 404 | `NOT_FOUND` |
-| 409 | `CONFLICT`, `USERNAME_TAKEN`, `LINE_ALREADY_LINKED`, `PHONE_ALREADY_REGISTERED`, `STALL_CODE_TAKEN`, `RESOURCE_IN_USE`, `MARKET_DATE_TAKEN`, `ROUND_ALREADY_OPENED`, `ROUND_NOT_OPEN`, `STALL_TAKEN`, `STALL_UNAVAILABLE`, `QUOTA_EXCEEDED`, `HOLD_EXPIRED`, `INVALID_STATE_TRANSITION`, `CANCEL_WINDOW_PASSED` |
+| 409 | `CONFLICT`, `USERNAME_TAKEN`, `LINE_ALREADY_LINKED`, `PHONE_ALREADY_REGISTERED`, `STALL_CODE_TAKEN`, `RESOURCE_IN_USE`, `MARKET_DATE_TAKEN`, `ROUND_ALREADY_OPENED`, `PAYMENT_DUE_PASSED`, `ROUND_NOT_OPEN`, `STALL_TAKEN`, `STALL_UNAVAILABLE`, `QUOTA_EXCEEDED`, `HOLD_EXPIRED`, `INVALID_STATE_TRANSITION`, `CANCEL_WINDOW_PASSED` |
 | 422 | `CATEGORY_NOT_ALLOWED` |
 | 429 | `RATE_LIMITED`, `ACCOUNT_LOCKED` |
 | 500 | `INTERNAL_ERROR` (ไม่ส่งข้อความจริงออกไป — ดูใน log ด้วย `x-request-id`) |
@@ -874,6 +879,10 @@ VITE_LINE_LIFF_ID=        (ฝั่ง web — ว่าง = ซ่อนป�
 | 2026-10-31 | HTTP `keepAliveTimeout` 65 s / `headersTimeout` 66 s | ค่าเริ่มต้น 5 s ทำให้ request ล้มแบบ EOF ~2% เมื่อ client ใช้ connection ซ้ำ (load test) — ต้องมากกว่า keepalive ของ Nginx |
 | 2026-10-31 | env `DATABASE_POOL_SIZE` (ค่าเริ่มต้น 10 ตาม pg) และขยายด้วยหลาย API instance แทนการเพิ่ม pool | load test: pool 10 vs 30 ไม่ต่าง (คอขวดคือ CPU ของ Node process เดียว ~330 hold/วินาที), 2 instance ลดเวลาช่วงกดพร้อมกันได้ |
 | 2026-10-31 | `VendorApprovedGuard` อ่านสถานะก่อน แล้วปลดการระงับที่หมดเวลาเฉพาะเมื่อจำเป็น (เดิม UPDATE ทุก request) | ลด write ต่อ request ของผู้ค้าทุกตัว (เจอใน load test) |
+| 2026-10-31 | PromptPay payload (EMVCo + CRC-16/CCITT) เขียนเองใน `packages/shared/src/promptpay.ts` แทน library `promptpay-qr` | library ไม่อัปเดตตั้งแต่ 2022 และลาก `qrcode` รุ่นเก่ากับ CLI parser มาด้วย; โค้ดสั้นและมี unit test (ค่าตรวจ CRC มาตรฐาน + โครงสร้าง TLV) — หน้าเว็บวาด QR จาก payload เอง (5.2) |
+| 2026-10-31 | สร้าง `checkin_token` ทุกครั้งที่การจองเป็น `CONFIRMED` (อนุมัติสลิป, เงินสด, ยืนยันแบบไม่ต้องชำระ, admin จองแทน) | ทุกการจองที่ยืนยันแล้วต้อง check-in ได้ (Phase 8) ไม่ใช่เฉพาะที่จ่ายผ่านสลิป |
+| 2026-10-31 | `SlipVerifier` (token `SLIP_VERIFIER`, ค่าเริ่มต้น `ManualSlipVerifier` = รอเจ้าหน้าที่): VALID → อนุมัติเอง (audit actor SYSTEM), INVALID → ไม่ผ่านพร้อมเหตุผล, error → รอเจ้าหน้าที่ | ต่อบริการตรวจสลิปจริงภายหลังได้โดยไม่แก้ flow |
+| 2026-10-31 | รับเงินสดขณะมีสลิปรอตรวจ: ปิดสลิปนั้นเป็น REJECTED ("รับชำระเป็นเงินสดแล้ว") แล้วสร้าง payment CASH APPROVED; สลิปไม่ผ่าน = กำหนดชำระใหม่ `now + payment_deadline_minutes` | ไม่มี payment ค้างรอตรวจหลังยืนยันแล้ว; ผู้ค้ามีเวลาส่งใหม่เต็มช่วง (§8.2 "ขยาย payment_due_at ตาม setting") |
 
 ### Open Questions
 - [ ] ใช้กับตลาดเดียวหรือหลายตลาด (ตอนนี้ schema รองรับแล้ว แต่ UI ยังเป็นตลาดเดียว)

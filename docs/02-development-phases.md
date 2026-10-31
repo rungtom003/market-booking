@@ -64,8 +64,8 @@
 | 4.4 | ↳ Vendor Web: หน้าผังและจองล็อค | ✅ DONE | 2026-10-31 | 2026-10-31 |
 | 4.5 | ↳ Admin Web: จัดการการจอง | ✅ DONE | 2026-10-31 | 2026-10-31 |
 | 4.6 | ↳ Concurrency & Load Test | ✅ DONE | 2026-10-31 | 2026-10-31 |
-| 5 | Payment | ⬜ TODO | | |
-| 5.1 | ↳ Payment API + PromptPay QR | ⬜ TODO | | |
+| 5 | Payment | 🟨 IN PROGRESS | 2026-10-31 | |
+| 5.1 | ↳ Payment API + PromptPay QR | ✅ DONE | 2026-10-31 | 2026-10-31 |
 | 5.2 | ↳ Vendor & Admin Payment UI | ⬜ TODO | | |
 | 6 | MVP Deployment 🚀 | ⬜ TODO | | |
 | 7 | Notifications (LINE OA / SMS) | ⬜ TODO | | |
@@ -583,23 +583,33 @@
 ---
 
 ## Phase 5 — Payment
-**สถานะ:** ⬜ TODO · **Dependencies:** Phase 4
+**สถานะ:** 🟨 IN PROGRESS · **Dependencies:** Phase 4
 
 ### 5.1 Payment API + PromptPay QR
-**สถานะ:** ⬜ TODO · **Dependencies:** 4.6 · **เริ่ม:** – · **เสร็จ:** –
+**สถานะ:** ✅ DONE · **Dependencies:** 4.6 · **เริ่ม:** 2026-10-31 · **เสร็จ:** 2026-10-31
 
 **Tasks**
-- [ ] สร้าง PromptPay payload (EMVCo, library `promptpay-qr`) จาก `promptpay_id` + amount
-- [ ] `POST /bookings/:id/payments` (presigned upload สลิป) → `PENDING_VERIFY`, ยกเลิก expiry job ระหว่างรอตรวจ
-- [ ] `GET /admin/payments?status=PENDING`, `approve` → `CONFIRMED` + สร้าง `checkin_token`, `reject` (เหตุผล) → `PENDING_PAYMENT` + ตั้ง `payment_due_at` ใหม่
-- [ ] บันทึกรับเงินสด (`CASH`) โดย Admin
-- [ ] Interface `SlipVerifier` (ทำ implementation จริงภายหลัง)
+- [x] สร้าง PromptPay payload (EMVCo, library `promptpay-qr`) จาก `promptpay_id` + amount
+- [x] `POST /bookings/:id/payments` (presigned upload สลิป) → `PENDING_VERIFY`, ยกเลิก expiry job ระหว่างรอตรวจ
+- [x] `GET /admin/payments?status=PENDING`, `approve` → `CONFIRMED` + สร้าง `checkin_token`, `reject` (เหตุผล) → `PENDING_PAYMENT` + ตั้ง `payment_due_at` ใหม่
+- [x] บันทึกรับเงินสด (`CASH`) โดย Admin
+- [x] Interface `SlipVerifier` (ทำ implementation จริงภายหลัง)
 
 **Acceptance Criteria**
 - สลิปถูกปฏิเสธแล้วส่งใหม่ได้, ประวัติ payment ครบทุกครั้ง
 - Booking ที่ `PENDING_VERIFY` ไม่หมดอายุระหว่างรอตรวจ
 
-**Agent Notes:** –
+**Agent Notes:**
+- ✅ AC ข้อ 1: `payments.int-spec.ts` — ส่งสลิป → FINANCE ไม่ผ่าน (เหตุผล) → การจองกลับเป็นรอชำระ + กำหนดชำระใหม่ → ส่งใหม่ → อนุมัติ → `CONFIRMED` + `checkin_token`; ประวัติมี 2 payment (REJECTED พร้อมเหตุผล, APPROVED) และ audit `payment.submit → reject → submit → approve`
+- ✅ AC ข้อ 2: การจอง `PENDING_VERIFY` ที่ `payment_due_at` เลยไปแล้ว — `expireBooking` และ sweeper ไม่เปลี่ยนสถานะ, job หมดเวลาถูกลบตอนเข้ารอตรวจ, คนอื่นจองทับไม่ได้ (`STALL_TAKEN`)
+- API (`modules/payment/`): `PaymentService` (ผู้ค้า: `GET /bookings/:id/payment`, `POST …/payments/slip-upload`, `POST …/payments`), `PaymentReviewService` (`GET /admin/payments`, approve/reject/cash — สิทธิ์ `PAYMENTS_VERIFY`), `slip-verifier.ts` (`SlipVerifier` + `ManualSlipVerifier`)
+- PromptPay: `promptPayPayload(id, amount)` ใน shared (เขียนเองแทน `promptpay-qr` — Decision Log) ใช้ได้ทั้ง API และหน้าเว็บ; `GET /bookings/:id/payment` คืน payload ตามยอดของการจอง (`promptpay: null` ถ้ายังไม่ตั้ง `promptpay_id` → ให้ชำระเงินสด)
+- สลิป: key `vendors/<vendorId>/slips/<bookingId>/<uuid>.<ext>`, ตรวจเจ้าของ + เป็นรูปจริง ≤ 5 MB ด้วย `storage/image-file.ts` (ย้ายมาจาก `VendorImageService` ใช้ร่วมกัน); ส่งได้เฉพาะ `PENDING_PAYMENT` ที่ยังไม่เลยกำหนด (เลย → expire ทันที + `PAYMENT_DUE_PASSED`), ทีละใบ (รอตรวจอยู่ → `INVALID_STATE_TRANSITION`)
+- `checkin_token` (base64url 32 ตัว) สร้างทุกครั้งที่เป็น `CONFIRMED` — `newCheckinToken()` ใน `booking-mapper.ts` (Phase 8 ใช้ทำ QR)
+- แจ้ง FINANCE: `NotifyService.paymentSubmitted` → socket `payment:submitted` ห้อง admin (Phase 7 ต่อ LINE กลุ่มที่จุดเดียวกัน)
+- **5.2 ต่อได้เลย**: วาด QR จาก `promptpay.payload` (lib QR ฝั่งเว็บ), อัปโหลดสลิปแบบเดียวกับรูปผู้ค้า (ย่อรูปในเครื่องก่อนส่ง), หน้า admin ตรวจสลิปใช้ `GET /admin/payments?status=PENDING` + `slipUrl`, badge จาก `payment:submitted`
+- ยังไม่ทำ: ยกเลิกการจองที่มีสลิปรอตรวจ — payment ยังเป็น PENDING (admin กด "ไม่ผ่าน" ได้ ระบบเปลี่ยนแค่ payment ไม่แตะการจองที่ยกเลิกแล้ว)
+- ทดสอบ: unit 172 (+6 PromptPay/schema), integration 224 (+9 `payments.int-spec.ts`), E2E 26
 
 ### 5.2 Vendor & Admin Payment UI
 **สถานะ:** ⬜ TODO · **Dependencies:** 5.1 · **เริ่ม:** – · **เสร็จ:** –
@@ -780,3 +790,5 @@
 | 2026-10-31 | 4.6 | 🟨 IN PROGRESS | เริ่ม load test: seed 1,000 ผู้ค้า/300 ล็อค (DB แยก _load), k6 500 socket + ยิง hold ตอนเปิดรอบ, ตรวจ SQL, วัด p95/CPU/RAM |
 | 2026-10-31 | 4.6 | ✅ DONE | load test (k6 + orchestrator `pnpm test:load`): 500 socket, กด hold พร้อมกัน 500 คน + 100 req/s — p95 18.8 ms, event p95 10 ms, จองซ้ำ 0, เกินโควตา 0; แก้ keep-alive EOF, guard UPDATE ทุก request, query ใน hold; ผลที่ docs/load-test-results.md |
 | 2026-10-31 | 4 | ✅ DONE | Realtime Booking ครบ (4.1–4.6) — ถัดไป: 5.1 Payment API + PromptPay QR |
+| 2026-10-31 | 5.1 | 🟨 IN PROGRESS | เริ่ม payment API: PromptPay payload, อัปโหลดสลิป → PENDING_VERIFY, admin อนุมัติ/ปฏิเสธ/รับเงินสด, SlipVerifier interface |
+| 2026-10-31 | 5.1 | ✅ DONE | PromptPay payload (เขียนเอง), อัปโหลด/ส่งสลิป → PENDING_VERIFY, admin อนุมัติ/ไม่ผ่าน/รับเงินสด, checkin token, SlipVerifier, `payment:submitted`; AC ส่งใหม่หลังไม่ผ่าน + รอตรวจไม่หมดอายุ — unit 172 / integration 224 / E2E 26 ผ่าน — ถัดไป: 5.2 Vendor & Admin Payment UI |

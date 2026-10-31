@@ -35,6 +35,10 @@ export const ErrorCode = {
   /** แก้เวลาเปิดจองหลังรอบเปิดจองแล้วไม่ได้ (Overview §8.3) */
   ROUND_ALREADY_OPENED: 'ROUND_ALREADY_OPENED',
 
+  // ชำระเงิน
+  /** เลยกำหนดชำระแล้ว (การจองหมดอายุ) — `details.paymentDueAt` */
+  PAYMENT_DUE_PASSED: 'PAYMENT_DUE_PASSED',
+
   // ธุรกิจ
   ROUND_NOT_OPEN: 'ROUND_NOT_OPEN',
   STALL_TAKEN: 'STALL_TAKEN',

@@ -21,6 +21,7 @@ import {
 } from '@market-booking/shared';
 import type {
   BookingChangedPayload,
+  PaymentSubmittedPayload,
   RoundChangedPayload,
   ServerTimePayload,
   SocketAck,
@@ -34,7 +35,11 @@ import { TokenService } from '../auth/token.service';
 import { type BookingChangedEvent, BookingEvents } from '../booking/booking-events';
 import { isLapsed } from '../booking/booking-mapper';
 import { MarketService } from '../market/market.service';
-import { NotifyService, type VendorStatusChangedEvent } from '../notify/notify.service';
+import {
+  NotifyService,
+  type PaymentSubmittedEvent,
+  type VendorStatusChangedEvent,
+} from '../notify/notify.service';
 import { type RoundChangedEvent, RoundEvents } from '../round/round-events';
 import { VendorStatusService } from '../vendor/vendor-status.service';
 
@@ -74,6 +79,7 @@ export class RealtimeGateway
       this.bookingEvents.onChanged((e) => this.onBookingChanged(e)),
       this.roundEvents.onChanged((e) => this.onRoundChanged(e)),
       this.notify.onVendorStatusChanged((e) => this.onVendorStatusChanged(e)),
+      this.notify.onPaymentSubmitted((e) => this.onPaymentSubmitted(e)),
     );
   }
 
@@ -193,6 +199,14 @@ export class RealtimeGateway
     this.server.to(socketRoom.admin(event.marketId)).emit(SocketEvent.VENDOR_REGISTERED, {
       vendorId: event.vendorId,
     } satisfies VendorRegisteredPayload);
+  }
+
+  /** สลิปใหม่รอตรวจ → badge ฝั่ง admin (ข้อมูลจริงโหลดผ่าน REST) */
+  onPaymentSubmitted(event: PaymentSubmittedEvent): void {
+    this.server.to(socketRoom.admin(event.marketId)).emit(SocketEvent.PAYMENT_SUBMITTED, {
+      paymentId: event.paymentId,
+      bookingId: event.bookingId,
+    } satisfies PaymentSubmittedPayload);
   }
 
   // ───────────── ภายใน ─────────────

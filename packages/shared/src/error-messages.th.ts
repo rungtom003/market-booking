@@ -49,6 +49,7 @@ export const ERROR_MESSAGES_TH: Record<ErrorCode, string | ((details: Details) =
     return `วันขายซ้ำกับรอบที่มีอยู่แล้ว: ${shown}${dates.length > 5 ? ` และอีก ${dates.length - 5} วัน` : ''}`;
   },
   ROUND_ALREADY_OPENED: 'รอบนี้เปิดจองแล้ว แก้เวลาเปิดจองไม่ได้',
+  PAYMENT_DUE_PASSED: 'เลยกำหนดชำระเงินแล้ว การจองนี้หมดอายุ กรุณาจองใหม่',
   UPLOAD_INVALID: 'ไฟล์รูปไม่ถูกต้อง (รองรับ JPG, PNG, WebP ไม่เกิน 5 MB) กรุณาอัปโหลดใหม่',
 
   ROUND_NOT_OPEN: 'ยังไม่อยู่ในช่วงเวลาเปิดจอง',

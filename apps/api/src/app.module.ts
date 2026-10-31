@@ -17,6 +17,7 @@ import { HealthModule } from './modules/health/health.module';
 import { MarketModule } from './modules/market/market.module';
 import { MarketSetupModule } from './modules/market-setup/market-setup.module';
 import { NotifyModule } from './modules/notify/notify.module';
+import { PaymentModule } from './modules/payment/payment.module';
 import { RealtimeModule } from './modules/realtime/realtime.module';
 import { RoundModule } from './modules/round/round.module';
 import { SettingsModule } from './modules/settings/settings.module';
@@ -54,6 +55,7 @@ import { REDIS, RedisModule } from './redis/redis.module';
     RoundModule,
     BookingModule,
     RealtimeModule,
+    PaymentModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

@@ -28,6 +28,7 @@ import {
   type BookingEventRow,
   type BookingRow,
   isLapsed,
+  newCheckinToken,
   toBooking,
   toEvent,
 } from './booking-mapper';
@@ -242,7 +243,7 @@ export class BookingAdminService {
             status: input.status,
             amount: input.amount ?? stall.overrides[0]?.priceOverride ?? stall.price,
             ...(input.status === BookingStatus.CONFIRMED
-              ? { confirmedAt: now }
+              ? { confirmedAt: now, checkinToken: newCheckinToken() }
               : { paymentDueAt: new Date(now.getTime() + paymentDeadline * 60_000) }),
           },
           select: ADMIN_BOOKING_FIELDS,
