@@ -567,6 +567,10 @@ Vendor กด "ยืนยันการจอง" → POST /bookings/:id/conf
 | POST | `/auth/refresh` | cookie |
 | POST | `/auth/logout` | any |
 
+- `/auth/refresh` และ `/auth/logout` รับ body `{ actorType: 'ADMIN' | 'VENDOR' }` เพื่อเลือก cookie: `mb_admin_rt` / `mb_vendor_rt` (httpOnly, SameSite=Strict, Path=`/api/v1/auth`, Secure บน production)
+- Access token ส่งใน header `Authorization: Bearer …`; ทุก endpoint ต้อง login ยกเว้นที่ระบุว่า public
+- Refresh token เป็นค่าสุ่ม (ไม่ใช่ JWT) เก็บ HMAC ใน Redis; ใช้ได้ครั้งเดียว — ใช้ token ที่ rotate แล้วซ้ำ = revoke ทั้ง session family
+
 ### Vendor (ผู้ค้า)
 | Method | Path | หมายเหตุ |
 |---|---|---|
@@ -610,15 +614,17 @@ Vendor กด "ยืนยันการจอง" → POST /bookings/:id/conf
 
 Code ทั่วไป (เพิ่มใน Phase 1.2): `VALIDATION_ERROR`, `BAD_REQUEST`, `UNAUTHORIZED`, `FORBIDDEN`, `NOT_FOUND`, `CONFLICT`, `INTERNAL_ERROR`
 
+Code ของ Auth (เพิ่มใน Phase 1.3): `INVALID_CREDENTIALS`, `ACCOUNT_LOCKED` (`details.retryAfterSeconds`), `USERNAME_TAKEN`
+
 | HTTP | Code |
 |---|---|
 | 400 | `VALIDATION_ERROR` (`details` = `[{ path, message, code }]` รายฟิลด์), `BAD_REQUEST`, `OTP_INVALID` |
-| 401 | `UNAUTHORIZED` |
+| 401 | `UNAUTHORIZED` (token หาย/ผิด/หมดอายุ → client ลอง refresh), `INVALID_CREDENTIALS` |
 | 403 | `FORBIDDEN`, `VENDOR_NOT_APPROVED`, `VENDOR_SUSPENDED` |
 | 404 | `NOT_FOUND` |
-| 409 | `CONFLICT`, `ROUND_NOT_OPEN`, `STALL_TAKEN`, `STALL_UNAVAILABLE`, `QUOTA_EXCEEDED`, `HOLD_EXPIRED`, `INVALID_STATE_TRANSITION`, `CANCEL_WINDOW_PASSED` |
+| 409 | `CONFLICT`, `USERNAME_TAKEN`, `ROUND_NOT_OPEN`, `STALL_TAKEN`, `STALL_UNAVAILABLE`, `QUOTA_EXCEEDED`, `HOLD_EXPIRED`, `INVALID_STATE_TRANSITION`, `CANCEL_WINDOW_PASSED` |
 | 422 | `CATEGORY_NOT_ALLOWED` |
-| 429 | `RATE_LIMITED` |
+| 429 | `RATE_LIMITED`, `ACCOUNT_LOCKED` |
 | 500 | `INTERNAL_ERROR` (ไม่ส่งข้อความจริงออกไป — ดูใน log ด้วย `x-request-id`) |
 
 - รายการ code อยู่ที่ `packages/shared/src/error-codes.ts`, ตาราง status ที่ `apps/api/src/common/exceptions/error-status.ts`
@@ -741,6 +747,14 @@ SEED_ADMIN_PASSWORD=
 | 2026-10-31 | Rate limit `@nestjs/throttler` + `@nest-lab/throttler-storage-redis` (ioredis 5) | นับใน Redis ใช้ได้หลาย instance; ioredis 6 เพิ่งออก major จึงใช้ 5 ที่ storage รองรับแน่นอน |
 | 2026-10-31 | Swagger (`/api/docs`) เปิดเฉพาะ `NODE_ENV !== production` | ไม่เปิดเผยโครงสร้าง API บน production (เปิดได้ภายหลังถ้าต้องการ) |
 | 2026-10-31 | Test ที่ boot `AppModule` ย้ายไป integration (`pnpm test:int`), Redis ของ test ใช้ db 15 | AppModule ต้องใช้ Redis (rate limit) — `pnpm test` คง unit test ล้วนที่ไม่ต้องมี infra |
+| 2026-10-31 | Refresh token เป็นค่าสุ่ม (`<sessionId>.<secret>`) เก็บ HMAC-SHA256 (`JWT_REFRESH_SECRET`) ใน Redis แบบ session family + rotation ด้วย `GETDEL` | revoke ได้ทันที (logout, เปลี่ยน role/รหัส, ปิดบัญชี); ใช้ token เก่าซ้ำ = revoke ทั้ง family; refresh พร้อมกันได้ผู้ชนะคนเดียว |
+| 2026-10-31 | Cookie refresh แยกตามประเภทผู้ใช้ + `/auth/refresh` รับ `{ actorType }` | เปิดแอป admin กับ vendor บนโดเมนเดียวกันได้โดย cookie ไม่ทับกัน; SameSite=Strict กัน CSRF เพราะทั้งสองแอปเรียก API ผ่าน origin เดียวกัน |
+| 2026-10-31 | Auth guard แบบ global "ปิดไว้ก่อน" (`@Public()` เพื่อเปิด) + path `/admin/*` บังคับเป็น ADMIN เสมอ | endpoint ใหม่ที่ลืมใส่ guard จะไม่เปิดโล่ง; กันผู้ค้าเข้าหน้า admin แม้ลืมใส่ `@Roles` |
+| 2026-10-31 | สิทธิ์ใช้ `@RequirePermission(Permission.X)` จากตาราง `PERMISSION_ROLES` ใน `packages/shared` (`@Roles` ยังมีให้ใช้) | ตาราง §2 อยู่ที่เดียว — API ตรวจ, หน้า admin ซ่อนเมนูจากตารางเดียวกัน; มี test ตรวจตารางกับ §2 |
+| 2026-10-31 | ไม่มี DELETE admin user — ปิดด้วย `isActive=false`; ห้ามแก้ role/ปิดบัญชีตัวเอง; ต้องเหลือ SUPER_ADMIN active ≥ 1 | มี FK จาก audit/rounds; กันระบบไม่มีผู้ดูแลสูงสุด |
+| 2026-10-31 | ล็อค login ต่อ username (5 ครั้ง/15 นาที → ล็อค 15 นาที) + rate limit login 10 ครั้ง/นาที/IP | ตาม §1.3; ข้อแลกเปลี่ยน: คนอื่นทำให้บัญชีถูกล็อคได้ (ยอมรับ — เป็นบัญชี admin จำนวนน้อย) |
+| 2026-10-31 | ปิดบัญชี/เปลี่ยน role มีผลทันทีกับ refresh token แต่ access token เดิมใช้ได้จนหมดอายุ (≤ 15 นาที) | ไม่ต้องอ่าน DB ทุก request; ถ้าต้องการตัดทันทีค่อยเพิ่ม denylist ใน Redis |
+| 2026-10-31 | เพิ่ม `GET /admin/settings` (อ่านอย่างเดียว) ตั้งแต่ Phase 1.3 | ใช้ตรวจ AC "STAFF → 403" กับ route จริง — Phase 1.5 เพิ่ม PUT, cache, validate |
 
 ### Open Questions
 - [ ] ใช้กับตลาดเดียวหรือหลายตลาด (ตอนนี้ schema รองรับแล้ว แต่ UI ยังเป็นตลาดเดียว)

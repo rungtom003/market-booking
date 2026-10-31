@@ -47,7 +47,7 @@
 | 1 | Backend Foundation | 🟨 IN PROGRESS | 2026-10-31 | |
 | 1.1 | ↳ Database Schema & Seed | ✅ DONE | 2026-10-31 | 2026-10-31 |
 | 1.2 | ↳ Core Infrastructure (config, error, logging, audit) | ✅ DONE | 2026-10-31 | 2026-10-31 |
-| 1.3 | ↳ Admin Auth & RBAC | ⬜ TODO | | |
+| 1.3 | ↳ Admin Auth & RBAC | ✅ DONE | 2026-10-31 | 2026-10-31 |
 | 1.4 | ↳ Vendor Auth (OTP + LINE) | ⬜ TODO | | |
 | 1.5 | ↳ Settings Module | ⬜ TODO | | |
 | 2 | Member Registration & Approval | ⬜ TODO | | |
@@ -191,21 +191,30 @@
 - ถ้ารัน `pnpm typecheck`/`test` ระหว่าง `pnpm dev` จะเห็น TS2307 ชั่วคราวใน watch ของ api (เพราะ build:shared ลบ `dist` ก่อน build ใหม่) — หายเองภายในวินาที
 
 ### 1.3 Admin Auth & RBAC
-**สถานะ:** ⬜ TODO · **Dependencies:** 1.2 · **เริ่ม:** – · **เสร็จ:** –
+**สถานะ:** ✅ DONE · **Dependencies:** 1.2 · **เริ่ม:** 2026-10-31 · **เสร็จ:** 2026-10-31
 
 **Tasks**
-- [ ] `POST /auth/admin/login` (bcrypt), access token + refresh cookie, `/auth/refresh` (rotation), `/auth/logout`
-- [ ] Refresh token เก็บ hash ใน Redis/DB เพื่อ revoke ได้
-- [ ] `JwtAuthGuard` แยก `actorType` (ADMIN/VENDOR), decorator `@CurrentAdmin()`, `@CurrentVendor()`
-- [ ] `@Roles(...)` + `RolesGuard` ตามตาราง Permission ใน Overview §2
-- [ ] CRUD `/admin/users` (SUPER_ADMIN เท่านั้น) + audit log
-- [ ] Lock บัญชีชั่วคราวเมื่อ login ผิด 5 ครั้งใน 15 นาที
+- [x] `POST /auth/admin/login` (bcrypt), access token + refresh cookie, `/auth/refresh` (rotation), `/auth/logout`
+- [x] Refresh token เก็บ hash ใน Redis/DB เพื่อ revoke ได้
+- [x] `JwtAuthGuard` แยก `actorType` (ADMIN/VENDOR), decorator `@CurrentAdmin()`, `@CurrentVendor()`
+- [x] `@Roles(...)` + `RolesGuard` ตามตาราง Permission ใน Overview §2
+- [x] CRUD `/admin/users` (SUPER_ADMIN เท่านั้น) + audit log
+- [x] Lock บัญชีชั่วคราวเมื่อ login ผิด 5 ครั้งใน 15 นาที
 
 **Acceptance Criteria**
 - STAFF เรียก `/admin/settings` ได้ 403
 - Refresh token เดิมใช้ซ้ำหลัง rotate ไม่ได้
 
-**Agent Notes:** –
+**Agent Notes:**
+- ✅ AC ข้อ 1: STAFF/FINANCE เรียก `GET /admin/settings` → 403 `FORBIDDEN`; ADMIN/SUPER_ADMIN → 200 (`test/integration/auth.int-spec.ts`) — route นี้สร้างแบบอ่านอย่างเดียวไว้ก่อน (Phase 1.5 ต่อยอด)
+- ✅ AC ข้อ 2: refresh token เดิมใช้ซ้ำหลัง rotate → 401 และ token ใหม่ของ family นั้นถูก revoke ด้วย
+- Test: unit 70 (ตาราง permission เทียบ §2, TokenService ปฏิเสธ secret ผิด/alg none/หมดอายุ, AccessGuard), integration 56 (login, ล็อค 5 ครั้ง, rotation, logout หลายเครื่อง, CRUD users + audit, กฎ SUPER_ADMIN)
+- ไฟล์สำคัญ: `apps/api/src/modules/auth/` (`auth.service.ts`, `refresh-token.service.ts`, `login-attempt.service.ts`, `token.service.ts`, `decorators.ts`, `guards/`, `refresh-cookie.ts`), `modules/admin-user/`, `modules/market/market.service.ts`, `modules/settings/`, `common/password.ts`, `packages/shared/src/permissions.ts` + `auth.ts`
+- **วิธีใช้**: endpoint ทุกตัวต้อง login อัตโนมัติ — เปิดด้วย `@Public()`; admin ใช้ `@RequirePermission(Permission.X)` (class หรือ method) + `@CurrentAdmin()`; vendor ใช้ `@ActorTypes('VENDOR')` + `@CurrentVendor()`; หา market ของ admin ด้วย `MarketService.resolveForAdmin(admin)`
+- **Phase 1.4** (vendor login): เรียก `AuthService.issue({ actorType: 'VENDOR', id, marketId })` แล้ว `setRefreshCookie(res, 'VENDOR', …)` — refresh/logout ของ vendor ใช้ได้แล้ว (โหลด vendor จาก DB ใน `AuthService.loadPrincipal`); `LoginAttemptService` ใช้กับ OTP ได้ (scope อื่น)
+- **Phase 2.2/2.3** (frontend): เก็บ access token ใน memory, ได้ 401 → `POST /auth/refresh { actorType }` แบบ single-flight (ยิงพร้อมกันหลายแท็บ = token reuse → ถูก logout); `admin.permissions` ใน response login ใช้ซ่อนเมนู
+- ข้อจำกัดที่รู้: ปิดบัญชี/เปลี่ยน role แล้ว access token เดิมยังใช้ได้ ≤ 15 นาที (refresh ถูกตัดทันที) — ดู Decision Log
+- request context มี `actor` แล้ว (ตั้งโดย JwtAuthGuard) และ log ของ pino-http มี field `actor` (`ADMIN:<id>`)
 
 ### 1.4 Vendor Auth (OTP + LINE)
 **สถานะ:** ⬜ TODO · **Dependencies:** 1.3 · **เริ่ม:** – · **เสร็จ:** –
@@ -614,3 +623,4 @@
 | 2026-10-31 | 1.1 | 🟨 IN PROGRESS | schema 16 ตาราง + partial index 4 ตัว, migration init, PrismaService, seed, enum ใน shared, integration test (14 ผ่าน), CI เพิ่ม postgres — เหลือรัน `migrate reset` (รอผู้ใช้ยินยอม) |
 | 2026-10-31 | 1.1 | ✅ DONE | `pnpm db:reset` ผ่าน (ผู้ใช้ยินยอม), lint/format/typecheck/test (13)/test:int (14)/build ผ่าน — Phase ถัดไป: 1.2 Core Infrastructure |
 | 2026-10-31 | 1.2 | ✅ DONE | error format/filter, `{ data, meta }`, Zod pipe (nestjs-zod), pino + request id + redact, Helmet/CORS, throttler บน Redis, AuditService, pagination, Swagger `/api/docs` — unit 45 / integration 33 ผ่าน — ถัดไป: 1.3 Admin Auth & RBAC |
+| 2026-10-31 | 1.3 | ✅ DONE | admin login (bcrypt) + JWT 15 นาที + refresh rotation ใน Redis, ล็อค 5 ครั้ง/15 นาที, global auth/RBAC guard จากตาราง §2, CRUD `/admin/users` + audit, `GET /admin/settings` — unit 70 / integration 56 ผ่าน — ถัดไป: 1.4 Vendor Auth |

@@ -9,8 +9,12 @@ import { AppLoggerModule } from './common/logger/logger.module';
 import { ZodValidationPipe } from './common/pipes/zod-validation.pipe';
 import { AppConfigService } from './config/app-config.service';
 import { AppConfigModule } from './config/config.module';
+import { AdminUserModule } from './modules/admin-user/admin-user.module';
 import { AuditModule } from './modules/audit/audit.module';
+import { AuthModule } from './modules/auth/auth.module';
 import { HealthModule } from './modules/health/health.module';
+import { MarketModule } from './modules/market/market.module';
+import { SettingsModule } from './modules/settings/settings.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { REDIS, RedisModule } from './redis/redis.module';
 
@@ -30,12 +34,17 @@ import { REDIS, RedisModule } from './redis/redis.module';
       }),
     }),
     AuditModule,
+    MarketModule,
+    AuthModule,
     HealthModule,
+    AdminUserModule,
+    SettingsModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
     { provide: APP_PIPE, useClass: ZodValidationPipe },
     { provide: APP_INTERCEPTOR, useClass: ResponseInterceptor },
+    // rate limit ก่อนตรวจ token — request ที่ไม่มี token ก็โดนจำกัด (guard ของ auth อยู่ใน AuthModule)
     { provide: APP_GUARD, useClass: ThrottlerGuard },
   ],
 })

@@ -7,6 +7,7 @@ import request from 'supertest';
 import { z } from 'zod';
 import { AppModule } from '../../src/app.module';
 import { AppException } from '../../src/common/exceptions/app.exception';
+import { Public } from '../../src/modules/auth/decorators';
 import { PaginatedResult } from '../../src/common/pagination/paginated-result';
 import { setupApp } from '../../src/setup-app';
 import { testRedisUrl } from './test-db-url';
@@ -15,6 +16,7 @@ class EchoDto extends createZodDto(z.object({ name: z.string().min(1), qty: z.nu
 class PageQueryDto extends createZodDto(paginationQuerySchema) {}
 
 /** controller สำหรับ test เท่านั้น — ใช้ตรวจ pipeline ทั้งชุด (guard → pipe → interceptor → filter) */
+@Public()
 @Controller('probe')
 class ProbeController {
   @Get()

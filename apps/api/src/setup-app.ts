@@ -1,5 +1,6 @@
 import { INestApplication } from '@nestjs/common';
 import { API_PREFIX } from '@market-booking/shared';
+import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { Logger } from 'nestjs-pino';
 import { requestContextMiddleware } from './common/request-context';
@@ -14,6 +15,8 @@ export function setupApp(app: INestApplication): void {
   // ต้องมาก่อน middleware ของ Nest (รวม pino-http) — ดู request-context.ts
   app.use(requestContextMiddleware);
   app.use(helmet());
+  // อ่าน refresh token cookie (httpOnly) — ใช้เฉพาะ /auth/refresh, /auth/logout
+  app.use(cookieParser());
 
   app.setGlobalPrefix(API_PREFIX.replace(/^\//, ''));
   app.enableCors({ origin: config.corsOrigins, credentials: true });

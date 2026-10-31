@@ -1,10 +1,7 @@
 import { SETTING_DEFAULTS } from '@market-booking/shared';
 import { PrismaPg } from '@prisma/adapter-pg';
-import bcrypt from 'bcryptjs';
+import { hashPassword } from '../src/common/password';
 import { Prisma, PrismaClient } from '../src/generated/prisma/client';
-
-/** bcrypt cost ตาม Overview §7.2 (admin_users.password_hash) */
-const BCRYPT_COST = 12;
 
 export interface SeedOptions {
   adminUsername: string;
@@ -26,7 +23,7 @@ export async function seed(prisma: PrismaClient, options: SeedOptions): Promise<
   const existing = await prisma.market.findFirst({ orderBy: { createdAt: 'asc' } });
   if (existing) return { skipped: true, marketId: existing.id };
 
-  const passwordHash = await bcrypt.hash(options.adminPassword, BCRYPT_COST);
+  const passwordHash = await hashPassword(options.adminPassword);
 
   const marketId = await prisma.$transaction(async (tx) => {
     const market = await tx.market.create({

@@ -14,6 +14,10 @@ import { PINO_REDACT_PATHS } from '../redact';
           // request id ตั้งโดย requestContextMiddleware (ทำงานก่อน) — log, header และ audit จึงใช้ค่าเดียวกัน
           genReqId: (req) => req.id ?? randomUUID(),
           redact: { paths: PINO_REDACT_PATHS, censor: '[REDACTED]' },
+          // ใครเป็นคนเรียก (ตั้งโดย JwtAuthGuard) — ไม่ใส่ข้อมูลส่วนตัว มีแค่ประเภท + id
+          customProps: (req) => ({
+            actor: req.principal ? `${req.principal.actorType}:${req.principal.id}` : undefined,
+          }),
           // health check ถูกเรียกถี่โดย uptime monitor — ไม่ต้อง log
           autoLogging: { ignore: (req) => req.url?.endsWith('/health') ?? false },
           // dev อ่านง่าย; production เป็น JSON บรรทัดเดียวสำหรับเก็บ log

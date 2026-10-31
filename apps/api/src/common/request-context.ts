@@ -1,12 +1,14 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomUUID } from 'node:crypto';
-import { REQUEST_ID_HEADER } from '@market-booking/shared';
+import { ActorType, REQUEST_ID_HEADER } from '@market-booking/shared';
 import type { NextFunction, Request, Response } from 'express';
 
 export interface RequestContext {
   requestId: string;
   ip?: string;
   userAgent?: string;
+  /** ตั้งโดย JwtAuthGuard เมื่อ request มี access token ที่ถูกต้อง */
+  actor?: { type: ActorType; id: string };
 }
 
 // AsyncLocalStorage ทำให้ service (เช่น AuditService) อ่าน ip/user-agent ของ request ปัจจุบันได้
@@ -15,6 +17,11 @@ const storage = new AsyncLocalStorage<RequestContext>();
 
 export function getRequestContext(): RequestContext | undefined {
   return storage.getStore();
+}
+
+export function setRequestActor(actor: NonNullable<RequestContext['actor']>): void {
+  const store = storage.getStore();
+  if (store) store.actor = actor;
 }
 
 /** รัน fn ใน context ที่กำหนด — ใช้กับ worker/job ที่ไม่ได้มาจาก HTTP และใน test */
