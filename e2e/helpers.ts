@@ -1,7 +1,7 @@
 import { type APIRequestContext, type Page, expect } from '@playwright/test';
 import { deflateSync } from 'node:zlib';
 import Redis from 'ioredis';
-import { API_URL, E2E_ADMIN, E2E_REDIS_URL } from './env';
+import { API_URL, E2E_ADMIN, E2E_REDIS_URL, WEB_URL } from './env';
 
 /** เบอร์สุ่มที่ไม่ซ้ำกับรอบก่อน (DB ของ E2E ไม่ถูกล้างระหว่างรอบ) */
 export function randomPhone(): string {
@@ -26,7 +26,7 @@ export async function readOtp(phone: string): Promise<string> {
 
 /** login ด้วยเบอร์ + OTP ผ่านหน้าเว็บ */
 export async function loginWithOtp(page: Page, phone: string): Promise<void> {
-  await page.goto('/login');
+  await page.goto(`${WEB_URL}/login`);
   await page.getByLabel('เบอร์มือถือ').fill(phone);
   await page.getByRole('button', { name: 'ขอรหัส OTP' }).click();
   await expect(page.getByLabel('รหัส OTP')).toBeVisible();
@@ -109,4 +109,20 @@ export function makePng(width: number, height: number, rgb: [number, number, num
     chunk('IDAT', deflateSync(pixels)),
     chunk('IEND', Buffer.alloc(0)),
   ]);
+}
+
+/** สมัครผู้ค้าใหม่ผ่านหน้าเว็บผู้ค้าจนถึงหน้า "รอการอนุมัติ" */
+export async function registerVendor(
+  page: Page,
+  phone: string,
+  profile: { firstName: string; lastName: string; address?: string },
+): Promise<void> {
+  await loginWithOtp(page, phone);
+  await expect(page).toHaveURL(/\/register$/);
+  await page.getByRole('textbox', { name: 'ชื่อ', exact: true }).fill(profile.firstName);
+  await page.getByLabel('นามสกุล').fill(profile.lastName);
+  await page.getByLabel('ที่อยู่').fill(profile.address ?? '1 ถนนทดสอบ กรุงเทพฯ');
+  await page.getByLabel(/ฉันยินยอมให้เก็บและใช้ข้อมูลส่วนบุคคล/).check();
+  await page.getByRole('button', { name: 'สมัครสมาชิก' }).click();
+  await expect(page.getByText('รอการอนุมัติ')).toBeVisible();
 }

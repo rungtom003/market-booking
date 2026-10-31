@@ -196,6 +196,17 @@ describe('Admin auth & RBAC (integration)', () => {
       expect(res.body.meta).toMatchObject({ page: 1, pageSize: 2, total: 4, totalPages: 2 });
     });
 
+    it('GET /admin/me returns the profile with permissions', async () => {
+      const { token } = await login('finance');
+      const res = await http()
+        .get('/api/v1/admin/me')
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+
+      expect(res.body.data).toMatchObject({ username: 'finance', role: 'FINANCE' });
+      expect(res.body.data.permissions.sort()).toEqual(['PAYMENTS_VERIFY', 'REPORTS_VIEW']);
+    });
+
     it('vendors cannot reach any /admin endpoint', async () => {
       const vendorToken = app
         .get(TokenService)

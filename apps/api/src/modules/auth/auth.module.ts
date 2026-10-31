@@ -1,6 +1,7 @@
 import { Global, Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtModule } from '@nestjs/jwt';
+import { AdminMeController } from './admin-me.controller';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { AccessGuard } from './guards/access.guard';
@@ -18,7 +19,7 @@ import { VendorAuthService } from './vendor-auth.service';
 @Module({
   // secret ส่งตอน sign/verify (TokenService) — ไม่ผูกไว้ที่ module
   imports: [JwtModule.register({})],
-  controllers: [AuthController, VendorAuthController],
+  controllers: [AuthController, AdminMeController, VendorAuthController],
   providers: [
     AuthService,
     TokenService,

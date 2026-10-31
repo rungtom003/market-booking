@@ -50,10 +50,10 @@
 | 1.3 | ↳ Admin Auth & RBAC | ✅ DONE | 2026-10-31 | 2026-10-31 |
 | 1.4 | ↳ Vendor Auth (OTP + LINE) | ✅ DONE | 2026-10-31 | 2026-10-31 |
 | 1.5 | ↳ Settings Module | ✅ DONE | 2026-10-31 | 2026-10-31 |
-| 2 | Member Registration & Approval | 🟨 IN PROGRESS | 2026-10-31 | |
+| 2 | Member Registration & Approval | ✅ DONE | 2026-10-31 | 2026-10-31 |
 | 2.1 | ↳ Vendor API & File Upload | ✅ DONE | 2026-10-31 | 2026-10-31 |
 | 2.2 | ↳ Vendor Web: สมัครสมาชิก | ✅ DONE | 2026-10-31 | 2026-10-31 |
-| 2.3 | ↳ Admin Web: Shell + อนุมัติสมาชิก + Settings | ⬜ TODO | | |
+| 2.3 | ↳ Admin Web: Shell + อนุมัติสมาชิก + Settings | ✅ DONE | 2026-10-31 | 2026-10-31 |
 | 3 | Market Setup | ⬜ TODO | | |
 | 3.1 | ↳ Zones, Categories, Stalls (API + Admin UI) | ⬜ TODO | | |
 | 3.2 | ↳ Booking Rounds & Market Days (API + Admin UI) | ⬜ TODO | | |
@@ -268,7 +268,7 @@
 ---
 
 ## Phase 2 — Member Registration & Approval
-**สถานะ:** 🟨 IN PROGRESS · **Dependencies:** Phase 1
+**สถานะ:** ✅ DONE · **Dependencies:** Phase 1
 
 ### 2.1 Vendor API & File Upload
 **สถานะ:** ✅ DONE · **Dependencies:** 1.4, 1.5 · **เริ่ม:** 2026-10-31 · **เสร็จ:** 2026-10-31
@@ -331,20 +331,27 @@
 - **Phase 2.3 (admin)**: ใช้ `errorMessageTh` / `ERROR_MESSAGES_TH` จาก shared ได้เลย; refresh ของ admin ส่ง `{ actorType: 'ADMIN' }`; โครง api-client/session ลอกจาก web ได้ (เปลี่ยน actorType); E2E ของ admin เพิ่มใน `e2e/` (เพิ่ม webServer ของ admin)
 
 ### 2.3 Admin Web: Shell + อนุมัติสมาชิก + Settings
-**สถานะ:** ⬜ TODO · **Dependencies:** 2.1 · **เริ่ม:** – · **เสร็จ:** –
+**สถานะ:** ✅ DONE · **Dependencies:** 2.1 · **เริ่ม:** 2026-10-31 · **เสร็จ:** 2026-10-31
 
 **Tasks**
-- [ ] Login, layout (sidebar/topbar), เมนูซ่อนตาม role, หน้า 403
-- [ ] หน้ารายการผู้ค้า (MUI DataGrid, tab ตามสถานะ, ค้นหา, badge จำนวนรออนุมัติ)
-- [ ] Drawer รายละเอียด: ข้อมูล + รูป (presigned GET) + ปุ่ม อนุมัติ/ปฏิเสธ/ระงับ + dialog ใส่เหตุผล
-- [ ] เลือกหลายรายการ → อนุมัติพร้อมกัน
-- [ ] หน้า Settings: ฟอร์มจาก schema (สวิตช์ AUTO/MANUAL อยู่บนสุด)
-- [ ] หน้า Admin users (SUPER_ADMIN)
+- [x] Login, layout (sidebar/topbar), เมนูซ่อนตาม role, หน้า 403
+- [x] หน้ารายการผู้ค้า (MUI DataGrid, tab ตามสถานะ, ค้นหา, badge จำนวนรออนุมัติ)
+- [x] Drawer รายละเอียด: ข้อมูล + รูป (presigned GET) + ปุ่ม อนุมัติ/ปฏิเสธ/ระงับ + dialog ใส่เหตุผล
+- [x] เลือกหลายรายการ → อนุมัติพร้อมกัน
+- [x] หน้า Settings: ฟอร์มจาก schema (สวิตช์ AUTO/MANUAL อยู่บนสุด)
+- [x] หน้า Admin users (SUPER_ADMIN)
 
 **Acceptance Criteria**
 - E2E: admin login → อนุมัติผู้ค้า PENDING → ผู้ค้า refresh แล้วเป็น APPROVED
 
-**Agent Notes:** –
+**Agent Notes:**
+- ✅ AC: `e2e/tests/admin.spec.ts` — admin login → เปิดผู้ค้า PENDING ใน drawer → อนุมัติ → ผู้ค้ารีเฟรชแล้วเห็น "บัญชีได้รับการอนุมัติแล้ว"; เพิ่ม: ไม่อนุมัติพร้อมเหตุผล (ผู้ค้าเห็นเหตุผล), เลือกหลายรายการแล้วอนุมัติ, เปลี่ยน AUTO แล้วผู้ค้าใหม่อนุมัติทันที, ค่าผิดในฟอร์มตั้งค่าไม่ถูกบันทึก, SUPER_ADMIN เพิ่ม STAFF → STAFF ไม่เห็นเมนูตั้งค่า/ผู้ดูแล และ /settings แสดง 403, รหัสผิดเห็นข้อความไทย (admin 7 + ผู้ค้า 5 = 12 ผ่าน)
+- E2E จับ bug จริงได้ 2 ตัว (แก้แล้ว): หน้า Settings พังเพราะ `setValueAs` ของ PromptPay เรียก `.trim()` กับค่า `null`; "เลือกทั้งหมด" ของ DataGrid (v8+) คืน `{ type: 'exclude' }` ทำให้นับได้ 0 รายการ — และดูภาพหน้าจอแล้วเจอ drawer รายละเอียดผู้ค้าโดน AppBar ทับ (แก้ zIndex)
+- ไฟล์สำคัญ (`apps/admin/src/`): `lib/session.ts` (+ `useCan`), `lib/api-client.ts` (`restoreSession`), `lib/nav.tsx` (เมนู + permission), `components/AppLayout.tsx`, `components/guards.tsx` (`Protected permission=`), `components/VendorDrawer.tsx`, `pages/` (Vendors, Settings, AdminUsers, Login, Home, Forbidden); API: `GET /admin/me`
+- **เพิ่มหน้าใหม่ใน Phase ถัดไป**: เพิ่มรายการใน `lib/nav.tsx` (พร้อม `permission`) + route `<Protected permission={Permission.X}>` ใน `App.tsx`
+- badge รออนุมัติโหลดใหม่ทุก 60 วินาที — Phase 4.3 เปลี่ยนเป็น realtime (`vendor:registered`)
+- "อนุมัติทั้งหมดที่ค้าง" ใช้ `window.confirm` (ยังไม่มี E2E ครอบ) — เปลี่ยนเป็น MUI Dialog ได้ถ้าต้องการหน้าตาเดียวกัน
+- หน้าแรกของ admin ยังเป็นหน้าทักทาย — Dashboard จริงอยู่ Phase 8; FINANCE ยังไม่มีเมนู (ตรวจสลิปมาใน Phase 5)
 
 ---
 
@@ -672,3 +679,5 @@
 | 2026-10-31 | 1 | ✅ DONE | Backend Foundation ครบทุก sub-phase (1.1–1.5) — ถัดไป: 2.1 Vendor API & File Upload |
 | 2026-10-31 | 2.1 | ✅ DONE | StorageModule (MinIO presigned PUT/GET + ตรวจไฟล์), สมัครด้วย registrationToken ตาม registration_mode, `/vendors/me`, admin list/counts/detail/approve/reject/suspend/unsuspend/bulk-approve + audit, VendorApprovedGuard, CI เพิ่ม MinIO — unit 117 / integration 126 ผ่าน — ถัดไป: 2.2 Vendor Web |
 | 2026-10-31 | 2.2 | ✅ DONE | เว็บผู้ค้า: login OTP (+LINE เมื่อตั้ง LIFF), สมัคร + อัปโหลดรูป (ย่อในเครื่อง), หน้าสถานะ, แก้โปรไฟล์, ข้อความไทย; E2E Playwright 360px 5 เคส + เข้า CI — ถัดไป: 2.3 Admin Web |
+| 2026-10-31 | 2.3 | ✅ DONE | หน้า admin: login, layout + เมนูตามสิทธิ์ + 403, รายการผู้ค้า (DataGrid, tab, ค้นหา, badge), drawer อนุมัติ/ไม่อนุมัติ/ระงับ, อนุมัติหลายรายการ, Settings จาก schema, จัดการผู้ดูแล; `GET /admin/me`; E2E admin 7 เคส |
+| 2026-10-31 | 2 | ✅ DONE | Member Registration & Approval ครบ (2.1–2.3) — ถัดไป: 3.1 Zones, Categories, Stalls |

@@ -16,6 +16,8 @@ try {
 export const API_PORT = 3100;
 export const WEB_PORT = 5183;
 export const WEB_URL = `http://localhost:${WEB_PORT}`;
+export const ADMIN_PORT = 5184;
+export const ADMIN_URL = `http://localhost:${ADMIN_PORT}`;
 export const API_URL = `http://localhost:${API_PORT}/api/v1`;
 
 function withPath(url: string, path: string): string {
@@ -52,7 +54,7 @@ export function apiEnv(): Record<string, string> {
     JWT_ACCESS_SECRET: pick('JWT_ACCESS_SECRET', 'e2e-access-secret'),
     JWT_REFRESH_SECRET: pick('JWT_REFRESH_SECRET', 'e2e-refresh-secret'),
     WEB_ORIGIN: WEB_URL,
-    ADMIN_ORIGIN: pick('ADMIN_ORIGIN', 'http://localhost:5184'),
+    ADMIN_ORIGIN: ADMIN_URL,
     // E2E ยิง request มากกว่าผู้ใช้จริงในเวลาสั้น
     RATE_LIMIT_PER_MINUTE: '1000',
   };

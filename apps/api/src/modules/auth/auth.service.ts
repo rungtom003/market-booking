@@ -86,6 +86,21 @@ export class AuthService {
     };
   }
 
+  /** โปรไฟล์ admin ที่ login อยู่ (หน้า admin ใช้ซ่อนเมนูตามสิทธิ์หลังรีเฟรชหน้า) */
+  async adminProfile(id: string): Promise<AdminProfile> {
+    const admin = await this.prisma.adminUser.findUnique({ where: { id }, select: ADMIN_SELECT });
+    if (!admin?.isActive)
+      throw new AppException(ErrorCode.UNAUTHORIZED, 'Account is no longer active');
+    return {
+      id: admin.id,
+      username: admin.username,
+      displayName: admin.displayName,
+      role: admin.role,
+      marketId: admin.marketId,
+      permissions: permissionsOf(admin.role),
+    };
+  }
+
   /** ออก access + refresh token ใหม่ (login) — ใช้กับ vendor ใน Phase 1.4 ด้วย */
   async issue(principal: Principal): Promise<IssuedTokens> {
     return {

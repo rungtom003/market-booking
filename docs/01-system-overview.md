@@ -600,6 +600,7 @@ Vendor กด "ยืนยันการจอง" → POST /bookings/:id/conf
 ### Admin
 | Method | Path |
 |---|---|
+| GET | `/admin/me` (โปรไฟล์ + permissions ของ admin ที่ login อยู่) |
 | GET | `/admin/vendors?status=&q=&page=` |
 | POST | `/admin/vendors/:id/approve` · `/reject` · `/suspend` · `/unsuspend` |
 | POST | `/admin/vendors/bulk-approve` (`{ ids }` หรือ `{ allPending: true }`) |
@@ -802,6 +803,11 @@ VITE_LINE_LIFF_ID=        (ฝั่ง web — ว่าง = ซ่อนป�
 | 2026-10-31 | LINE LIFF SDK โหลดแบบ dynamic import และเปิดเมื่อตั้ง `VITE_LINE_LIFF_ID` เท่านั้น | ไม่เพิ่มขนาด bundle หลัก; dev/test ไม่มี LIFF ก็ใช้ OTP ได้ |
 | 2026-10-31 | E2E (Playwright) เป็น package `e2e/` เปิด api :3100 + web :5183 ของตัวเอง ต่อ DB `*_e2e`, Redis db 14, bucket test; อ่าน OTP จาก Redis (`mock-sms:last:<เบอร์>` — MockSmsProvider เขียนเฉพาะที่ไม่ใช่ production) | รันพร้อม `pnpm dev` ได้; ไม่ต้องมี endpoint พิเศษสำหรับ test ที่อาจหลุดไป production |
 | 2026-10-31 | `*` ของช่องบังคับเป็น `aria-hidden` + ใช้ `aria-required` | ชื่อช่องที่ screen reader อ่านไม่มี "ดอกจัน" (E2E ใช้ `getByRole` ตาม accessible name) |
+| 2026-10-31 | เพิ่ม `GET /admin/me` | หน้า admin ต้องรู้ role/permissions หลังรีเฟรชหน้า (refresh ได้แค่ token) เพื่อซ่อนเมนู |
+| 2026-10-31 | หน้า admin: เมนูซ่อนตาม `PERMISSION_ROLES`, route ที่ไม่มีสิทธิ์แสดงหน้า 403 ใน layout (API ตรวจซ้ำอีกชั้น) | ตาราง §2 ที่เดียวกับ API; ซ่อนเมนูเป็นแค่ UX ไม่ใช่ความปลอดภัย |
+| 2026-10-31 | ฟอร์ม Settings สร้างจาก `settingFields` (ชนิด/ช่วงค่า) + ชื่อภาษาไทยใน admin (`META`), ส่งเฉพาะ key ที่แก้ | เพิ่ม setting ใหม่แก้ schema + ใส่ชื่อไทยที่เดียว; ไม่ทับค่าที่ admin อื่นเพิ่งแก้ |
+| 2026-10-31 | `@mui/x-data-grid` ปักไว้ `~9.16.0`; MUI 9 ไม่มี system props (`fontWeight=`, `justifyContent=`) แล้ว ใช้ `sx` | 9.17 ใหม่เกิน `minimumReleaseAge` ของ pnpm (ไม่ bypass) |
+| 2026-10-31 | E2E แยก project: ผู้ค้า (Pixel 5, 360px) / admin (Desktop Chrome 1280px) และเปิด admin :5184 เพิ่ม | แอปผู้ค้า mobile-first, admin desktop-first (§4) |
 
 ### Open Questions
 - [ ] ใช้กับตลาดเดียวหรือหลายตลาด (ตอนนี้ schema รองรับแล้ว แต่ UI ยังเป็นตลาดเดียว)

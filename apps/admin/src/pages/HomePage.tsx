@@ -1,30 +1,39 @@
-import Alert from '@mui/material/Alert';
-import Container from '@mui/material/Container';
+import { Link } from 'react-router';
+import { hasPermission } from '@market-booking/shared';
+import Button from '@mui/material/Button';
 import Paper from '@mui/material/Paper';
+import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
-import { useHealth } from '../api/health';
+import { NAV_ITEMS } from '../lib/nav';
+import { ADMIN_ROLE_TH } from '../lib/format';
+import { useAdmin } from '../lib/session';
 
+/** หน้าแรก — Dashboard จริงมาใน Phase 8 */
 export function HomePage() {
-  const health = useHealth();
-
+  const admin = useAdmin();
+  const items = NAV_ITEMS.filter(
+    (i) => i.to !== '/' && (!i.permission || hasPermission(admin.role, i.permission)),
+  );
   return (
-    <Container maxWidth="md" sx={{ py: 6 }}>
-      <Typography variant="h4" component="h1" gutterBottom>
-        ผู้ดูแลระบบ · จองล็อคตลาด
+    <Paper variant="outlined" sx={{ p: 3 }}>
+      <Typography variant="h5" gutterBottom>
+        สวัสดี {admin.displayName}
       </Typography>
-
-      <Paper variant="outlined" sx={{ p: 3 }}>
-        <Typography variant="h6" gutterBottom>
-          สถานะระบบ
+      <Typography color="text.secondary" sx={{ mb: 2 }}>
+        บทบาท: {ADMIN_ROLE_TH[admin.role]}
+      </Typography>
+      <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
+        {items.map((i) => (
+          <Button key={i.to} component={Link} to={i.to} variant="outlined" startIcon={i.icon}>
+            {i.label}
+          </Button>
+        ))}
+      </Stack>
+      {items.length === 0 && (
+        <Typography color="text.secondary">
+          เมนูของบทบาทนี้จะเปิดในระยะถัดไป (ตรวจสลิป / รายงาน)
         </Typography>
-        {health.isPending && <Alert severity="info">กำลังตรวจสอบ…</Alert>}
-        {health.isError && <Alert severity="error">เชื่อมต่อเซิร์ฟเวอร์ไม่ได้</Alert>}
-        {health.isSuccess && (
-          <Alert severity="success">
-            เซิร์ฟเวอร์ทำงานปกติ · uptime {health.data.uptime} วินาที
-          </Alert>
-        )}
-      </Paper>
-    </Container>
+      )}
+    </Paper>
   );
 }

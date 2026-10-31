@@ -1,5 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
-import { API_PORT, ROOT, WEB_PORT, WEB_URL, apiEnv } from './env';
+import { ADMIN_PORT, ADMIN_URL, API_PORT, ROOT, WEB_PORT, WEB_URL, apiEnv } from './env';
 
 export default defineConfig({
   testDir: './tests',
@@ -19,9 +19,16 @@ export default defineConfig({
   },
   projects: [
     {
-      // เป้าหมาย Overview §13: ใช้งานได้ดีที่ความกว้าง 360px
-      name: 'mobile-360',
+      // แอปผู้ค้า — เป้าหมาย Overview §13: ใช้งานได้ดีที่ความกว้าง 360px
+      name: 'vendor-mobile-360',
+      testMatch: /registration.spec.ts/,
       use: { ...devices['Pixel 5'], viewport: { width: 360, height: 740 } },
+    },
+    {
+      // แอป admin — desktop-first
+      name: 'admin-desktop',
+      testMatch: /admin.spec.ts/,
+      use: { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 800 } },
     },
   ],
   webServer: [
@@ -39,6 +46,17 @@ export default defineConfig({
       cwd: `${ROOT}/apps/web`,
       url: WEB_URL,
       env: { WEB_PORT: String(WEB_PORT), VITE_API_PROXY_TARGET: `http://localhost:${API_PORT}` },
+      reuseExistingServer: false,
+      timeout: 60_000,
+    },
+    {
+      command: 'pnpm exec vite',
+      cwd: `${ROOT}/apps/admin`,
+      url: ADMIN_URL,
+      env: {
+        ADMIN_PORT: String(ADMIN_PORT),
+        VITE_API_PROXY_TARGET: `http://localhost:${API_PORT}`,
+      },
       reuseExistingServer: false,
       timeout: 60_000,
     },
