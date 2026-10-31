@@ -14,6 +14,8 @@ allowBuilds:
   '@nestjs/core': false
   '@parcel/watcher': false
   unrs-resolver: false
+  # msgpackr (ใช้โดย bullmq) มี prebuilt binary และ fallback เป็น JS ได้
+  msgpackr-extract: false
 
 peerDependencyRules:
   # webpack มากับ @nestjs/cli 10 (เราใช้ tsc builder ไม่ได้ใช้ webpack)

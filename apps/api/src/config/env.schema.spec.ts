@@ -24,6 +24,7 @@ describe('validateEnv', () => {
     expect(env.LOG_LEVEL).toBe('info');
     expect(env.RATE_LIMIT_PER_MINUTE).toBe(100);
     expect(env.RATE_LIMIT_DISABLED).toBe(false);
+    expect(env.WORKERS_ENABLED).toBe(true);
     expect(env.MINIO_PORT).toBe(9000);
     expect(env.SMS_PROVIDER).toBe('mock');
   });
@@ -35,6 +36,11 @@ describe('validateEnv', () => {
     expect(() => validateEnv({ ...validEnv, RATE_LIMIT_DISABLED: 'yes' })).toThrow(
       /RATE_LIMIT_DISABLED/,
     );
+  });
+
+  it('parses WORKERS_ENABLED', () => {
+    expect(validateEnv({ ...validEnv, WORKERS_ENABLED: 'false' }).WORKERS_ENABLED).toBe(false);
+    expect(() => validateEnv({ ...validEnv, WORKERS_ENABLED: '0' })).toThrow(/WORKERS_ENABLED/);
   });
 
   it('treats empty strings as unset', () => {

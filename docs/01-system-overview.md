@@ -172,7 +172,7 @@ market-booking/
 │   │   │       ├── market/      # ตลาดหลัก (MarketService)
 │   │   │       ├── market-setup/ # product categories, zones, stalls, ผังตลาด
 │   │   │       ├── round/        # รอบการจอง, วันขาย, override ล็อครายวัน, /rounds/current
-│   │   │       ├── booking/      # hold/confirm/cancel, BookingStateService, BookingEvents (booking.changed)
+│   │   │       ├── booking/      # hold/confirm/cancel, BookingStateService, BookingEvents (booking.changed), queue booking-expiry
 │   │   │       ├── round/       # booking_rounds, market_days
 │   │   │       ├── booking/
 │   │   │       ├── payment/
@@ -738,6 +738,7 @@ DATABASE_URL=postgresql://market:market_dev@localhost:5433/market_booking
 TEST_DATABASE_URL=postgresql://market:market_dev@localhost:5433/market_booking_test
 REDIS_URL=redis://localhost:6379
 # TEST_REDIS_URL=redis://localhost:6379/15
+WORKERS_ENABLED=true     (BullMQ worker + job ประจำใน process นี้; test ปิดไว้)
 JWT_ACCESS_SECRET=
 JWT_REFRESH_SECRET=
 MINIO_ENDPOINT=localhost
@@ -844,6 +845,9 @@ VITE_LINE_LIFF_ID=        (ฝั่ง web — ว่าง = ซ่อนป�
 | 2026-10-31 | rate limit ของ hold (5/10 วินาที/ผู้ค้า) นับใน `BookingService` ด้วย Redis INCR; Redis ล่ม = ไม่จำกัด | `ThrottlerGuard` เป็น global guard ที่ทำงานก่อน auth guard จึงยังไม่รู้ vendor id; การจองไม่ควรล่มเพราะ Redis |
 | 2026-10-31 | ยืนยันการจองราคา 0 บาท → `CONFIRMED` ทันทีแม้ `payment_required` | ไม่มีอะไรให้ชำระ — ไม่ค้างเป็น `PENDING_PAYMENT` จนหมดเวลา |
 | 2026-10-31 | advisory lock ของ hold = `pg_advisory_xact_lock(hashtext(vendor_id), hashtext(market_day_id))`; transaction `maxWait/timeout` 10 วินาที | กุญแจ 2 ส่วนลดโอกาส hash ชน; ตอนเปิดรอบ request พร้อมกันมากต้องรอ connection pool ได้ |
+| 2026-10-31 | ใช้ `bullmq` 5.x ตรง (ไม่ใช้ `@nestjs/bullmq`) | 6.x เลิกใช้ ioredis และยังใหม่; 5.81 ใช้ ioredis 5.11 ตัวเดียวกับ API; `@nestjs/bullmq` รุ่นใหม่ต้อง Nest 11 |
+| 2026-10-31 | worker รันใน API process (ปิดได้ด้วย `WORKERS_ENABLED=false`); job กวาดทุก 1 นาทีใช้ BullMQ job scheduler แทน cron | ระยะแรกไม่ต้องมี process เพิ่ม; job scheduler รันครั้งเดียวแม้มีหลาย instance |
+| 2026-10-31 | job หมดเวลา 1 ตัวต่อการจอง (`jobId = bookingId`): ทุก `booking.changed` ลบ job เดิมแล้วตั้งใหม่ตามเวลาหมดของสถานะล่าสุด; processor ที่มาก่อนเวลาเลื่อน job ไปเวลาจริง (`moveToDelayed`) | ตั้ง job ชนกันหรือหลุดก็แก้ตัวเองได้; การเปลี่ยนเป็น EXPIRED ยังเป็น UPDATE แบบมีเงื่อนไขเวลา+สถานะ (ชนกับ confirm ได้ผลเดียว) และ sweeper เก็บตก |
 
 ### Open Questions
 - [ ] ใช้กับตลาดเดียวหรือหลายตลาด (ตอนนี้ schema รองรับแล้ว แต่ UI ยังเป็นตลาดเดียว)

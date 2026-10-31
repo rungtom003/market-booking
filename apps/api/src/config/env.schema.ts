@@ -23,6 +23,14 @@ export const envSchema = z.object({
 
   DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }),
   REDIS_URL: z.url({ protocol: /^rediss?$/ }),
+  /**
+   * รัน BullMQ worker + job ประจำ (เช่น กวาดการจองที่หมดเวลา) ใน process นี้
+   * ปิดได้เมื่อแยก worker ไปอีก process — ส่วนที่ใส่ job เข้า queue ยังทำงานเสมอ
+   */
+  WORKERS_ENABLED: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((v) => v === 'true'),
 
   JWT_ACCESS_SECRET: secret,
   JWT_REFRESH_SECRET: secret,

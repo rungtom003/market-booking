@@ -59,7 +59,7 @@
 | 3.2 | ↳ Booking Rounds & Market Days (API + Admin UI) | ✅ DONE | 2026-10-31 | 2026-10-31 |
 | 4 | Realtime Booking ⭐ | 🟨 IN PROGRESS | 2026-10-31 | |
 | 4.1 | ↳ Booking Core API + Concurrency | ✅ DONE | 2026-10-31 | 2026-10-31 |
-| 4.2 | ↳ Expiry Worker (BullMQ) | ⬜ TODO | | |
+| 4.2 | ↳ Expiry Worker (BullMQ) | ✅ DONE | 2026-10-31 | 2026-10-31 |
 | 4.3 | ↳ Realtime Gateway (Socket.IO) | ⬜ TODO | | |
 | 4.4 | ↳ Vendor Web: หน้าผังและจองล็อค | ⬜ TODO | | |
 | 4.5 | ↳ Admin Web: จัดการการจอง | ⬜ TODO | | |
@@ -454,20 +454,29 @@
 - ทดสอบ: unit 159 (+25: ตาราง transition, `transition` mock, `isLapsed`, `BookingEvents`, schema), integration 194 (+18 `bookings.int-spec.ts` ครอบคลุมทุก error code ของการจอง), E2E 20 (ไม่มี UI ใหม่ — หน้าจองอยู่ 4.4)
 
 ### 4.2 Expiry Worker (BullMQ)
-**สถานะ:** ⬜ TODO · **Dependencies:** 4.1 · **เริ่ม:** – · **เสร็จ:** –
+**สถานะ:** ✅ DONE · **Dependencies:** 4.1 · **เริ่ม:** 2026-10-31 · **เสร็จ:** 2026-10-31
 
 **Tasks**
-- [ ] Queue `booking-expiry`: delayed job ตอน hold (jobId = bookingId) และตอนเข้า PENDING_PAYMENT
-- [ ] Processor: transition `HOLD|PENDING_PAYMENT → EXPIRED` เฉพาะถ้ายังหมดเวลาจริง (idempotent)
-- [ ] Sweeper cron ทุก 1 นาที: กวาด booking ที่หมดเวลาแต่ยังค้าง (กรณี Redis หาย/restart)
-- [ ] ลบ job เมื่อ confirm/cancel ก่อนหมดเวลา
-- [ ] Emit `booking.changed` เมื่อ expire
+- [x] Queue `booking-expiry`: delayed job ตอน hold (jobId = bookingId) และตอนเข้า PENDING_PAYMENT
+- [x] Processor: transition `HOLD|PENDING_PAYMENT → EXPIRED` เฉพาะถ้ายังหมดเวลาจริง (idempotent)
+- [x] Sweeper cron ทุก 1 นาที: กวาด booking ที่หมดเวลาแต่ยังค้าง (กรณี Redis หาย/restart)
+- [x] ลบ job เมื่อ confirm/cancel ก่อนหมดเวลา
+- [x] Emit `booking.changed` เมื่อ expire
 
 **Acceptance Criteria**
 - ตั้ง `hold_minutes` = 1 ใน test → ล็อคว่างหลัง 1 นาที (± sweeper interval)
 - Confirm ที่วินาทีเดียวกับ expire → ผลลัพธ์เป็นอย่างใดอย่างหนึ่ง ไม่มีสถานะเพี้ยน
 
-**Agent Notes:** –
+**Agent Notes:**
+- ✅ AC ข้อ 1: `booking-expiry.int-spec.ts` ตั้ง `hold_minutes = 1` → จองแล้วไม่ทำอะไร → การจองเป็น `EXPIRED` เองหลังครบ 1 นาที (ไม่ก่อนเวลา, ช้ากว่าไม่เกิน sweeper interval) + event `EXPIRED` + ผังแสดงล็อคว่าง (test นี้ใช้เวลาจริง ~1 นาที)
+- ✅ AC ข้อ 2: 20 การจองหมดเวลาพร้อมกันที่ T แล้วยิง confirm (HTTP) กับ `expireBooking` ชนกันรอบ T (เหลื่อม 0–40 ms) → ทุกรายการจบที่ `PENDING_PAYMENT` หรือ `EXPIRED` อย่างใดอย่างหนึ่ง, `version = 1` (เปลี่ยนครั้งเดียว), event 1 ครั้งตรงกับสถานะจริง, confirm ได้ 200 เฉพาะเมื่อชนะ
+- `modules/booking/booking-expiry.processor.ts` (`BookingExpiryProcessor`): ฟัง `BookingEvents` → ลบ job เดิม (`jobId = bookingId`) แล้วตั้ง delayed job ใหม่ที่ `holdExpiresAt` (HOLD) / `paymentDueAt` (PENDING_PAYMENT); สถานะอื่น (confirm แบบไม่ต้องชำระ/cancel/expire) = ลบ job
+- processor: `expireBooking(id)` ใช้ `BookingStateService.expireLapsed` (UPDATE เฉพาะที่หมดเวลาจริง — idempotent) แล้ว emit; ถ้ายังไม่ถึงเวลาหมดของสถานะปัจจุบัน → `job.moveToDelayed(เวลาจริง)` (ตั้ง job ชนกันก็แก้ตัวเอง)
+- sweeper: BullMQ job scheduler `sweep-lapsed-bookings` ทุก 60 วินาที → `sweep()` กวาดทุกตลาด (กรณี Redis หาย/restart/job หลุด)
+- env ใหม่ `WORKERS_ENABLED` (default `true`): worker + scheduler รันใน API process; ฝั่งตั้ง job ทำงานเสมอ — unit/integration test ตั้ง `false` (ไฟล์ test ของ worker เรียก `start()` เอง) กัน sweeper ไปเปลี่ยนข้อมูลของ test อื่น
+- dependency ใหม่ `bullmq@^5.81.5` (6.x เลิกใช้ ioredis) + `msgpackr-extract: false` ใน `allowBuilds` (มี prebuilt/JS fallback)
+- **4.3 ต่อได้เลย**: event `EXPIRED` จาก worker/sweeper ส่งผ่าน `BookingEvents` เหมือน event อื่น — gateway subscribe ที่เดียวพอ
+- ทดสอบ: unit 165 (+6: processor ตัดสินใจ expire/เลื่อน/ข้าม/sweep, env), integration 199 (+5), E2E 20 (E2E รัน worker จริงด้วย default `true`)
 
 ### 4.3 Realtime Gateway (Socket.IO)
 **สถานะ:** ⬜ TODO · **Dependencies:** 4.1 · **เริ่ม:** – · **เสร็จ:** –
@@ -722,3 +731,5 @@
 | 2026-10-31 | 3 | ✅ DONE | Market Setup ครบ (3.1–3.2) — ถัดไป: 4.1 Booking Core API + Concurrency |
 | 2026-10-31 | 4.1 | 🟨 IN PROGRESS | เริ่ม hold/confirm/cancel + advisory lock + partial unique, state transition, snapshot ผังรวมสถานะจอง, event ภายใน, concurrency test |
 | 2026-10-31 | 4.1 | ✅ DONE | hold/confirm/cancel (+admin cancel), advisory lock + partial unique, `BookingStateService`, expire ที่หมดเวลาในการจอง, snapshot ผัง AVAILABLE/HOLD/BOOKED/CLOSED + mine, `BookingEvents`; AC concurrency 50→1 และโควตา 2→1 ผ่าน — unit 159 / integration 194 / E2E 20 ผ่าน — ถัดไป: 4.2 Expiry Worker |
+| 2026-10-31 | 4.2 | 🟨 IN PROGRESS | เริ่ม queue booking-expiry (BullMQ), processor idempotent, sweeper ทุก 1 นาที, ลบ job เมื่อ confirm/cancel |
+| 2026-10-31 | 4.2 | ✅ DONE | queue `booking-expiry` (bullmq 5) ตั้ง/ลบ job ตาม `booking.changed`, processor idempotent + เลื่อน job ที่มาก่อนเวลา, sweeper ทุก 1 นาที (job scheduler), `WORKERS_ENABLED`; AC hold 1 นาทีว่างเอง + confirm ชน expire ได้ผลเดียว — unit 165 / integration 199 / E2E 20 ผ่าน — ถัดไป: 4.3 Realtime Gateway |

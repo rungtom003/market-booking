@@ -13,6 +13,8 @@ const defaults: Record<string, string> = {
   MINIO_BUCKET: 'test',
   WEB_ORIGIN: 'http://localhost:5173',
   ADMIN_ORIGIN: 'http://localhost:5174',
+  // ไม่รัน BullMQ worker/job ประจำใน test — test ของ worker เรียก start() เอง
+  WORKERS_ENABLED: 'false',
 };
 
 for (const [key, value] of Object.entries(defaults)) {
