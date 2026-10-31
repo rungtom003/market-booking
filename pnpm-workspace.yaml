@@ -1,6 +1,7 @@
 packages:
   - apps/*
   - packages/*
+  - e2e
 
 # pnpm 11 ไม่รัน install script ของ dependency เว้นแต่อนุญาต
 allowBuilds:

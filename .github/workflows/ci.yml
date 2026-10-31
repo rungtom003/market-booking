@@ -12,7 +12,7 @@ concurrency:
 jobs:
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
 
     services:
       postgres:
@@ -107,3 +107,20 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+      - name: Install Playwright (Chromium)
+        run: pnpm --filter @market-booking/e2e exec playwright install --with-deps chromium
+
+      # เปิด api (port 3100) + web (port 5183) ของตัวเอง ใช้ DB market_booking_e2e / Redis db 14
+      - name: E2E test (Playwright, 360px)
+        run: pnpm test:e2e
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report
+          path: |
+            e2e/playwright-report
+            e2e/test-results
+          retention-days: 7

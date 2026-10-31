@@ -59,15 +59,15 @@ function utf8Length(value: string): number {
 /** bcrypt ใช้แค่ 72 byte แรก — จำกัดไว้กันผู้ใช้เข้าใจผิดว่ารหัสยาวกว่านั้นมีผล (ภาษาไทย 1 ตัว = 3 byte) */
 export const adminPasswordSchema = z
   .string()
-  .min(10, 'Password must be at least 10 characters')
-  .refine((p) => utf8Length(p) <= 72, 'Password is too long (max 72 bytes)');
+  .min(10, 'รหัสผ่านต้องมีอย่างน้อย 10 ตัวอักษร')
+  .refine((p) => utf8Length(p) <= 72, 'รหัสผ่านยาวเกินไป (สูงสุด 72 ไบต์)');
 
 export const createAdminUserSchema = z.object({
   username: z
     .string()
     .trim()
     .toLowerCase()
-    .regex(/^[a-z0-9._-]{3,50}$/, 'Use 3-50 characters: a-z, 0-9, dot, underscore, hyphen'),
+    .regex(/^[a-z0-9._-]{3,50}$/, 'ใช้ a-z, 0-9, จุด, ขีดล่าง หรือขีด 3–50 ตัว'),
   password: adminPasswordSchema,
   displayName: z.string().trim().min(1).max(100),
   role: adminRoleSchema,
@@ -86,7 +86,7 @@ export const updateAdminUserSchema = z
     password: adminPasswordSchema,
   })
   .partial()
-  .refine((v) => Object.keys(v).length > 0, 'Nothing to update');
+  .refine((v) => Object.keys(v).length > 0, 'ไม่มีข้อมูลที่เปลี่ยนแปลง');
 export type UpdateAdminUserInput = z.infer<typeof updateAdminUserSchema>;
 
 export const adminUserListQuerySchema = paginationQuerySchema.extend({

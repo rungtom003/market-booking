@@ -11,7 +11,9 @@ export const promptPayIdSchema = z
   .string()
   .trim()
   .transform((v) => v.replace(/[\s-]/g, ''))
-  .pipe(z.string().regex(/^(\d{10}|\d{13}|\d{15})$/, 'PromptPay ID must be 10, 13 or 15 digits'));
+  .pipe(
+    z.string().regex(/^(\d{10}|\d{13}|\d{15})$/, 'PromptPay ต้องเป็นตัวเลข 10, 13 หรือ 15 หลัก'),
+  );
 
 /**
  * schema ของทุก setting (Overview §12) — API ใช้ validate ตอนแก้/อ่านจาก DB,
@@ -66,5 +68,5 @@ export const SETTING_KEYS = Object.keys(settingFields) as SettingKey[];
 export const updateSettingsSchema = settingsSchema
   .partial()
   .strict()
-  .refine((v) => Object.keys(v).length > 0, 'Nothing to update');
+  .refine((v) => Object.keys(v).length > 0, 'ไม่มีข้อมูลที่เปลี่ยนแปลง');
 export type UpdateSettingsInput = z.infer<typeof updateSettingsSchema>;

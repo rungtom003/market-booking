@@ -13,3 +13,7 @@ coverage
 
 # Prisma client (สร้างด้วย prisma generate)
 apps/api/src/generated
+
+# Playwright
+e2e/test-results
+e2e/playwright-report

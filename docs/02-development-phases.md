@@ -52,7 +52,7 @@
 | 1.5 | ↳ Settings Module | ✅ DONE | 2026-10-31 | 2026-10-31 |
 | 2 | Member Registration & Approval | 🟨 IN PROGRESS | 2026-10-31 | |
 | 2.1 | ↳ Vendor API & File Upload | ✅ DONE | 2026-10-31 | 2026-10-31 |
-| 2.2 | ↳ Vendor Web: สมัครสมาชิก | ⬜ TODO | | |
+| 2.2 | ↳ Vendor Web: สมัครสมาชิก | ✅ DONE | 2026-10-31 | 2026-10-31 |
 | 2.3 | ↳ Admin Web: Shell + อนุมัติสมาชิก + Settings | ⬜ TODO | | |
 | 3 | Market Setup | ⬜ TODO | | |
 | 3.1 | ↳ Zones, Categories, Stalls (API + Admin UI) | ⬜ TODO | | |
@@ -304,21 +304,31 @@
 - ไฟล์ที่อัปโหลดแล้วแต่ไม่ได้ใช้ (ยกเลิกสมัคร/เปลี่ยนรูป) ยังค้างใน bucket — ควรเพิ่ม lifecycle rule ลบ `vendors/reg-*` ที่เก่ากว่า 1 วัน (Phase 6)
 
 ### 2.2 Vendor Web: สมัครสมาชิก
-**สถานะ:** ⬜ TODO · **Dependencies:** 2.1 · **เริ่ม:** – · **เสร็จ:** –
+**สถานะ:** ✅ DONE · **Dependencies:** 2.1 · **เริ่ม:** 2026-10-31 · **เสร็จ:** 2026-10-31
 
 **Tasks**
-- [ ] Layout mobile-first, router, auth context, axios interceptor (refresh อัตโนมัติ)
-- [ ] หน้า Login: ปุ่ม LINE (LIFF SDK) + เบอร์โทร/OTP (นับถอยหลังขอใหม่)
-- [ ] หน้าสมัคร: React Hook Form + Zod schema จาก `shared`, อัปโหลดรูปผ่าน presigned URL พร้อม preview/บีบอัดรูป, checkbox PDPA + ลิงก์นโยบาย
-- [ ] หน้าสถานะ: รออนุมัติ / ถูกปฏิเสธ (แสดงเหตุผล + ปุ่มแก้ไข) / ถูกระงับ (แสดงวันสิ้นสุด)
-- [ ] หน้าโปรไฟล์แก้ไขข้อมูล
-- [ ] Error message ภาษาไทยตาม error code
+- [x] Layout mobile-first, router, auth context, axios interceptor (refresh อัตโนมัติ)
+- [x] หน้า Login: ปุ่ม LINE (LIFF SDK) + เบอร์โทร/OTP (นับถอยหลังขอใหม่)
+- [x] หน้าสมัคร: React Hook Form + Zod schema จาก `shared`, อัปโหลดรูปผ่าน presigned URL พร้อม preview/บีบอัดรูป, checkbox PDPA + ลิงก์นโยบาย
+- [x] หน้าสถานะ: รออนุมัติ / ถูกปฏิเสธ (แสดงเหตุผล + ปุ่มแก้ไข) / ถูกระงับ (แสดงวันสิ้นสุด)
+- [x] หน้าโปรไฟล์แก้ไขข้อมูล
+- [x] Error message ภาษาไทยตาม error code
 
 **Acceptance Criteria**
 - ใช้งานครบ flow ได้บนจอ 360px
 - E2E (Playwright): OTP (mock) → สมัคร → เห็นหน้ารออนุมัติ
 
-**Agent Notes:** –
+**Agent Notes:**
+- ✅ AC ข้อ 1: ทุก E2E รันที่ viewport 360×740 และตรวจว่าไม่มี scroll แนวนอน; ดูภาพหน้าจอ login / OTP / ฟอร์มสมัคร (พร้อม error) ที่ 360px แล้ว
+- ✅ AC ข้อ 2: `e2e/tests/registration.spec.ts` — OTP (mock) → สมัคร (แนบรูป 2000×1200 ที่ถูกย่อเป็น JPEG ก่อนอัปโหลด) → เห็น "รอการอนุมัติ" → รีเฟรชแล้วยัง login; เพิ่ม: OTP ผิดเห็นข้อความไทย + จำนวนครั้งที่เหลือ, เบอร์ผิดรูปแบบ, ถูกปฏิเสธ→เห็นเหตุผล→แก้→กลับเป็นรออนุมัติ→อนุมัติ, ออกจากระบบ (5/5 ผ่าน)
+- E2E จับ bug จริงได้ 1 ตัว: เลือก "— เลือกประเภทสินค้า —" ส่ง `''` แล้วไม่ผ่าน uuid → ส่งฟอร์มไม่ได้ (แก้แล้วทั้งหน้าสมัครและโปรไฟล์)
+- ไฟล์สำคัญ (`apps/web/src/`): `lib/api-client.ts` (refresh อัตโนมัติ single-flight), `lib/session.ts` (token ใน memory), `lib/errors.ts` (ข้อความไทย + ใส่ error รายฟิลด์ลงฟอร์ม), `lib/image.ts` (ย่อรูป), `lib/registration-draft.ts`, `features/auth/` (AuthBootstrap/RequireAuth, LIFF), `components/ui.tsx`, `components/ImageUpload.tsx`, `pages/` (Login, Register, Home=สถานะ, Profile, Privacy); `packages/shared/src/error-messages.th.ts`; `e2e/`
+- API เพิ่ม: `POST /vendors/register/options`, `GET /vendors/me/options` (ต้องแนบรูปไหม + ประเภทสินค้า); `MockSmsProvider` เขียนข้อความล่าสุดลง Redis (dev/test เท่านั้น) ให้ E2E อ่าน OTP
+- ข้อความ validation รายฟิลด์ใน shared schema เปลี่ยนเป็นภาษาไทย (ดู Decision Log)
+- **ยังไม่ได้ทดสอบกับ LINE จริง** — ปุ่ม LINE ซ่อนจนกว่าจะตั้ง `VITE_LINE_LIFF_ID` (และ `LINE_LOGIN_CHANNEL_ID` ฝั่ง API); ต้องทดสอบบนมือถือจริงใน LINE app ก่อนเปิดใช้ (Phase 6)
+- **นโยบายความเป็นส่วนตัว** (`/privacy`) เป็นฉบับร่าง — เจ้าของตลาดต้องตรวจ/ให้ฝ่ายกฎหมายรับรอง
+- Bundle web ~643 KB (gzip ~198 KB) — แยก route ด้วย lazy import ได้เมื่อมีหน้าจองใน Phase 4
+- **Phase 2.3 (admin)**: ใช้ `errorMessageTh` / `ERROR_MESSAGES_TH` จาก shared ได้เลย; refresh ของ admin ส่ง `{ actorType: 'ADMIN' }`; โครง api-client/session ลอกจาก web ได้ (เปลี่ยน actorType); E2E ของ admin เพิ่มใน `e2e/` (เพิ่ม webServer ของ admin)
 
 ### 2.3 Admin Web: Shell + อนุมัติสมาชิก + Settings
 **สถานะ:** ⬜ TODO · **Dependencies:** 2.1 · **เริ่ม:** – · **เสร็จ:** –
@@ -661,3 +671,4 @@
 | 2026-10-31 | 1.5 | ✅ DONE | schema ทุก key ใน shared, `SettingsService.get<K>()`, cache Redis แบบ version, `PUT /admin/settings` + audit เฉพาะ key ที่เปลี่ยน — unit 109 / integration 89 ผ่าน |
 | 2026-10-31 | 1 | ✅ DONE | Backend Foundation ครบทุก sub-phase (1.1–1.5) — ถัดไป: 2.1 Vendor API & File Upload |
 | 2026-10-31 | 2.1 | ✅ DONE | StorageModule (MinIO presigned PUT/GET + ตรวจไฟล์), สมัครด้วย registrationToken ตาม registration_mode, `/vendors/me`, admin list/counts/detail/approve/reject/suspend/unsuspend/bulk-approve + audit, VendorApprovedGuard, CI เพิ่ม MinIO — unit 117 / integration 126 ผ่าน — ถัดไป: 2.2 Vendor Web |
+| 2026-10-31 | 2.2 | ✅ DONE | เว็บผู้ค้า: login OTP (+LINE เมื่อตั้ง LIFF), สมัคร + อัปโหลดรูป (ย่อในเครื่อง), หน้าสถานะ, แก้โปรไฟล์, ข้อความไทย; E2E Playwright 360px 5 เคส + เข้า CI — ถัดไป: 2.3 Admin Web |

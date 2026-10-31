@@ -1,6 +1,8 @@
 dist
 coverage
 **/generated
+e2e/test-results
+e2e/playwright-report
 node_modules
 pnpm-lock.yaml
 # เอกสารออกแบบแก้ด้วยมือ ไม่ให้ Prettier จัดตารางใหม่

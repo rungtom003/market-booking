@@ -10,7 +10,7 @@ export const thaiMobilePhoneSchema = z
   .string()
   .trim()
   .transform((value) => value.replace(/[\s-]/g, ''))
-  .pipe(z.string().regex(/^(?:\+?66|0)[689]\d{8}$/, 'Invalid Thai mobile number'))
+  .pipe(z.string().regex(/^(?:\+?66|0)[689]\d{8}$/, 'เบอร์มือถือไม่ถูกต้อง (เช่น 0812345678)'))
   .transform((value) => `0${value.slice(-9)}`);
 
 export const OTP_LENGTH = 6;
@@ -20,7 +20,7 @@ export type OtpRequestInput = z.infer<typeof otpRequestSchema>;
 
 export const otpVerifySchema = z.object({
   phone: thaiMobilePhoneSchema,
-  code: z.string().regex(/^\d{6}$/, 'OTP must be 6 digits'),
+  code: z.string().regex(/^\d{6}$/, 'รหัส OTP ต้องเป็นตัวเลข 6 หลัก'),
   /** ส่งมาเมื่อมาจากขั้นตอน LINE (ยังไม่มีบัญชี) — ถ้าเบอร์นี้มีบัญชีอยู่แล้วจะผูก LINE ให้ */
   registrationToken: z.string().max(2000).optional(),
 });

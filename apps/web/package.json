@@ -10,11 +10,16 @@
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.node.json --noEmit"
   },
   "dependencies": {
+    "@hookform/resolvers": "^6.0.2",
+    "@line/liff": "^2.31.2",
     "@market-booking/shared": "workspace:*",
     "@tanstack/react-query": "^5.105.0",
     "axios": "^1.21.0",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "react-hook-form": "^7.91.0",
+    "react-router": "7.18.5",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",

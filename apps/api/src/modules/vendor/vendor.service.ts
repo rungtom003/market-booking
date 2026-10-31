@@ -6,6 +6,7 @@ import {
   UploadRequestInput,
   UploadTicket,
   VendorImageKind,
+  VendorFormOptions,
   VendorProfile,
   VendorRegisterInput,
   VendorRegisterResponse,
@@ -54,6 +55,31 @@ export class VendorService {
     return this.images.createUpload({ registrationId: claims.registrationId }, input);
   }
 
+  /** ตัวเลือกของฟอร์มสมัคร (ผู้สมัครยังไม่มีบัญชี — ยืนยันด้วย registrationToken) */
+  async registrationOptions(registrationToken: string): Promise<VendorFormOptions> {
+    return this.formOptions(this.registrationTokens.verify(registrationToken).marketId);
+  }
+
+  async profileOptions(vendor: VendorPrincipal): Promise<VendorFormOptions> {
+    return this.formOptions(vendor.marketId);
+  }
+
+  private async formOptions(marketId: string): Promise<VendorFormOptions> {
+    const [settings, productCategories] = await Promise.all([
+      this.settings.getAll(marketId),
+      this.prisma.productCategory.findMany({
+        where: { marketId },
+        select: { id: true, name: true },
+        orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+      }),
+    ]);
+    return {
+      requireIdCardImage: settings.require_id_card_image,
+      requireShopImage: settings.require_shop_image,
+      productCategories,
+    };
+  }
+
   createProfileUpload(vendor: VendorPrincipal, input: UploadRequestInput): Promise<UploadTicket> {
     return this.images.createUpload({ vendorId: vendor.id }, input);
   }
@@ -68,13 +94,13 @@ export class VendorService {
     const claims = this.registrationTokens.verify(input.registrationToken);
     // มาทาง OTP: ใช้เบอร์ที่ยืนยันแล้วเสมอ (ไม่สนเบอร์ใน body); มาทาง LINE: ต้องกรอกเบอร์
     const phone = claims.verifiedPhone ?? input.phone;
-    if (!phone) throw validationError('phone', 'Phone is required');
+    if (!phone) throw validationError('phone', 'กรุณากรอกเบอร์โทร');
 
     const settings = await this.settings.getAll(claims.marketId);
     const owners: ImageOwner[] = [{ registrationId: claims.registrationId }];
     for (const { kind, field, setting } of IMAGE_FIELDS) {
       const key = input[field];
-      if (!key && settings[setting]) throw validationError(field, 'This image is required');
+      if (!key && settings[setting]) throw validationError(field, 'กรุณาแนบรูปนี้');
       if (key) await this.images.assertUsable(owners, kind, key);
     }
     await this.assertCategory(claims.marketId, input.productCategoryId);
@@ -159,7 +185,7 @@ export class VendorService {
     for (const { kind, field, setting } of IMAGE_FIELDS) {
       const key = input[field];
       if (key === undefined || key === before[field]) continue;
-      if (key === null && settings[setting]) throw validationError(field, 'This image is required');
+      if (key === null && settings[setting]) throw validationError(field, 'กรุณาแนบรูปนี้');
       if (key) await this.images.assertUsable([{ vendorId: principal.id }], kind, key);
     }
     if (input.productCategoryId)
@@ -208,7 +234,7 @@ export class VendorService {
   private async assertCategory(marketId: string, categoryId: string | null | undefined) {
     if (!categoryId) return;
     const found = await this.prisma.productCategory.count({ where: { id: categoryId, marketId } });
-    if (!found) throw validationError('productCategoryId', 'Unknown product category');
+    if (!found) throw validationError('productCategoryId', 'ไม่พบประเภทสินค้านี้');
   }
 
   private async assertNotRegistered(marketId: string, phone: string, lineUserId?: string) {

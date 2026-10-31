@@ -580,8 +580,10 @@ Vendor กด "ยืนยันการจอง" → POST /bookings/:id/conf
 ### Vendor (ผู้ค้า)
 | Method | Path | หมายเหตุ |
 |---|---|---|
+| POST | `/vendors/register/options` | public — ต้องแนบรูปไหม + ประเภทสินค้า (ใช้ `registrationToken`) |
 | POST | `/vendors/register/uploads` | public — ขอ URL อัปโหลดรูประหว่างสมัคร (ใช้ `registrationToken`) |
 | POST | `/vendors/register` | public — ใช้ `registrationToken` จาก OTP/LINE |
+| GET | `/vendors/me/options` | ตัวเลือกของฟอร์มแก้โปรไฟล์ |
 | GET / PATCH | `/vendors/me` | แก้ไขข้อมูล (REJECTED → ส่งใหม่เป็น PENDING) |
 | POST | `/vendors/me/images` | presigned upload — ได้ `{ key, url, headers }` แล้ว PUT ไฟล์ตรงไป MinIO แล้วส่ง `key` ไปกับ `PATCH /vendors/me` |
 | GET | `/rounds/current` | รอบที่กำลังจะเปิด/เปิดอยู่ |
@@ -736,6 +738,8 @@ WEB_ORIGIN=http://localhost:5173
 ADMIN_ORIGIN=http://localhost:5174
 SEED_ADMIN_USERNAME=admin
 SEED_ADMIN_PASSWORD=
+VITE_LINE_LIFF_ID=        (ฝั่ง web — ว่าง = ซ่อนปุ่ม LINE)
+# E2E_DATABASE_URL / E2E_REDIS_URL  (ไม่ตั้ง = DB *_e2e และ Redis db 14)
 ```
 > ไฟล์ `.env.example` จริงใส่ค่า dev ของ JWT/MinIO ไว้ให้รันกับ `docker-compose.yml` ได้ทันที — production ต้องตั้งใหม่ทั้งหมด (env schema บังคับ secret ≥ 32 ตัวอักษรเมื่อ `NODE_ENV=production`)
 
@@ -790,6 +794,14 @@ SEED_ADMIN_PASSWORD=
 | 2026-10-31 | ผู้ค้า APPROVED แก้โปรไฟล์ได้โดยไม่ต้องตรวจใหม่; เปลี่ยนเบอร์ยังไม่รองรับ (ต้องผ่าน OTP) | §8.1 กำหนดให้ส่งตรวจใหม่เฉพาะ REJECTED; เบอร์เป็นตัวระบุตัวตนสำหรับ login |
 | 2026-10-31 | ไม่มี CORS config ของ MinIO แยก — MinIO ตอบ preflight ให้ทุก origin โดย default (ตรวจแล้วกับ origin ของ web) | presigned URL เป็นตัวคุมสิทธิ์อยู่แล้ว; production ที่วาง MinIO หลัง Nginx ต้องผ่าน header เหล่านี้ด้วย (Phase 6) |
 | 2026-10-31 | CI เปิด MinIO ด้วย `docker run` (ไม่ใช่ `services`) | services ของ GitHub Actions กำหนด command `server /data` ไม่ได้ |
+| 2026-10-31 | ข้อความ validation รายฟิลด์ใน schema ของ `packages/shared` เป็นภาษาไทย; `message` ระดับบนของ API ยังเป็นอังกฤษ; ข้อความไทยตาม error code อยู่ที่ `ERROR_MESSAGES_TH` (shared) + Zod locale `th` | ข้อความรายฟิลด์ผู้ใช้เห็นตรงๆ (client และ `details` จาก server); ข้อความ error ระดับบนสำหรับ developer; ทั้งแอปผู้ค้าและ admin ใช้ชุดเดียวกัน — typecheck บังคับให้มีครบทุก code |
+| 2026-10-31 | Web: access token อยู่ใน memory เท่านั้น, เปิดแอปแล้วขอใหม่จาก refresh cookie; 401 → refresh แบบ single-flight แล้วยิงซ้ำ 1 ครั้ง | กัน XSS ขโมย token จาก storage; refresh ซ้อนกันจะถูกมองเป็นการใช้ token ซ้ำ (Phase 1.3) |
+| 2026-10-31 | ผล `REGISTRATION_REQUIRED` เก็บใน `sessionStorage` (หมดอายุตาม token) | รีเฟรชหน้าสมัครแล้วไม่ต้องยืนยัน OTP ใหม่; ปิดแท็บแล้วหาย |
+| 2026-10-31 | ย่อ/บีบอัดรูปในเบราว์เซอร์เป็น JPEG ด้านยาว ≤ 1600px ก่อนอัปโหลด (canvas, หมุนตาม EXIF) | รูปกล้องมือถือ 3–10 MB อัปโหลดช้าบนเน็ตมือถือ; ได้ไฟล์ชนิดเดียวที่ server รองรับแน่นอน; HEIC ที่เบราว์เซอร์เปิดไม่ได้แจ้งให้เลือกรูปใหม่ |
+| 2026-10-31 | `react-router` 7 (ไม่ใช่ 8) | v8 ต้องการ React 19 แต่ Tech Stack กำหนด React 18 |
+| 2026-10-31 | LINE LIFF SDK โหลดแบบ dynamic import และเปิดเมื่อตั้ง `VITE_LINE_LIFF_ID` เท่านั้น | ไม่เพิ่มขนาด bundle หลัก; dev/test ไม่มี LIFF ก็ใช้ OTP ได้ |
+| 2026-10-31 | E2E (Playwright) เป็น package `e2e/` เปิด api :3100 + web :5183 ของตัวเอง ต่อ DB `*_e2e`, Redis db 14, bucket test; อ่าน OTP จาก Redis (`mock-sms:last:<เบอร์>` — MockSmsProvider เขียนเฉพาะที่ไม่ใช่ production) | รันพร้อม `pnpm dev` ได้; ไม่ต้องมี endpoint พิเศษสำหรับ test ที่อาจหลุดไป production |
+| 2026-10-31 | `*` ของช่องบังคับเป็น `aria-hidden` + ใช้ `aria-required` | ชื่อช่องที่ screen reader อ่านไม่มี "ดอกจัน" (E2E ใช้ `getByRole` ตาม accessible name) |
 
 ### Open Questions
 - [ ] ใช้กับตลาดเดียวหรือหลายตลาด (ตอนนี้ schema รองรับแล้ว แต่ UI ยังเป็นตลาดเดียว)

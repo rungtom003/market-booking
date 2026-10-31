@@ -19,7 +19,7 @@ export const uploadRequestSchema = z.object({
   kind: z.enum([VendorImageKind.ID_CARD, VendorImageKind.SHOP]),
   contentType: z.enum(ALLOWED_IMAGE_TYPES),
   /** byte — ต้องตรงกับไฟล์ที่ส่งจริง (ลงลายเซ็นใน URL) */
-  size: z.number().int().min(1).max(MAX_UPLOAD_BYTES, 'File must be 5 MB or smaller'),
+  size: z.number().int().min(1).max(MAX_UPLOAD_BYTES, 'ไฟล์ต้องไม่เกิน 5 MB'),
 });
 export type UploadRequestInput = z.infer<typeof uploadRequestSchema>;
 
@@ -44,9 +44,9 @@ export interface UploadTicket {
 const imageKeySchema = z.string().max(255);
 
 const profileFields = {
-  firstName: z.string().trim().min(1).max(100),
-  lastName: z.string().trim().min(1).max(100),
-  address: z.string().trim().min(5).max(500),
+  firstName: z.string().trim().min(1, 'กรุณากรอกชื่อ').max(100),
+  lastName: z.string().trim().min(1, 'กรุณากรอกนามสกุล').max(100),
+  address: z.string().trim().min(5, 'กรุณากรอกที่อยู่ (อย่างน้อย 5 ตัวอักษร)').max(500),
   shopName: z.string().trim().max(200).nullish(),
   productCategoryId: z.uuid().nullish(),
   idCardImageKey: imageKeySchema.nullish(),
@@ -58,7 +58,7 @@ export const vendorRegisterSchema = z.object({
   /** ใช้เมื่อมาทาง LINE (ยังไม่ได้ยืนยันเบอร์) — มาทาง OTP ใช้เบอร์ที่ยืนยันแล้วจาก token เสมอ */
   phone: thaiMobilePhoneSchema.optional(),
   ...profileFields,
-  pdpaConsent: z.literal(true, { error: 'PDPA consent is required' }),
+  pdpaConsent: z.literal(true, { error: 'กรุณายอมรับนโยบายความเป็นส่วนตัว' }),
 });
 export type VendorRegisterInput = z.infer<typeof vendorRegisterSchema>;
 
@@ -67,7 +67,7 @@ export const updateVendorProfileSchema = z
   .object(profileFields)
   .partial()
   .strict()
-  .refine((v) => Object.keys(v).length > 0, 'Nothing to update');
+  .refine((v) => Object.keys(v).length > 0, 'ไม่มีข้อมูลที่เปลี่ยนแปลง');
 export type UpdateVendorProfileInput = z.infer<typeof updateVendorProfileSchema>;
 
 export interface VendorProfile {
@@ -89,6 +89,17 @@ export interface VendorProfile {
   shopImageUrl: string | null;
   createdAt: string;
 }
+
+/** ข้อมูลที่ฟอร์มสมัคร/แก้โปรไฟล์ต้องใช้ */
+export interface VendorFormOptions {
+  requireIdCardImage: boolean;
+  requireShopImage: boolean;
+  productCategories: { id: string; name: string }[];
+}
+
+export const registrationOptionsSchema = z.object({
+  registrationToken: z.string().min(1).max(2000),
+});
 
 export type VendorRegisterResponse = {
   status: 'LOGGED_IN';
@@ -112,7 +123,7 @@ export const adminVendorListQuerySchema = paginationQuerySchema.extend({
 export type AdminVendorListQuery = z.infer<typeof adminVendorListQuerySchema>;
 
 export const rejectVendorSchema = z.object({
-  reason: z.string().trim().min(3, 'Reason is required').max(500),
+  reason: z.string().trim().min(3, 'กรุณาระบุเหตุผล (อย่างน้อย 3 ตัวอักษร)').max(500),
 });
 export type RejectVendorInput = z.infer<typeof rejectVendorSchema>;
 
@@ -131,7 +142,7 @@ export const bulkApproveVendorsSchema = z
   })
   .strict()
   .refine((v) => (v.ids === undefined) !== (v.allPending === undefined), {
-    message: 'Provide either ids or allPending: true',
+    message: 'ระบุ ids หรือ allPending อย่างใดอย่างหนึ่ง',
   });
 export type BulkApproveVendorsInput = z.infer<typeof bulkApproveVendorsSchema>;
 

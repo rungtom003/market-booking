@@ -158,7 +158,7 @@ export class VendorAdminService {
     const until = new Date(input.until);
     if (until <= new Date()) {
       throw new AppException(ErrorCode.VALIDATION_ERROR, 'Request validation failed', [
-        { path: 'until', message: 'Must be in the future', code: 'custom' },
+        { path: 'until', message: 'ต้องเป็นเวลาในอนาคต', code: 'custom' },
       ]);
     }
     await this.assertInScope(admin, vendorId);

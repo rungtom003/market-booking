@@ -3,8 +3,10 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import {
   UploadTicket,
+  VendorFormOptions,
   VendorProfile,
   VendorRegisterResponse,
+  registrationOptionsSchema,
   registrationUploadRequestSchema,
   updateVendorProfileSchema,
   uploadRequestSchema,
@@ -19,6 +21,7 @@ import type { VendorPrincipal } from '../auth/principal';
 import { setRefreshCookie } from '../auth/refresh-cookie';
 import { VendorService } from './vendor.service';
 
+class RegistrationOptionsDto extends createZodDto(registrationOptionsSchema) {}
 class RegistrationUploadDto extends createZodDto(registrationUploadRequestSchema) {}
 class VendorRegisterDto extends createZodDto(vendorRegisterSchema) {}
 class UpdateVendorProfileDto extends createZodDto(updateVendorProfileSchema) {}
@@ -31,6 +34,16 @@ export class VendorController {
     private readonly vendors: VendorService,
     private readonly config: AppConfigService,
   ) {}
+
+  // POST (ไม่ใช่ GET) เพื่อไม่ให้ registrationToken ไปอยู่ใน URL/log
+  @Public()
+  @Post('register/options')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: OTP_RATE_LIMIT })
+  @ApiOperation({ summary: 'ตัวเลือกของฟอร์มสมัคร: ต้องแนบรูปไหม, ประเภทสินค้า' })
+  registrationOptions(@Body() body: RegistrationOptionsDto): Promise<VendorFormOptions> {
+    return this.vendors.registrationOptions(body.registrationToken);
+  }
 
   @Public()
   @Post('register/uploads')
@@ -58,6 +71,13 @@ export class VendorController {
   @Get('me')
   getMe(@CurrentVendor() vendor: VendorPrincipal): Promise<VendorProfile> {
     return this.vendors.getMe(vendor);
+  }
+
+  @ActorTypes('VENDOR')
+  @ApiBearerAuth()
+  @Get('me/options')
+  profileOptions(@CurrentVendor() vendor: VendorPrincipal): Promise<VendorFormOptions> {
+    return this.vendors.profileOptions(vendor);
   }
 
   @ActorTypes('VENDOR')
