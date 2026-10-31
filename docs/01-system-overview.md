@@ -644,21 +644,25 @@ Code ของ Auth (เพิ่มใน Phase 1.3–1.4): `INVALID_CREDENTIAL
 
 เก็บใน `system_settings` (ต่อ market) และ cache ใน Redis (invalidate เมื่อแก้)
 
-| Key | Type | Default | ความหมาย |
-|---|---|---|---|
-| `registration_mode` | `AUTO`\|`MANUAL` | `MANUAL` | อนุมัติสมาชิกอัตโนมัติหรือตรวจก่อน |
-| `require_id_card_image` | boolean | false | บังคับแนบรูปบัตรตอนสมัคร |
-| `require_shop_image` | boolean | false | |
-| `hold_minutes` | int | 10 | เวลา Hold ก่อนกดยืนยัน |
-| `payment_required` | boolean | true | |
-| `payment_deadline_minutes` | int | 1440 | เวลาชำระหลังยืนยัน |
-| `promptpay_id` | string | — | เบอร์/เลขผู้เสียภาษีสำหรับสร้าง QR |
-| `max_stalls_per_vendor_default` | int | 1 | ค่าเริ่มต้นเวลาสร้างรอบ |
-| `cancel_before_hours` | int | 48 | |
-| `waitlist_claim_minutes` | int | 30 | |
-| `noshow_threshold` | int | 3 | |
-| `noshow_suspend_days` | int | 30 | |
-| `notify_before_round_open_minutes` | int | 60 | |
+| Key | Type | Default | ช่วงที่รับ | ความหมาย |
+|---|---|---|---|---|
+| `registration_mode` | `AUTO`|`MANUAL` | `MANUAL` | | อนุมัติสมาชิกอัตโนมัติหรือตรวจก่อน |
+| `require_id_card_image` | boolean | false | | บังคับแนบรูปบัตรตอนสมัคร |
+| `require_shop_image` | boolean | false | | |
+| `hold_minutes` | int | 10 | 1–60 | เวลา Hold ก่อนกดยืนยัน |
+| `payment_required` | boolean | true | | |
+| `payment_deadline_minutes` | int | 1440 | 5–10080 (7 วัน) | เวลาชำระหลังยืนยัน |
+| `promptpay_id` | string | null | null | 10 / 13 / 15 หลัก | เบอร์/เลขผู้เสียภาษีสำหรับสร้าง QR (เก็บเป็นตัวเลขล้วน) |
+| `max_stalls_per_vendor_default` | int | 1 | 1–50 | ค่าเริ่มต้นเวลาสร้างรอบ |
+| `cancel_before_hours` | int | 48 | 0–720 | |
+| `waitlist_claim_minutes` | int | 30 | 1–1440 | |
+| `noshow_threshold` | int | 3 | 1–20 | |
+| `noshow_suspend_days` | int | 30 | 1–365 | |
+| `notify_before_round_open_minutes` | int | 60 | 0–10080 (0 = ไม่แจ้ง) | |
+
+- Schema ของทุก key อยู่ที่ `packages/shared/src/settings.ts` (`settingFields`, `SETTING_DEFAULTS`) — API และหน้า admin ใช้ตัวเดียวกัน
+- `PUT /admin/settings` ส่งเฉพาะ key ที่จะแก้ (key ที่ไม่รู้จัก/ค่าผิดประเภท/นอกช่วง → 400 `VALIDATION_ERROR`) และคืนค่าทั้งชุด; audit log เก็บ before/after เฉพาะ key ที่เปลี่ยน
+- ใน code อ่านค่าด้วย `SettingsService.get(marketId, 'hold_minutes')` (type-safe)
 
 ---
 
@@ -767,6 +771,9 @@ SEED_ADMIN_PASSWORD=
 | 2026-10-31 | ผลยืนยันตัวตนของผู้ค้าใหม่ส่งต่อเป็น `registrationToken` (JWT audience `registration`) | `/vendors/register` เชื่อเบอร์/LINE จาก token ที่ server ออกเอง ไม่ใช่ค่าที่ client ส่ง |
 | 2026-10-31 | LINE ตรวจผ่าน interface `LineIdTokenVerifier` (ตัวจริงเรียก `api.line.me/oauth2/v2.1/verify`); ไม่ได้ตั้ง `LINE_LOGIN_CHANNEL_ID` → 503 | test ใช้ mock ได้ (AC 1.4); ไม่มีโหมด "mock อัตโนมัติ" ที่อาจหลุดไป production |
 | 2026-10-31 | `MockSmsProvider` แสดง OTP ใน log เฉพาะ `NODE_ENV=development`; บน production โยน `SERVICE_UNAVAILABLE` | ไม่มีทาง log OTP บน production; บังคับเลือกผู้ให้บริการ SMS จริงก่อนเปิดใช้ OTP |
+| 2026-10-31 | Cache settings ใน Redis แบบมี version (`settings:v:<market>` + `settings:<market>:<v>`, TTL 5 นาที) — แก้ค่าแล้ว `INCR` version หลัง commit | การ `DEL` cache อย่างเดียวมี race: request ที่อ่าน DB ก่อน commit เขียนค่าเก่ากลับหลังลบแล้วค้าง; Redis ล่ม → อ่าน DB ตรง |
+| 2026-10-31 | กำหนดช่วงค่าที่รับของแต่ละ setting (§12) และ `PUT /admin/settings` เป็นแบบ partial | กันค่าที่ทำให้ระบบเพี้ยน (เช่น hold 0 นาที); ส่งเฉพาะที่แก้ ลดการเขียนทับค่าที่ admin อีกคนเพิ่งแก้ |
+| 2026-10-31 | ค่าใน DB ที่ไม่ผ่าน schema (แก้มือ/schema เปลี่ยน) ใช้ค่า default แทน + log เตือน | ระบบไม่ล่มเพราะข้อมูล settings เสียแถวเดียว |
 
 ### Open Questions
 - [ ] ใช้กับตลาดเดียวหรือหลายตลาด (ตอนนี้ schema รองรับแล้ว แต่ UI ยังเป็นตลาดเดียว)

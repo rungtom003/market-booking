@@ -44,12 +44,12 @@
 | Phase | ชื่อ | สถานะ | เริ่ม | เสร็จ |
 |---|---|---|---|---|
 | 0 | Project Setup | ✅ DONE | 2026-10-31 | 2026-10-31 |
-| 1 | Backend Foundation | 🟨 IN PROGRESS | 2026-10-31 | |
+| 1 | Backend Foundation | ✅ DONE | 2026-10-31 | 2026-10-31 |
 | 1.1 | ↳ Database Schema & Seed | ✅ DONE | 2026-10-31 | 2026-10-31 |
 | 1.2 | ↳ Core Infrastructure (config, error, logging, audit) | ✅ DONE | 2026-10-31 | 2026-10-31 |
 | 1.3 | ↳ Admin Auth & RBAC | ✅ DONE | 2026-10-31 | 2026-10-31 |
 | 1.4 | ↳ Vendor Auth (OTP + LINE) | ✅ DONE | 2026-10-31 | 2026-10-31 |
-| 1.5 | ↳ Settings Module | ⬜ TODO | | |
+| 1.5 | ↳ Settings Module | ✅ DONE | 2026-10-31 | 2026-10-31 |
 | 2 | Member Registration & Approval | ⬜ TODO | | |
 | 2.1 | ↳ Vendor API & File Upload | ⬜ TODO | | |
 | 2.2 | ↳ Vendor Web: สมัครสมาชิก | ⬜ TODO | | |
@@ -126,7 +126,7 @@
 ---
 
 ## Phase 1 — Backend Foundation
-**สถานะ:** 🟨 IN PROGRESS · **Dependencies:** Phase 0
+**สถานะ:** ✅ DONE · **Dependencies:** Phase 0
 
 ### 1.1 Database Schema & Seed
 **สถานะ:** ✅ DONE · **Dependencies:** 0 · **เริ่ม:** 2026-10-31 · **เสร็จ:** 2026-10-31
@@ -244,18 +244,26 @@
 - access token มี `aud: access` แล้ว (registration token ใช้ `aud: registration`) — token ที่ออกก่อน Phase 1.4 ใช้ไม่ได้ ต้อง login ใหม่ (dev เท่านั้น)
 
 ### 1.5 Settings Module
-**สถานะ:** ⬜ TODO · **Dependencies:** 1.3 · **เริ่ม:** – · **เสร็จ:** –
+**สถานะ:** ✅ DONE · **Dependencies:** 1.3 · **เริ่ม:** 2026-10-31 · **เสร็จ:** 2026-10-31
 
 **Tasks**
-- [ ] `SettingsService.get<K>(marketId, key)` แบบ type-safe (นิยาม schema ของทุก key ใน `packages/shared`)
-- [ ] Cache ใน Redis + invalidate เมื่อแก้
-- [ ] `GET/PUT /admin/settings` (ADMIN ขึ้นไป) validate ค่าตาม schema + audit log (before/after)
+- [x] `SettingsService.get<K>(marketId, key)` แบบ type-safe (นิยาม schema ของทุก key ใน `packages/shared`)
+- [x] Cache ใน Redis + invalidate เมื่อแก้
+- [x] `GET/PUT /admin/settings` (ADMIN ขึ้นไป) validate ค่าตาม schema + audit log (before/after)
 
 **Acceptance Criteria**
 - แก้ `registration_mode` แล้ว `get()` ได้ค่าใหม่ทันที
 - ใส่ค่าผิดประเภท → 400
 
-**Agent Notes:** –
+**Agent Notes:**
+- ✅ AC ข้อ 1: `test/integration/settings.int-spec.ts` — อ่าน `registration_mode` (เข้า cache) → แก้เป็น AUTO → `get()` ได้ AUTO ทันที; มี test พิสูจน์ว่าอ่านจาก cache จริง (แก้ DB ตรงแล้วยังได้ค่าเดิม)
+- ✅ AC ข้อ 2: PUT ค่าผิดประเภท/enum ผิด/นอกช่วง/key ที่ไม่รู้จัก/body ว่าง → 400 `VALIDATION_ERROR` และไม่มีอะไรถูกบันทึก; STAFF → 403
+- Test: unit 109, integration 89 ผ่าน; ลองบน dev server แล้ว (แก้ `hold_minutes` แล้วคืนค่า 10 ตามเดิม)
+- ไฟล์สำคัญ: `packages/shared/src/settings.ts` (`settingFields`, `settingsSchema`, `updateSettingsSchema`, `SETTING_DEFAULTS`, `SETTING_KEYS`, `promptPayIdSchema`), `apps/api/src/modules/settings/settings.service.ts`, `settings-admin.controller.ts`
+- **วิธีใช้**: inject `SettingsService` (import `SettingsModule` ใน module ที่ใช้) แล้ว `await settings.get(marketId, 'registration_mode')` — ได้ type ตาม key; ไม่ต้องจัดการ cache เอง
+- **Phase 2.1**: `registration_mode`, `require_id_card_image`, `require_shop_image` อ่านจาก `SettingsService`; การเปลี่ยน MANUAL → AUTO ไม่แตะผู้ค้า PENDING เดิม (§9.2 ข้อ 4) — ไม่มีโค้ดใน settings ที่ทำเรื่องนี้ ซึ่งถูกต้องแล้ว
+- **Phase 2.3**: ฟอร์ม Settings สร้างจาก `settingFields` (Zod) ได้ตรงๆ — ส่ง PUT เฉพาะ key ที่แก้
+- ผู้ค้ายังไม่มี endpoint อ่าน settings (เช่น ต้องแนบรูปไหม) — เพิ่มแบบ public เฉพาะ key ที่จำเป็นใน Phase 2.1/2.2
 
 ---
 
@@ -636,3 +644,5 @@
 | 2026-10-31 | 1.2 | ✅ DONE | error format/filter, `{ data, meta }`, Zod pipe (nestjs-zod), pino + request id + redact, Helmet/CORS, throttler บน Redis, AuditService, pagination, Swagger `/api/docs` — unit 45 / integration 33 ผ่าน — ถัดไป: 1.3 Admin Auth & RBAC |
 | 2026-10-31 | 1.3 | ✅ DONE | admin login (bcrypt) + JWT 15 นาที + refresh rotation ใน Redis, ล็อค 5 ครั้ง/15 นาที, global auth/RBAC guard จากตาราง §2, CRUD `/admin/users` + audit, `GET /admin/settings` — unit 70 / integration 56 ผ่าน — ถัดไป: 1.4 Vendor Auth |
 | 2026-10-31 | 1.4 | ✅ DONE | OTP (SMS mock, HMAC ใน Redis, cooldown 60 วินาที/5 ต่อชั่วโมง/ผิดได้ 5 ครั้ง), LINE login ผ่าน verifier ที่ mock ได้, registrationToken, ผูก LINE ภายหลัง — unit 94 / integration 77 ผ่าน — ถัดไป: 1.5 Settings Module |
+| 2026-10-31 | 1.5 | ✅ DONE | schema ทุก key ใน shared, `SettingsService.get<K>()`, cache Redis แบบ version, `PUT /admin/settings` + audit เฉพาะ key ที่เปลี่ยน — unit 109 / integration 89 ผ่าน |
+| 2026-10-31 | 1 | ✅ DONE | Backend Foundation ครบทุก sub-phase (1.1–1.5) — ถัดไป: 2.1 Vendor API & File Upload |
