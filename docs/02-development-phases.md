@@ -43,7 +43,7 @@
 
 | Phase | ชื่อ | สถานะ | เริ่ม | เสร็จ |
 |---|---|---|---|---|
-| 0 | Project Setup | 🟨 IN PROGRESS | 2026-10-31 | |
+| 0 | Project Setup | ✅ DONE | 2026-10-31 | 2026-10-31 |
 | 1 | Backend Foundation | ⬜ TODO | | |
 | 1.1 | ↳ Database Schema & Seed | ⬜ TODO | | |
 | 1.2 | ↳ Core Infrastructure (config, error, logging, audit) | ⬜ TODO | | |
@@ -91,7 +91,7 @@
 ---
 
 ## Phase 0 — Project Setup
-**สถานะ:** 🟨 IN PROGRESS · **Dependencies:** — · **เริ่ม:** 2026-10-31 · **เสร็จ:** –
+**สถานะ:** ✅ DONE · **Dependencies:** — · **เริ่ม:** 2026-10-31 · **เสร็จ:** 2026-10-31
 
 **เป้าหมาย:** Monorepo ที่รันได้ทั้ง 3 apps พร้อม infra สำหรับ dev
 
@@ -114,7 +114,7 @@
 
 **Agent Notes:**
 - ✅ AC ข้อ 1 ผ่านแล้ว (2026-10-31): `docker compose up -d && pnpm dev` → api :3000, web :5173, admin :5174 เปิดได้ทั้งหมด, `GET /api/v1/health` ตอบ 200 ทั้งตรงและผ่าน Vite proxy, ทั้งสองหน้าเว็บแสดงสถานะจาก API โดยไม่มี console error
-- ⏳ AC ข้อ 2 **รอ push ขึ้น GitHub** — ยังไม่มี remote/commit แรก; รันทุกขั้นของ `.github/workflows/ci.yml` (lint, format:check, typecheck, test, build) ในเครื่องแล้วผ่านหมด
+- ✅ AC ข้อ 2 ผ่านแล้ว (2026-10-31): GitHub Actions run [#41159342264](https://github.com/rungtom003/market-booking/actions/runs/41159342264) บน `main` (commit `1d598be`) → success
 - ไฟล์สำคัญ: `apps/api/src/config/env.schema.ts` (Zod env + `validateEnv`), `apps/api/src/config/app-config.service.ts` (`AppConfigService.get()` type-safe), `apps/api/src/setup-app.ts` (prefix/CORS ใช้ร่วม main.ts กับ e2e), `packages/shared/src/*` (`API_PREFIX`, `ErrorCode`, `SocketEvent`, `socketRoom`)
 - `packages/shared` build คู่ ESM+CJS — **ต้อง build ก่อน** api/web/admin จะเห็นของใหม่ (`pnpm dev` รัน `tsc -w` ให้แล้ว); enum ใน Phase 1.1 ให้เพิ่มที่ `packages/shared/src/` แล้ว export จาก `index.ts` (ใช้นามสกุล `.js` ใน relative import)
 - Test env ของ api ตั้งใน `apps/api/test/setup-env.ts` (Jest `setupFiles`) เพราะ `ConfigModule.forRoot()` validate ตอน import — Phase ถัดไปที่เพิ่ม env บังคับต้องเพิ่มที่ไฟล์นี้ด้วย
@@ -584,3 +584,4 @@
 |---|---|---|---|
 | 2026-10-31 | — | — | สร้างเอกสารแผนการพัฒนา |
 | 2026-10-31 | 0 | 🟨 IN PROGRESS | ตั้ง monorepo (api/web/admin/shared), docker-compose, env validation, lint/format/test, husky, CI workflow, README — AC ข้อ 1 ผ่าน, เหลือยืนยัน CI บน GitHub หลัง push |
+| 2026-10-31 | 0 | ✅ DONE | push ขึ้น github.com/rungtom003/market-booking, CI บน `main` ผ่าน — Phase ถัดไป: 1.1 Database Schema & Seed |
