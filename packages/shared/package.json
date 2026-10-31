@@ -1,0 +1,34 @@
+{
+  "name": "@market-booking/shared",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Enums, Zod schemas, types และชื่อ socket event ที่ใช้ร่วมกันทั้ง api/web/admin",
+  "sideEffects": false,
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/cjs/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/esm/index.d.ts",
+        "default": "./dist/esm/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/index.d.ts",
+        "default": "./dist/cjs/index.js"
+      }
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "node scripts/clean.mjs && tsc -p tsconfig.esm.json && tsc -p tsconfig.cjs.json && node scripts/write-module-types.mjs",
+    "dev": "concurrently -n esm,cjs \"tsc -p tsconfig.esm.json -w --preserveWatchOutput\" \"tsc -p tsconfig.cjs.json -w --preserveWatchOutput\"",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.6",
+    "typescript": "~5.9.3"
+  }
+}

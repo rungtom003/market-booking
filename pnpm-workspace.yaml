@@ -1,0 +1,14 @@
+packages:
+  - apps/*
+  - packages/*
+
+# pnpm 11 ไม่รัน install script ของ dependency เว้นแต่อนุญาต — ทุกตัวด้านล่างมี prebuilt binary ไม่ต้อง build
+allowBuilds:
+  '@nestjs/core': false # แค่ข้อความ opencollective
+  '@parcel/watcher': false
+  unrs-resolver: false
+
+peerDependencyRules:
+  # webpack มากับ @nestjs/cli 10 (เราใช้ tsc builder ไม่ได้ใช้ webpack)
+  allowedVersions:
+    webpack: '5'
