@@ -1,9 +1,11 @@
 import { BrowserRouter, Link, Route, Routes } from 'react-router';
 import { Layout } from './components/Layout';
 import { AuthBootstrap, RedirectIfAuthenticated, RequireAuth } from './features/auth/AuthProvider';
+import { DayMapPage } from './pages/DayMapPage';
 import { HomePage } from './pages/HomePage';
 import { LoginPage } from './pages/LoginPage';
 import { MarketMapPage } from './pages/MarketMapPage';
+import { MyBookingsPage } from './pages/MyBookingsPage';
 import { PrivacyPage } from './pages/PrivacyPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { RegisterPage } from './pages/RegisterPage';
@@ -51,6 +53,22 @@ export function App() {
             element={
               <RequireAuth>
                 <MarketMapPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/days/:marketDayId"
+            element={
+              <RequireAuth>
+                <DayMapPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/bookings"
+            element={
+              <RequireAuth>
+                <MyBookingsPage />
               </RequireAuth>
             }
           />

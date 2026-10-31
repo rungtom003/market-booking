@@ -48,3 +48,27 @@ export function formatCountdown(ms: number): string {
   const hms = `${pad(Math.floor((total % 86_400) / 3600))}:${pad(Math.floor((total % 3600) / 60))}:${pad(total % 60)}`;
   return days > 0 ? `${days} วัน ${hms}` : hms;
 }
+
+// ───────────── offset ล่าสุดของทั้งแอป ─────────────
+
+let offsetMs = 0;
+const offsetListeners = new Set<() => void>();
+
+/** เก็บ offset (เวลา server − เวลาเครื่อง) ที่วัดได้ล่าสุด — query ที่มี `serverTime` เรียกหลังโหลด */
+export function setClockOffset(ms: number): void {
+  if (ms === offsetMs) return;
+  offsetMs = ms;
+  offsetListeners.forEach((l) => l());
+}
+
+function subscribeOffset(listener: () => void) {
+  offsetListeners.add(listener);
+  return () => {
+    offsetListeners.delete(listener);
+  };
+}
+
+/** offset ล่าสุด (0 ถ้ายังไม่เคยวัด) — ใช้กับ `useCountdown` ในหน้าที่ไม่มี `serverTime` ของตัวเอง */
+export function useClockOffset(): number {
+  return useSyncExternalStore(subscribeOffset, () => offsetMs);
+}

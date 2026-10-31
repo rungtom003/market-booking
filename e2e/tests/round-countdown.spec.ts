@@ -27,12 +27,12 @@ test.describe('ผู้ค้าเห็นรอบที่กำลัง�
 
     // E2E รัน API บนเครื่องเดียวกัน — Date.now() ของ Node = เวลา server
     const openAt = new Date(Date.now() + 20_000);
-    roundId = await admin.publishRound({
+    ({ roundId } = await admin.publishRound({
       name: `รอบทดสอบนับถอยหลัง ${Date.now() % 100_000}`,
       openAt,
       closeAt: new Date(openAt.getTime() + 86_400_000),
       dates: [bangkokDate(3), bangkokDate(4)],
-    });
+    }));
     const id = roundId;
     cleanup = () => admin.cancelRound(id);
 

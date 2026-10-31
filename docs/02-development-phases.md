@@ -61,7 +61,7 @@
 | 4.1 | ↳ Booking Core API + Concurrency | ✅ DONE | 2026-10-31 | 2026-10-31 |
 | 4.2 | ↳ Expiry Worker (BullMQ) | ✅ DONE | 2026-10-31 | 2026-10-31 |
 | 4.3 | ↳ Realtime Gateway (Socket.IO) | ✅ DONE | 2026-10-31 | 2026-10-31 |
-| 4.4 | ↳ Vendor Web: หน้าผังและจองล็อค | ⬜ TODO | | |
+| 4.4 | ↳ Vendor Web: หน้าผังและจองล็อค | ✅ DONE | 2026-10-31 | 2026-10-31 |
 | 4.5 | ↳ Admin Web: จัดการการจอง | ⬜ TODO | | |
 | 4.6 | ↳ Concurrency & Load Test | ⬜ TODO | | |
 | 5 | Payment | ⬜ TODO | | |
@@ -505,23 +505,34 @@
 - ทดสอบ: unit 165, integration 207 (+8 `realtime.int-spec.ts`), E2E 21 (+1 badge realtime)
 
 ### 4.4 Vendor Web: หน้าผังและจองล็อค
-**สถานะ:** ⬜ TODO · **Dependencies:** 4.2, 4.3 · **เริ่ม:** – · **เสร็จ:** –
+**สถานะ:** ✅ DONE · **Dependencies:** 4.2, 4.3 · **เริ่ม:** 2026-10-31 · **เสร็จ:** 2026-10-31
 
 **Tasks**
-- [ ] `useMarketDaySocket(marketDayId)`: join/leave, อัปเดต TanStack Query cache จาก event, refetch เมื่อ reconnect/visibilitychange
-- [ ] หน้าเลือกวันขาย → หน้าผัง (StallMap) + legend สี + filter โซน
-- [ ] แตะล็อค → bottom sheet: รหัส, ขนาด, ราคา, โซน → ปุ่ม "จอง"
-- [ ] หลัง hold: แถบนับถอยหลัง + ปุ่ม "ยืนยัน" / "ยกเลิก"; หมดเวลา → แจ้งและคืนสถานะ
-- [ ] จัดการ error: `STALL_TAKEN` (แจ้ง + highlight ล็อคที่ว่างใกล้เคียง), `QUOTA_EXCEEDED`, `ROUND_NOT_OPEN`
-- [ ] ก่อนรอบเปิด: ผังดูได้แต่กดไม่ได้ + Countdown; เปิดปุ๊บปุ่มใช้ได้ทันทีโดยไม่ต้อง refresh
-- [ ] หน้า "การจองของฉัน"
-- [ ] Optimistic UI เฉพาะการ hold (rollback เมื่อ error)
+- [x] `useMarketDaySocket(marketDayId)`: join/leave, อัปเดต TanStack Query cache จาก event, refetch เมื่อ reconnect/visibilitychange
+- [x] หน้าเลือกวันขาย → หน้าผัง (StallMap) + legend สี + filter โซน
+- [x] แตะล็อค → bottom sheet: รหัส, ขนาด, ราคา, โซน → ปุ่ม "จอง"
+- [x] หลัง hold: แถบนับถอยหลัง + ปุ่ม "ยืนยัน" / "ยกเลิก"; หมดเวลา → แจ้งและคืนสถานะ
+- [x] จัดการ error: `STALL_TAKEN` (แจ้ง + highlight ล็อคที่ว่างใกล้เคียง), `QUOTA_EXCEEDED`, `ROUND_NOT_OPEN`
+- [x] ก่อนรอบเปิด: ผังดูได้แต่กดไม่ได้ + Countdown; เปิดปุ๊บปุ่มใช้ได้ทันทีโดยไม่ต้อง refresh
+- [x] หน้า "การจองของฉัน"
+- [x] Optimistic UI เฉพาะการ hold (rollback เมื่อ error)
 
 **Acceptance Criteria**
 - E2E: 2 vendor แย่งล็อคเดียว → คนหนึ่งได้, อีกคนเห็นข้อความ STALL_TAKEN และผังอัปเดต
 - ปิด Wi-Fi 10 วินาทีแล้วเปิด → ผังถูกต้องโดยไม่ต้อง refresh
 
-**Agent Notes:** –
+**Agent Notes:**
+- ✅ AC ข้อ 1: `e2e/tests/vendor-booking.spec.ts` ผู้ค้า 2 คน (คนละ browser context จอ 360px) แตะ B3 แล้วกด "จองล็อคนี้" พร้อมกัน → คนหนึ่งได้แผงยืนยัน (B3 = `MINE`), อีกคนเห็น "ล็อคนี้มีผู้จองแล้ว กรุณาเลือกล็อคอื่น" + B3 = `HELD` + ไฮไลต์ล็อคว่างใกล้เคียง; ผู้ชนะยืนยัน → ผังของอีกคนเป็น `BOOKED` เองภายใน 2 วินาที
+- ✅ AC ข้อ 2: ผู้ค้า A เปิดผังแล้ว `context.setOffline(true)` 10 วินาที ระหว่างนั้นผู้ค้า B จอง B5 → เน็ตกลับมา ผังของ A เป็น `HELD` เองไม่ต้องรีเฟรช (หมายเหตุ: offline ของ Playwright อาจไม่ตัด websocket ที่ต่ออยู่ — หน้าเว็บโหลดผังใหม่ทั้งตอน socket ต่อใหม่และตอนได้ event `online` จึงถูกต้องทั้งสองทาง)
+- หน้าใหม่ (`apps/web/src/pages/`): `DayMapPage` (`/days/:marketDayId` — สถานะรอบ + นับถอยหลังเปิดจอง, filter โซน, StallMap สีตามสถานะ, bottom sheet ล็อค, แผง hold นับถอยหลัง + ยืนยัน/ยกเลิก, แถบ "กำลังเชื่อมต่อใหม่…"), `MyBookingsPage` (`/bookings` — ยืนยัน hold, ยกเลิกพร้อมถามซ้ำ, แสดงกำหนดชำระ/เหตุผลยกเลิก); หน้าแรก: ปุ่มเลือกวันขายในการ์ดรอบ (`RoundCard`), เมนู "การจอง" ที่หัวเว็บ
+- `lib/realtime.ts`: socket เดียวของแอป (ปิดเมื่อ logout, UNAUTHORIZED → refresh token แล้วต่อใหม่), `useMarketDaySocket(marketDayId)` (join ทุกครั้งที่ต่อ + refetch, แก้ cache จาก `stall:updated`, `booking:changed` → โหลดการจองของฉันใหม่, refetch เมื่อ visibilitychange/online), `useSocketConnected()`
+- `lib/server-clock.ts`: offset ล่าสุดของทั้งแอป (`setClockOffset`/`useClockOffset`) — query ที่มี `serverTime` (`/rounds/current`, `/market-days/:id/stalls`) อัปเดตให้เอง
+- API: `GET /market-days/:id/stalls` เพิ่ม `round` (phase/เวลา/โควตา) + `serverTime`; `StallMap` เพิ่ม `highlightIds` (`data-highlighted`)
+- เลือกไม่ทำหน้า "เลือกวันขาย" แยก: การ์ดรอบบนหน้าแรกมีปุ่มทุกวันขายอยู่แล้ว (แตะแล้วเข้าผังวันนั้น)
+- เจอระหว่างทำ: callback ที่ส่งเข้า effect ของแผง hold/สถานะรอบต้องคงที่ (`useCallback`/`refetch`) — countdown render ทุก 250 ms ทำให้ timer ถูกรีเซ็ตตลอดและไม่เคยทำงาน; ดูภาพหน้าจอแล้วปุ่มวันขายตัดบรรทัดไม่เท่ากัน → ใช้ป้ายสั้น "พฤหัส 10 ธ.ค." (`formatShortDateTh`)
+- ข้อสังเกตสภาพแวดล้อม: `pnpm build` ชนกับ `pnpm dev` ที่รันค้างอยู่ (nest watch เขียน `apps/api/dist` พร้อมกัน → `ENOTEMPTY` บน Windows) — ตรวจแทนด้วย `tsc` ไปโฟลเดอร์อื่น + E2E build ผ่าน; CI ไม่มีปัญหานี้
+- ยังไม่ทำ (ตามแผน): ชำระเงิน/QR (Phase 5 — ตอนนี้แสดงแค่ยอดและกำหนดชำระ), waitlist เมื่อล็อคเต็ม (Phase 9)
+- ทดสอบ: unit 165, integration 207 (เพิ่ม assertion `round`/`serverTime`), E2E 25 (+4 `vendor-booking.spec.ts`)
 
 ### 4.5 Admin Web: จัดการการจอง
 **สถานะ:** ⬜ TODO · **Dependencies:** 4.3 · **เริ่ม:** – · **เสร็จ:** –
@@ -745,3 +756,5 @@
 | 2026-10-31 | 4.2 | ✅ DONE | queue `booking-expiry` (bullmq 5) ตั้ง/ลบ job ตาม `booking.changed`, processor idempotent + เลื่อน job ที่มาก่อนเวลา, sweeper ทุก 1 นาที (job scheduler), `WORKERS_ENABLED`; AC hold 1 นาทีว่างเอง + confirm ชน expire ได้ผลเดียว — unit 165 / integration 199 / E2E 20 ผ่าน — ถัดไป: 4.3 Realtime Gateway |
 | 2026-10-31 | 4.3 | 🟨 IN PROGRESS | เริ่ม Socket.IO namespace /booking + Redis adapter, auth ใน handshake, rooms/events ตาม §10, stall:updated/booking:changed จาก booking.changed |
 | 2026-10-31 | 4.3 | ✅ DONE | Socket.IO `/booking` + Redis adapter, auth ใน handshake, ห้อง vendor/admin/market/md (จำกัด 3), stall:updated (สถานะจาก DB + mine แยกห้อง), booking:changed, round:changed, server:time, vendor:registered + badge admin realtime; AC 2 ผู้ค้า < 1 วินาที และข้าม 2 instance — unit 165 / integration 207 / E2E 21 ผ่าน — ถัดไป: 4.4 Vendor Web หน้าผังและจองล็อค |
+| 2026-10-31 | 4.4 | 🟨 IN PROGRESS | เริ่มหน้าผังวันขาย + จอง/ยืนยัน/ยกเลิก (socket อัปเดตผัง, นับถอยหลัง hold), หน้าการจองของฉัน |
+| 2026-10-31 | 4.4 | ✅ DONE | หน้าผังวันขาย (socket อัปเดตผัง, filter โซน, bottom sheet, นับถอยหลังเปิดจอง/hold, ยืนยัน/ยกเลิก, STALL_TAKEN แนะนำล็อคใกล้เคียง), หน้าการจองของฉัน, ปุ่มเลือกวันขายบนหน้าแรก; AC แย่งล็อค 2 คน + เน็ตหลุด 10 วินาที ผ่าน — unit 165 / integration 207 / E2E 25 ผ่าน — ถัดไป: 4.5 Admin Web จัดการการจอง |

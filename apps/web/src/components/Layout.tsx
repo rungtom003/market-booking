@@ -30,6 +30,9 @@ export function Layout({ title, children }: { title?: string; children: ReactNod
           </Link>
           {state.status === 'authenticated' && (
             <nav className="flex items-center gap-1 text-sm">
+              <Link to="/bookings" className="rounded-md px-2 py-2 text-gray-700 hover:bg-gray-100">
+                การจอง
+              </Link>
               <Link to="/profile" className="rounded-md px-2 py-2 text-gray-700 hover:bg-gray-100">
                 โปรไฟล์
               </Link>

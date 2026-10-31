@@ -579,6 +579,17 @@ describe('Market setup: categories, zones, stalls, layout (integration)', () => 
         marketDate: '2026-12-12',
         isCancelled: false,
       });
+      // รอบ + เวลา server สำหรับ Countdown (รอบ DRAFT = ไม่มี phase)
+      expect(body.round).toEqual({
+        id: day.roundId,
+        name: 'รอบทดสอบ',
+        status: 'DRAFT',
+        phase: null,
+        openAt: '2026-11-20T00:00:00.000Z',
+        closeAt: '2026-11-25T00:00:00.000Z',
+        maxStallsPerVendor: 2,
+      });
+      expect(Math.abs(Date.parse(body.serverTime) - Date.now())).toBeLessThan(5_000);
       const byId = new Map(body.stalls.map((s) => [s.id, s]));
       expect(byId.get(open.id)).toMatchObject({ status: 'AVAILABLE', price: 100 });
       expect(byId.get(reserved.id)?.status).toBe('CLOSED');

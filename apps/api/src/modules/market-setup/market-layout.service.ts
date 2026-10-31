@@ -7,6 +7,7 @@ import {
   MarketDayStalls,
   MarketLayout,
   StallDayStatus,
+  roundPhase,
 } from '@market-booking/shared';
 import { AppException } from '../../common/exceptions/app.exception';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -59,7 +60,21 @@ export class MarketLayoutService {
     // ตลาดอื่น = ไม่พบ (ไม่บอกว่ามีอยู่)
     const day = await this.prisma.marketDay.findFirst({
       where: { id: marketDayId, marketId },
-      select: { id: true, roundId: true, marketDate: true, isCancelled: true },
+      select: {
+        id: true,
+        roundId: true,
+        marketDate: true,
+        isCancelled: true,
+        round: {
+          select: {
+            name: true,
+            status: true,
+            openAt: true,
+            closeAt: true,
+            maxStallsPerVendor: true,
+          },
+        },
+      },
     });
     if (!day) throw new AppException(ErrorCode.NOT_FOUND, 'Market day not found');
 
@@ -98,6 +113,17 @@ export class MarketLayoutService {
         marketDate: day.marketDate.toISOString().slice(0, 10),
         isCancelled: day.isCancelled,
       },
+      round: {
+        id: day.roundId,
+        name: day.round.name,
+        status: day.round.status,
+        phase: roundPhase(day.round, now),
+        openAt: day.round.openAt.toISOString(),
+        closeAt: day.round.closeAt.toISOString(),
+        maxStallsPerVendor: day.round.maxStallsPerVendor,
+      },
+      // ให้หน้าเว็บหา offset นาฬิกา (Countdown เปิดจอง/hold) จาก request นี้ได้เลย
+      serverTime: new Date().toISOString(),
       zones,
       stalls: stalls.sort(compareStalls).map(({ overrides, isReserved, ...s }) => {
         const override = overrides[0];

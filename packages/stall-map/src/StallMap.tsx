@@ -20,6 +20,8 @@ export interface StallMapProps {
   stalls: StallMapItem[];
   zones: StallMapZone[];
   selectedId?: string | null;
+  /** ล็อคที่ต้องการให้สังเกต (เช่น ล็อคว่างใกล้เคียง) — วาดกรอบสีน้ำเงินรอบนอก */
+  highlightIds?: ReadonlySet<string>;
   /** ไม่ส่ง = ผังสำหรับดูอย่างเดียว */
   onSelect?: (stall: StallMapItem) => void;
   /** ค่าเริ่มต้น: เลือกได้ทุกล็อคเมื่อมี `onSelect` */
@@ -47,6 +49,7 @@ export function StallMap({
   stalls,
   zones,
   selectedId,
+  highlightIds,
   onSelect,
   isSelectable,
   describe = defaultDescribe,
@@ -193,6 +196,7 @@ export function StallMap({
       >
         {stalls.map((s) => {
           const selected = s.id === selectedId;
+          const highlighted = highlightIds?.has(s.id) ?? false;
           const canSelect = selectable(s);
           const c = stallColors(s.status, zoneColor.get(s.zoneId) ?? '#64748B', selected);
           const cx = s.posX + s.shapeW / 2;
@@ -203,6 +207,7 @@ export function StallMap({
               data-stall-id={s.id}
               data-stall-code={s.code}
               data-status={s.status}
+              data-highlighted={highlighted || undefined}
               transform={s.rot ? `rotate(${s.rot} ${cx} ${cy})` : undefined}
               role={canSelect ? 'button' : 'img'}
               aria-label={describe(s)}
@@ -215,6 +220,18 @@ export function StallMap({
               }}
               onKeyDown={(e) => onKey(e, s)}
             >
+              {highlighted && (
+                <rect
+                  x={s.posX - 5}
+                  y={s.posY - 5}
+                  width={s.shapeW + 10}
+                  height={s.shapeH + 10}
+                  rx={Math.min(10, s.shapeW / 6, s.shapeH / 6)}
+                  fill="none"
+                  stroke="#2563EB"
+                  strokeWidth={3}
+                />
+              )}
               <rect
                 x={s.posX}
                 y={s.posY}

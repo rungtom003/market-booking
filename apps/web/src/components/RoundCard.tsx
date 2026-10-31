@@ -1,9 +1,10 @@
 import { useEffect } from 'react';
+import { Link } from 'react-router';
 import { formatIsoDateTh } from '@market-booking/shared';
 import type { CurrentRound } from '@market-booking/shared';
 import { useCurrentRound } from '../api/market';
 import { errorMessage } from '../lib/errors';
-import { formatThaiDateTime } from '../lib/format';
+import { formatShortDateTh, formatThaiDateTime } from '../lib/format';
 import { formatCountdown, useCountdown } from '../lib/server-clock';
 import { Alert, Card } from './ui';
 
@@ -83,11 +84,27 @@ function RoundDetails({
         <dd>{formatThaiDateTime(round.openAt)}</dd>
         <dt className="text-gray-500">ปิดจอง</dt>
         <dd>{formatThaiDateTime(round.closeAt)}</dd>
-        <dt className="text-gray-500">วันขาย</dt>
-        <dd>{round.marketDays.map((d) => formatIsoDateTh(d.marketDate, true)).join(', ')}</dd>
         <dt className="text-gray-500">จองได้</dt>
         <dd>สูงสุด {round.maxStallsPerVendor} ล็อคต่อวัน</dd>
       </dl>
+
+      <nav aria-label="เลือกวันขาย" className="flex flex-col gap-2">
+        <h3 className="text-sm font-semibold text-gray-900">
+          {open ? 'เลือกวันขายเพื่อจองล็อค' : 'วันขาย (ดูผังไว้ก่อนได้)'}
+        </h3>
+        <div className="grid grid-cols-2 gap-2">
+          {round.marketDays.map((d) => (
+            <Link
+              key={d.id}
+              to={`/days/${d.id}`}
+              className="rounded-lg border border-green-700 px-3 py-2 text-center text-sm font-semibold whitespace-nowrap text-green-800 hover:bg-green-50"
+              aria-label={formatIsoDateTh(d.marketDate, true)}
+            >
+              {formatShortDateTh(d.marketDate)}
+            </Link>
+          ))}
+        </div>
+      </nav>
     </Card>
   );
 }

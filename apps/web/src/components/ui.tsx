@@ -13,7 +13,7 @@ export const linkButtonClass =
   'inline-flex min-h-12 w-full items-center justify-center rounded-lg bg-green-700 px-4 text-base font-semibold text-white hover:bg-green-800';
 
 type ButtonProps = ComponentProps<'button'> & {
-  variant?: 'primary' | 'secondary' | 'ghost';
+  variant?: 'primary' | 'secondary' | 'ghost' | 'danger';
   loading?: boolean;
 };
 
@@ -30,6 +30,7 @@ export function Button({
     secondary:
       'border border-green-700 text-green-800 bg-white hover:bg-green-50 disabled:opacity-50',
     ghost: 'text-green-800 hover:bg-green-50 disabled:opacity-50',
+    danger: 'bg-red-700 text-white hover:bg-red-800 disabled:bg-red-300',
   }[variant];
   return (
     <button

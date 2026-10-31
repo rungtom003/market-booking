@@ -597,7 +597,7 @@ Vendor กด "ยืนยันการจอง" → POST /bookings/:id/conf
 | POST | `/vendors/me/images` | presigned upload — ได้ `{ key, url, headers }` แล้ว PUT ไฟล์ตรงไป MinIO แล้วส่ง `key` ไปกับ `PATCH /vendors/me` |
 | GET | `/market/layout` | ผังตลาด (โซน + ล็อคที่เปิดใช้งาน) — ดูได้ก่อนเปิดรอบ (ผู้ค้า APPROVED) |
 | GET | `/rounds/current` | ผู้ค้า APPROVED — `{ serverTime, round }`: รอบที่เปิดอยู่ (ปิดก่อนขึ้นก่อน) หรือรอบถัดไปที่ใกล้ที่สุด, `round: null` ถ้าไม่มี; `serverTime` ใช้หา offset ให้ Countdown |
-| GET | `/market-days/:id/stalls` | snapshot ผัง: ราคาของวัน (รวม override) + `status` `AVAILABLE`/`HOLD`/`BOOKED`/`CLOSED` + `mine` และ `bookingId` (เฉพาะของตัวเอง); hold/รอชำระที่หมดเวลาแล้วนับเป็นว่าง |
+| GET | `/market-days/:id/stalls` | snapshot ผัง + `round` (`phase`, `openAt`, `closeAt`, `maxStallsPerVendor`) + `serverTime`: ราคาของวัน (รวม override) + `status` `AVAILABLE`/`HOLD`/`BOOKED`/`CLOSED` + `mine` และ `bookingId` (เฉพาะของตัวเอง); hold/รอชำระที่หมดเวลาแล้วนับเป็นว่าง |
 | POST | `/bookings/hold` | `{ stallId, marketDayId }` → 201 การจอง HOLD (`amount` = ราคาของวันนั้น, `holdExpiresAt` = now + `hold_minutes`); ชน → `STALL_TAKEN` (`details.mine`) |
 | POST | `/bookings/:id/confirm` | HOLD → `PENDING_PAYMENT` (ตั้ง `paymentDueAt`) หรือ `CONFIRMED` ถ้า `payment_required = false` หรือราคา 0; หมดเวลา → `HOLD_EXPIRED` |
 | POST | `/bookings/:id/cancel` | `{ reason? }` — HOLD ยกเลิกได้ทุกเมื่อ; สถานะอื่นต้องก่อน 00:00 วันขาย − `cancel_before_hours` |
@@ -856,6 +856,9 @@ VITE_LINE_LIFF_ID=        (ฝั่ง web — ว่าง = ซ่อนป�
 | 2026-10-31 | เพิ่มห้อง `market:{marketId}` สำหรับ `round:changed` และส่งเฉพาะรอบที่ไม่ใช่ DRAFT (เผยแพร่/แก้/ยกเลิก/วันขายเปลี่ยน) | §10.1 ไม่มีห้องที่ครอบผู้ค้าทั้งตลาด; ผู้ค้าไม่เห็นรอบ DRAFT |
 | 2026-10-31 | event ภายในทุกชนิดใช้ `EventChannel` (common): `BookingEvents`, `RoundEvents`, `NotifyService.onVendorStatusChanged` — gateway แค่ subscribe | business logic ไม่รู้จัก socket; `NotifyService` เป็นจุดแจ้งเตือนอยู่แล้ว (Phase 7 ต่อ LINE/SMS ที่เดียวกัน) |
 | 2026-10-31 | badge รออนุมัติของ admin อัปเดตจาก `vendor:registered` (invalidate query) + โหลดใหม่ทุก 5 นาทีเผื่อ socket หลุด (เดิมทุก 60 วินาที) | ข้อมูลจริงยังมาจาก REST (§5 ข้อ 2) |
+| 2026-10-31 | หน้าผังวันขายของผู้ค้า: socket อัปเดต cache ของผังจาก `stall:updated` ทันที, โหลดผังใหม่เมื่อ socket ต่อ/ต่อใหม่ (`md:join` ซ้ำทุกครั้ง), แท็บกลับมา active และ `online` | ห้องหายเมื่อหลุด; event ที่พลาดระหว่างหลุดได้คืนจาก REST (§5 ข้อ 2) |
+| 2026-10-31 | `GET /market-days/:id/stalls` ส่ง `round` และ `serverTime` มาด้วย | หน้าผังรู้ว่าเปิดจองหรือยังและนับถอยหลังด้วยเวลา server จาก request เดียว; ถึงเวลาแล้วถาม server ใหม่ ปุ่มจองใช้ได้ทันทีโดยไม่ต้องรีเฟรช |
+| 2026-10-31 | Optimistic UI เฉพาะ hold (ล็อคเป็น ของฉัน ทันที, error = ย้อนกลับ); `STALL_TAKEN` แนะนำล็อคว่างที่ใกล้ที่สุด 3 ล็อค (ไฮไลต์บนผังด้วย `StallMap.highlightIds`) | ตอบสนองเร็วตอนแย่งกันจอง แต่สถานะจริงยังมาจาก server |
 
 ### Open Questions
 - [ ] ใช้กับตลาดเดียวหรือหลายตลาด (ตอนนี้ schema รองรับแล้ว แต่ UI ยังเป็นตลาดเดียว)

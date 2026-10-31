@@ -62,14 +62,21 @@ export async function adminRequest(request: APIRequestContext) {
       const res = await request.post(`${API_URL}/admin/vendors/${id}/approve`, { headers });
       expect(res.ok()).toBeTruthy();
     },
-    /** สร้างรอบ + วันขาย แล้วเผยแพร่ — คืน id ไว้ยกเลิกตอนจบ test */
-    async publishRound(input: { name: string; openAt: Date; closeAt: Date; dates: string[] }) {
+    /** สร้างรอบ + วันขาย แล้วเผยแพร่ — คืน id รอบ (ไว้ยกเลิกตอนจบ test) และ id วันขายตามลำดับวันที่ */
+    async publishRound(input: {
+      name: string;
+      openAt: Date;
+      closeAt: Date;
+      dates: string[];
+      maxStallsPerVendor?: number;
+    }) {
       const created = await request.post(`${API_URL}/admin/rounds`, {
         headers,
         data: {
           name: input.name,
           openAt: input.openAt.toISOString(),
           closeAt: input.closeAt.toISOString(),
+          maxStallsPerVendor: input.maxStallsPerVendor,
         },
       });
       expect(created.ok()).toBeTruthy();
@@ -79,9 +86,10 @@ export async function adminRequest(request: APIRequestContext) {
         data: { dates: input.dates },
       });
       expect(days.ok(), await days.text()).toBeTruthy();
+      const dayIds = ((await days.json()).data.marketDays as { id: string }[]).map((d) => d.id);
       const published = await request.post(`${API_URL}/admin/rounds/${id}/publish`, { headers });
       expect(published.ok()).toBeTruthy();
-      return id;
+      return { roundId: id, dayIds };
     },
     async cancelRound(id: string) {
       await request.post(`${API_URL}/admin/rounds/${id}/cancel`, { headers });

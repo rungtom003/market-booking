@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { RoundPhase, RoundStatus } from './enums.js';
 
 // ───────────── ประเภทสินค้า ─────────────
 
@@ -258,6 +259,18 @@ export interface MarketDayStall extends MapStall {
 /** `GET /market-days/:id/stalls` — ราคาเป็นราคาของวันนั้น (รวม override) */
 export interface MarketDayStalls {
   marketDay: { id: string; roundId: string; marketDate: string; isCancelled: boolean };
+  /** รอบของวันขายนี้ — `phase` คำนวณจากเวลา server ตอนตอบ (null = ยังไม่เผยแพร่/ยกเลิก) */
+  round: {
+    id: string;
+    name: string;
+    status: RoundStatus;
+    phase: RoundPhase | null;
+    openAt: string;
+    closeAt: string;
+    maxStallsPerVendor: number;
+  };
+  /** เวลา server ตอนตอบ — หา offset ให้ Countdown */
+  serverTime: string;
   zones: MapZone[];
   stalls: MarketDayStall[];
 }
