@@ -1,39 +1,87 @@
 import { useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { ErrorCode, SOCKET_NAMESPACE, SocketEvent } from '@market-booking/shared';
-import { io } from 'socket.io-client';
+import type { StallUpdatedPayload } from '@market-booking/shared';
+import { type Socket, io } from 'socket.io-client';
 import { renewAccessToken } from './api-client';
 import { session } from './session';
 
 /**
- * Socket.IO ของ admin (Overview §10) — ตอนนี้ใช้กับ badge ผู้ค้ารออนุมัติ (`vendor:registered`)
+ * socket เดียวของแอป admin (Overview §10) — ต่อเมื่อมีหน้าที่ใช้ครั้งแรก, ปิดเมื่อ logout
  * event แค่บอกว่ามีการเปลี่ยนแปลง ข้อมูลจริงโหลดผ่าน REST (invalidate query)
  */
+let socket: Socket | null = null;
+
+function adminSocket(): Socket {
+  if (socket) return socket;
+  // path /socket.io เดียวกับ API (dev: Vite proxy, production: Nginx)
+  const s = io(SOCKET_NAMESPACE, {
+    transports: ['websocket'],
+    // อ่าน token ล่าสุดทุกครั้งที่ต่อใหม่ (access token อายุ 15 นาที)
+    auth: (cb) => cb({ token: session.accessToken() }),
+  });
+  s.on('connect_error', (error) => {
+    // token หมดอายุ: ต่ออายุแล้วต่อใหม่ (server ปฏิเสธใน handshake จะไม่ต่อใหม่เอง)
+    if (error.message !== ErrorCode.UNAUTHORIZED) return;
+    void renewAccessToken().then((token) => {
+      if (token) s.connect();
+    });
+  });
+  socket = s;
+  return s;
+}
+
+session.subscribe(() => {
+  if (session.get().status !== 'anonymous' || !socket) return;
+  socket.disconnect();
+  socket = null;
+});
+
+/** badge ผู้ค้ารออนุมัติ — โหลดใหม่เมื่อมี `vendor:registered` และทุกครั้งที่ต่อ (อาจพลาด event ระหว่างหลุด) */
 export function useAdminRealtime(enabled: boolean): void {
   const queryClient = useQueryClient();
 
   useEffect(() => {
     if (!enabled) return;
-    // path /socket.io เดียวกับ API (dev: Vite proxy, production: Nginx)
-    const socket = io(SOCKET_NAMESPACE, {
-      transports: ['websocket'],
-      // อ่าน token ล่าสุดทุกครั้งที่ต่อใหม่ (access token อายุ 15 นาที)
-      auth: (cb) => cb({ token: session.accessToken() }),
-    });
+    const s = adminSocket();
     const refreshVendors = () => void queryClient.invalidateQueries({ queryKey: ['vendors'] });
-
-    socket.on(SocketEvent.VENDOR_REGISTERED, refreshVendors);
-    // ต่อใหม่หลังหลุด อาจพลาด event ระหว่างนั้น → โหลดใหม่ (§10.3)
-    socket.on('connect', refreshVendors);
-    socket.on('connect_error', (error) => {
-      // token หมดอายุ: ต่ออายุแล้วต่อใหม่ (server ปฏิเสธใน handshake จะไม่ต่อใหม่เอง)
-      if (error.message !== ErrorCode.UNAUTHORIZED) return;
-      void renewAccessToken().then((token) => {
-        if (token) socket.connect();
-      });
-    });
+    s.on(SocketEvent.VENDOR_REGISTERED, refreshVendors);
+    s.on('connect', refreshVendors);
     return () => {
-      socket.disconnect();
+      s.off(SocketEvent.VENDOR_REGISTERED, refreshVendors);
+      s.off('connect', refreshVendors);
     };
   }, [enabled, queryClient]);
+}
+
+/**
+ * ผังวันขายฝั่ง admin แบบ realtime: `md:join` ทุกครั้งที่ต่อ แล้วโหลดผัง/ตารางใหม่เมื่อล็อคในวันนั้นเปลี่ยน
+ * (ฝั่ง admin ต้องการชื่อผู้ค้าซึ่งไม่อยู่ใน event สาธารณะ จึงโหลดผ่าน REST เสมอ)
+ */
+export function useAdminMarketDaySocket(marketDayId: string | null): void {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (!marketDayId) return;
+    const s = adminSocket();
+    const refresh = () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-day', marketDayId] });
+      void queryClient.invalidateQueries({ queryKey: ['admin-bookings'] });
+    };
+    const join = () => {
+      void s.emitWithAck(SocketEvent.MD_JOIN, { marketDayId });
+      refresh();
+    };
+    const onStall = (p: StallUpdatedPayload) => {
+      if (p.marketDayId === marketDayId) refresh();
+    };
+    s.on('connect', join);
+    s.on(SocketEvent.STALL_UPDATED, onStall);
+    if (s.connected) join();
+    return () => {
+      if (s.connected) s.emit(SocketEvent.MD_LEAVE, { marketDayId });
+      s.off('connect', join);
+      s.off(SocketEvent.STALL_UPDATED, onStall);
+    };
+  }, [marketDayId, queryClient]);
 }

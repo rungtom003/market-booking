@@ -18,6 +18,9 @@ import { AuditService } from '../audit/audit.service';
 import type { AdminPrincipal } from '../auth/principal';
 import { MarketService } from '../market/market.service';
 import { SettingsService } from '../settings/settings.service';
+import { BookingEvents } from '../booking/booking-events';
+import { type BookingEventRow, toEvent } from '../booking/booking-mapper';
+import { BookingStateService } from '../booking/booking-state.service';
 import { RoundEvents } from './round-events';
 import { assertCloseBeforeFirstDay, toIsoDate, validationError } from './round-rules';
 
@@ -105,6 +108,8 @@ export class RoundService {
     private readonly markets: MarketService,
     private readonly settings: SettingsService,
     private readonly roundEvents: RoundEvents,
+    private readonly bookingState: BookingStateService,
+    private readonly bookingEvents: BookingEvents,
   ) {}
 
   getPhase(
@@ -323,7 +328,7 @@ export class RoundService {
 
   /**
    * PUBLISHED → CANCELLED และยกเลิกทุกวันขายของรอบ (วันที่เหล่านั้นใช้ในรอบใหม่ได้)
-   * Phase 4: ต้องยกเลิกการจองที่ยังมีผลของรอบนี้ด้วย
+   * และยกเลิกการจองที่ยังมีผลของรอบนี้ทั้งหมดใน transaction เดียวกัน
    */
   async cancel(admin: AdminPrincipal, id: string): Promise<RoundDetail> {
     const round = await this.findInScope(admin, id);
@@ -383,6 +388,7 @@ export class RoundService {
     action: string,
     now: Date,
   ): Promise<RoundDetail> {
+    let cancelled: BookingEventRow[] = [];
     const detail = await this.prisma.$transaction(async (tx) => {
       const { count } = await tx.bookingRound.updateMany({
         where: { id: round.id, status: round.status },
@@ -394,6 +400,12 @@ export class RoundService {
           where: { roundId: round.id },
           data: { isCancelled: true },
         });
+        // ยกเลิกรอบ = ยกเลิกทุกการจองที่ยังมีผลของรอบ (Phase 7 แจ้งผู้ค้า)
+        cancelled = await this.bookingState.cancelActive(
+          tx,
+          { marketDay: { roundId: round.id } },
+          { cancelledAt: now, cancelReason: 'รอบการจองถูกยกเลิก', cancelledByAdminId: admin.id },
+        );
       }
       await this.audit.log(
         {
@@ -402,7 +414,10 @@ export class RoundService {
           action,
           entity: { type: 'booking_round', id: round.id },
           before: { status: round.status },
-          after: { status: to },
+          after: {
+            status: to,
+            ...(cancelled.length > 0 && { cancelledBookings: cancelled.length }),
+          },
         },
         tx,
       );
@@ -412,6 +427,7 @@ export class RoundService {
       });
       return toRoundDetail(row, now);
     });
+    this.bookingEvents.emitChanged(cancelled.map(toEvent));
     this.notifyChanged(round.marketId, detail);
     return detail;
   }

@@ -66,7 +66,7 @@
 | อนุมัติ/ปฏิเสธ/ระงับ Vendor | ✅ | ✅ | ✅ | ❌ |
 | จัดการโซน/ล็อค/ผังตลาด | ✅ | ✅ | ❌ | ❌ |
 | จัดการรอบการจอง | ✅ | ✅ | ❌ | ❌ |
-| ยกเลิกการจองแทนผู้ค้า | ✅ | ✅ | ✅ | ❌ |
+| ยกเลิกการจองแทนผู้ค้า (รวมดูผัง/ตารางการจอง, จองแทน, export รายชื่อ) | ✅ | ✅ | ✅ | ❌ |
 | ตรวจสลิป/ยืนยันการชำระเงิน | ✅ | ✅ | ❌ | ✅ |
 | ดูรายงาน | ✅ | ✅ | ✅ | ✅ |
 | Check-in ผู้ค้าหน้างาน | ✅ | ✅ | ✅ | ❌ |
@@ -451,7 +451,7 @@ DRAFT ── publish ──► PUBLISHED ── cancel ──► CANCELLED
                         └─ now ≥ close_at           → CLOSED
 ```
 - แก้ `open_at` ได้เฉพาะก่อนเปิดจอง (เปิดแล้ว → `ROUND_ALREADY_OPENED`; รอบที่เผยแพร่แล้วต้องตั้งเป็นเวลาในอนาคต); แก้ `close_at` ได้ตลอดแต่ต้อง ≤ วันขายวันแรก (ต้องลง Audit Log)
-- publish ได้เมื่อมีวันขายอย่างน้อย 1 วัน และ `close_at` ยังไม่ผ่าน; ยกเลิกได้เฉพาะ PUBLISHED (วันขายทุกวันถูกยกเลิกตาม — วันที่เหล่านั้นใช้ในรอบใหม่ได้); ลบได้เฉพาะ DRAFT
+- publish ได้เมื่อมีวันขายอย่างน้อย 1 วัน และ `close_at` ยังไม่ผ่าน; ยกเลิกได้เฉพาะ PUBLISHED (วันขายทุกวันและการจองที่ยังมีผลทั้งหมดถูกยกเลิกตามใน transaction เดียวกัน — วันที่เหล่านั้นใช้ในรอบใหม่ได้); ยกเลิกวันขายเดียวก็ยกเลิกการจองของวันนั้นเหมือนกัน; ลบได้เฉพาะ DRAFT
 - `open_at` พอดี = OPEN, `close_at` พอดี = CLOSED — คำนวณที่ `roundPhase()` (`packages/shared/src/round.ts`) และ `RoundService.getPhase`; ตอนจองใช้ `RoundService.assertRoundOpen(marketDayId)` → `ROUND_NOT_OPEN`
 
 ---
@@ -625,9 +625,12 @@ Vendor กด "ยืนยันการจอง" → POST /bookings/:id/conf
 | PATCH / DELETE | `/admin/rounds/:id/market-days/:dayId` (PATCH `{ isCancelled }`; DELETE เฉพาะวันที่ไม่มีการจอง/คิว) |
 | GET | `/admin/market-days/:id/overrides` |
 | PUT / DELETE | `/admin/market-days/:id/overrides/:stallId` (PUT `{ priceOverride, isClosed }`; ค่าว่างทั้งคู่ = ลบ → `data: null`) |
-| GET | `/admin/bookings?marketDayId=&status=` |
+| GET | `/admin/bookings?marketDayId=&status=&q=&page=` (`status=ACTIVE` = ยังมีผล; `q` = ชื่อ/ร้าน/เบอร์ผู้ค้า หรือรหัสล็อค) |
+| GET | `/admin/market-days` (วันขายของรอบที่ไม่ใช่ DRAFT ตั้งแต่ 30 วันก่อน + จำนวนการจอง) |
+| GET | `/admin/market-days/:id/stalls` (ผังวันขาย + การจองและผู้ค้าของแต่ละล็อค — เฉพาะ admin) |
+| GET | `/admin/market-days/:id/bookings.xlsx` (รายชื่อผู้ค้าที่จองวันนั้น — ลง audit `booking.export`) |
 | POST | `/admin/bookings/:id/cancel` (`{ reason }` บังคับ, สิทธิ์ `BOOKINGS_CANCEL`, ลง audit `booking.cancel`) |
-| POST | `/admin/bookings` (จองแทนผู้ค้า) |
+| POST | `/admin/bookings` (จองแทนผู้ค้า `{ vendorId, stallId, marketDayId, status: CONFIRMED|PENDING_PAYMENT, amount? }` — ข้ามรอบ/โควตา/ล็อคสงวน/ปิดเฉพาะวัน/ประเภทสินค้าได้ แต่ผู้ค้าต้อง APPROVED, ล็อคต้องเปิดใช้งาน, วันขายไม่ถูกยกเลิก และไม่ข้าม unique index) |
 | GET | `/admin/payments?status=PENDING` |
 | POST | `/admin/payments/:id/approve` · `/reject` |
 | POST | `/admin/checkin/scan` |
@@ -859,6 +862,11 @@ VITE_LINE_LIFF_ID=        (ฝั่ง web — ว่าง = ซ่อนป�
 | 2026-10-31 | หน้าผังวันขายของผู้ค้า: socket อัปเดต cache ของผังจาก `stall:updated` ทันที, โหลดผังใหม่เมื่อ socket ต่อ/ต่อใหม่ (`md:join` ซ้ำทุกครั้ง), แท็บกลับมา active และ `online` | ห้องหายเมื่อหลุด; event ที่พลาดระหว่างหลุดได้คืนจาก REST (§5 ข้อ 2) |
 | 2026-10-31 | `GET /market-days/:id/stalls` ส่ง `round` และ `serverTime` มาด้วย | หน้าผังรู้ว่าเปิดจองหรือยังและนับถอยหลังด้วยเวลา server จาก request เดียว; ถึงเวลาแล้วถาม server ใหม่ ปุ่มจองใช้ได้ทันทีโดยไม่ต้องรีเฟรช |
 | 2026-10-31 | Optimistic UI เฉพาะ hold (ล็อคเป็น ของฉัน ทันที, error = ย้อนกลับ); `STALL_TAKEN` แนะนำล็อคว่างที่ใกล้ที่สุด 3 ล็อค (ไฮไลต์บนผังด้วย `StallMap.highlightIds`) | ตอบสนองเร็วตอนแย่งกันจอง แต่สถานะจริงยังมาจาก server |
+| 2026-10-31 | ยกเลิกรอบ/วันขาย = ยกเลิกการจองที่ยังมีผลของรอบ/วันนั้นใน transaction เดียวกัน (`cancelReason` = รอบการจองถูกยกเลิก/วันขายถูกยกเลิก) แล้วส่ง event; ปิดล็อคเฉพาะวันที่มีการจองอยู่ไม่ได้ (`RESOURCE_IN_USE`) | ไม่มีการจองค้างในวันที่ไม่มีตลาด; ผู้ค้าเห็นทันทีผ่าน realtime; ปิดล็อคต้องตัดสินใจเรื่องผู้จองก่อน (ยกเลิกในหน้าจัดการการจอง) |
+| 2026-10-31 | `BookingStateService` + `BookingEvents` ย้ายไป `BookingCoreModule` (ไม่มี dependency) — round module ใช้ยกเลิกการจองได้โดยไม่ import BookingModule (ซึ่ง import RoundModule) | กัน circular dependency และให้ event มี instance เดียวทั้งแอป |
+| 2026-10-31 | หน้าจัดการการจองของ admin ใช้สิทธิ์ `BOOKINGS_CANCEL` (SUPER_ADMIN/ADMIN/STAFF) สำหรับดู/ยกเลิก/จองแทน/export | งานหน้างานกลุ่มเดียวกัน; FINANCE ดูผ่านรายงาน (Phase 8) |
+| 2026-10-31 | export xlsx ใช้ `exceljs` 4.4 และลง audit log ทุกครั้ง | มีชื่อ+เบอร์ผู้ค้า (ข้อมูลส่วนบุคคล — PDPA); Phase 8 รายงานใช้ library เดียวกัน |
+| 2026-10-31 | ผัง admin โหลดผ่าน REST ทุกครั้งที่ได้ `stall:updated` ของวันนั้น (ไม่แก้ cache จาก event) และแสดงชื่อผู้จองในล็อคด้วย `StallMap.subLabel` | ชื่อผู้ค้าห้ามอยู่ใน event สาธารณะ (§10.3) |
 
 ### Open Questions
 - [ ] ใช้กับตลาดเดียวหรือหลายตลาด (ตอนนี้ schema รองรับแล้ว แต่ UI ยังเป็นตลาดเดียว)

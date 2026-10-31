@@ -28,6 +28,8 @@ export interface StallMapProps {
   isSelectable?: (stall: StallMapItem) => boolean;
   /** ชื่อสำหรับ screen reader / E2E — ค่าเริ่มต้น "ล็อค A1 ว่าง" */
   describe?: (stall: StallMapItem) => string;
+  /** บรรทัดที่สองใต้รหัสล็อค (เช่น ชื่อผู้จองฝั่ง admin) — ยาวเกินถูกตัดด้วย … */
+  subLabel?: (stall: StallMapItem) => string | undefined;
   /** ไม่ระบุ = สูงตามสัดส่วนของผัง (อย่างน้อย 220px ไม่เกิน 70vh) */
   height?: CSSProperties['height'];
   ariaLabel?: string;
@@ -38,6 +40,12 @@ const TAP_SLOP = 6;
 const MAX_ZOOM = 10;
 const BUTTON_ZOOM = 1.4;
 const WHEEL_ZOOM = 1.15;
+
+/** ตัดข้อความให้พอดีความกว้างโดยประมาณ (ตัวอักษรกว้าง ~0.55 ของขนาด font) */
+function fitText(text: string, width: number, fontSize: number): string {
+  const max = Math.max(1, Math.floor(width / (fontSize * 0.55)));
+  return text.length <= max ? text : `${text.slice(0, Math.max(1, max - 1))}…`;
+}
 
 const defaultDescribe = (s: StallMapItem) => `ล็อค ${s.code} ${STALL_STATUS_LABEL_TH[s.status]}`;
 
@@ -53,6 +61,7 @@ export function StallMap({
   onSelect,
   isSelectable,
   describe = defaultDescribe,
+  subLabel,
   height,
   ariaLabel = 'ผังตลาด',
 }: StallMapProps) {
@@ -197,6 +206,8 @@ export function StallMap({
         {stalls.map((s) => {
           const selected = s.id === selectedId;
           const highlighted = highlightIds?.has(s.id) ?? false;
+          const sub = subLabel?.(s);
+          const subSize = Math.max(7, Math.min(s.shapeH * 0.2, 12));
           const canSelect = selectable(s);
           const c = stallColors(s.status, zoneColor.get(s.zoneId) ?? '#64748B', selected);
           const cx = s.posX + s.shapeW / 2;
@@ -245,12 +256,12 @@ export function StallMap({
               />
               <text
                 x={cx}
-                y={cy}
+                y={sub ? s.posY + s.shapeH * 0.36 : cy}
                 textAnchor="middle"
                 dominantBaseline="central"
                 fontSize={Math.max(
                   8,
-                  Math.min(s.shapeW / (s.code.length * 0.62 + 0.8), s.shapeH * 0.4),
+                  Math.min(s.shapeW / (s.code.length * 0.62 + 0.8), s.shapeH * (sub ? 0.32 : 0.4)),
                 )}
                 fontWeight={600}
                 fontFamily="inherit"
@@ -259,6 +270,20 @@ export function StallMap({
               >
                 {s.code}
               </text>
+              {sub && (
+                <text
+                  x={cx}
+                  y={s.posY + s.shapeH * 0.74}
+                  textAnchor="middle"
+                  dominantBaseline="central"
+                  fontSize={subSize}
+                  fontFamily="inherit"
+                  fill={c.text}
+                  style={{ pointerEvents: 'none' }}
+                >
+                  {fitText(sub, s.shapeW - 6, subSize)}
+                </text>
+              )}
             </g>
           );
         })}

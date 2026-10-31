@@ -62,7 +62,7 @@
 | 4.2 | ↳ Expiry Worker (BullMQ) | ✅ DONE | 2026-10-31 | 2026-10-31 |
 | 4.3 | ↳ Realtime Gateway (Socket.IO) | ✅ DONE | 2026-10-31 | 2026-10-31 |
 | 4.4 | ↳ Vendor Web: หน้าผังและจองล็อค | ✅ DONE | 2026-10-31 | 2026-10-31 |
-| 4.5 | ↳ Admin Web: จัดการการจอง | ⬜ TODO | | |
+| 4.5 | ↳ Admin Web: จัดการการจอง | ✅ DONE | 2026-10-31 | 2026-10-31 |
 | 4.6 | ↳ Concurrency & Load Test | ⬜ TODO | | |
 | 5 | Payment | ⬜ TODO | | |
 | 5.1 | ↳ Payment API + PromptPay QR | ⬜ TODO | | |
@@ -535,18 +535,27 @@
 - ทดสอบ: unit 165, integration 207 (เพิ่ม assertion `round`/`serverTime`), E2E 25 (+4 `vendor-booking.spec.ts`)
 
 ### 4.5 Admin Web: จัดการการจอง
-**สถานะ:** ⬜ TODO · **Dependencies:** 4.3 · **เริ่ม:** – · **เสร็จ:** –
+**สถานะ:** ✅ DONE · **Dependencies:** 4.3 · **เริ่ม:** 2026-10-31 · **เสร็จ:** 2026-10-31
 
 **Tasks**
-- [ ] หน้าผังวันขายแบบ realtime (เห็นชื่อผู้ค้าในล็อค — เฉพาะ admin)
-- [ ] ตารางการจอง filter ตามวัน/สถานะ/ผู้ค้า
-- [ ] ยกเลิกแทน (บังคับเหตุผล), จองแทนผู้ค้า (`POST /admin/bookings` — bypass รอบ/โควต้าได้ แต่ไม่ bypass unique index)
-- [ ] Export รายชื่อผู้ค้าต่อวันขาย (xlsx)
+- [x] หน้าผังวันขายแบบ realtime (เห็นชื่อผู้ค้าในล็อค — เฉพาะ admin)
+- [x] ตารางการจอง filter ตามวัน/สถานะ/ผู้ค้า
+- [x] ยกเลิกแทน (บังคับเหตุผล), จองแทนผู้ค้า (`POST /admin/bookings` — bypass รอบ/โควต้าได้ แต่ไม่ bypass unique index)
+- [x] Export รายชื่อผู้ค้าต่อวันขาย (xlsx)
 
 **Acceptance Criteria**
 - Admin ยกเลิก → ผู้ค้าและผู้ดูผังคนอื่นเห็นทันที, มี audit log
 
-**Agent Notes:** –
+**Agent Notes:**
+- ✅ AC: integration `admin-bookings.int-spec.ts` — STAFF ยกเลิกพร้อมเหตุผล → socket ของเจ้าของ, ผู้ค้าอีกคนที่ดูผัง และ admin ได้ `stall:updated { state: 'AVAILABLE' }` ภายใน 1 วินาที, เจ้าของได้ `booking:changed CANCELLED`, audit `booking.cancel` (actor/before/after/reason), `/bookings/me` แสดงเหตุผล + `cancelledByAdmin`; E2E `admin-bookings.spec.ts` ทำ flow เดียวกันผ่านหน้าเว็บจริง (ผู้ค้า 2 คน จอ 360px + admin) ผังของทั้งคู่เป็นว่างภายใน 2 วินาทีโดยไม่รีเฟรช
+- API (`modules/booking/`): `BookingAdminService` + `booking-admin.controller.ts` — `GET /admin/bookings` (กรองวัน/สถานะ/ค้นหา, แบ่งหน้า), `POST /admin/bookings` (จองแทน), `GET /admin/market-days`, `GET /admin/market-days/:id/stalls` (ผังพร้อมผู้จอง), `GET /admin/market-days/:id/bookings.xlsx` (exceljs) — ทั้งหมดสิทธิ์ `BOOKINGS_CANCEL`
+- จองแทนผู้ค้า: ข้ามรอบ/โควตา/ล็อคสงวน/ปิดเฉพาะวัน/ประเภทสินค้า แต่ผู้ค้าต้อง APPROVED, ล็อค active, วันขายไม่ยกเลิก, ชน unique = `STALL_TAKEN`; เลือก `CONFIRMED` (ค่าเริ่มต้น) หรือ `PENDING_PAYMENT` (กำหนดชำระตาม setting → worker 4.2 ตั้ง job ให้เอง) และตั้งราคาเองได้; audit `booking.create_by_admin`
+- งานค้างจาก 3.2 ปิดแล้ว: ยกเลิกรอบ/วันขาย → `BookingStateService.cancelActive` ใน transaction เดียวกัน + event (audit มี `cancelledBookings`); ปิดล็อคเฉพาะวันที่มีการจองอยู่ → `RESOURCE_IN_USE` (หน้า admin แสดงว่าให้ยกเลิกการจองก่อน); หน้ารอบถามยืนยันก่อนยกเลิกวันที่มีการจอง
+- `BookingCoreModule` ใหม่ (`BookingStateService` + `BookingEvents`) — RoundModule import ได้โดยไม่วน; **ห้ามใส่สองตัวนี้ใน providers ของ module อื่น** (event ต้องมี instance เดียว)
+- หน้า admin `/bookings` "จัดการการจอง": เลือกวันขาย (จำใน URL `?day=&tab=`), ผัง realtime (ชื่อผู้จองในล็อคด้วย `StallMap.subLabel`), คลิกล็อค → ดูผู้จอง/ยกเลิก (บังคับเหตุผล) หรือจองแทน (ค้นหาผู้ค้าที่อนุมัติแล้ว), แท็บตาราง (DataGrid แบ่งหน้าฝั่ง server + กรองสถานะ/ค้นหา), ปุ่มดาวน์โหลด xlsx; socket ของ admin รวมเป็นตัวเดียว (`useAdminRealtime` + `useAdminMarketDaySocket`)
+- `BOOKING_STATUS_TH` ย้ายไป shared (เว็บผู้ค้า, admin, ไฟล์ export ใช้ตัวเดียวกัน)
+- เจอระหว่างทดสอบ: ลองใส่ `<title>` ใน SVG เป็น tooltip แล้วชนกับ `getByText` ของ E2E เดิม (ข้อความซ้ำ) → เอาออก ใช้ aria-label + subLabel แทน; ชื่อผู้ค้าซ้ำกับรอบก่อนใน DB ของ E2E → E2E เลือกผู้ค้าด้วยเบอร์
+- ทดสอบ: unit 165, integration 215 (+8 `admin-bookings.int-spec.ts`), E2E 26 (+1)
 
 ### 4.6 Concurrency & Load Test
 **สถานะ:** ⬜ TODO · **Dependencies:** 4.4 · **เริ่ม:** – · **เสร็จ:** –
@@ -758,3 +767,5 @@
 | 2026-10-31 | 4.3 | ✅ DONE | Socket.IO `/booking` + Redis adapter, auth ใน handshake, ห้อง vendor/admin/market/md (จำกัด 3), stall:updated (สถานะจาก DB + mine แยกห้อง), booking:changed, round:changed, server:time, vendor:registered + badge admin realtime; AC 2 ผู้ค้า < 1 วินาที และข้าม 2 instance — unit 165 / integration 207 / E2E 21 ผ่าน — ถัดไป: 4.4 Vendor Web หน้าผังและจองล็อค |
 | 2026-10-31 | 4.4 | 🟨 IN PROGRESS | เริ่มหน้าผังวันขาย + จอง/ยืนยัน/ยกเลิก (socket อัปเดตผัง, นับถอยหลัง hold), หน้าการจองของฉัน |
 | 2026-10-31 | 4.4 | ✅ DONE | หน้าผังวันขาย (socket อัปเดตผัง, filter โซน, bottom sheet, นับถอยหลังเปิดจอง/hold, ยืนยัน/ยกเลิก, STALL_TAKEN แนะนำล็อคใกล้เคียง), หน้าการจองของฉัน, ปุ่มเลือกวันขายบนหน้าแรก; AC แย่งล็อค 2 คน + เน็ตหลุด 10 วินาที ผ่าน — unit 165 / integration 207 / E2E 25 ผ่าน — ถัดไป: 4.5 Admin Web จัดการการจอง |
+| 2026-10-31 | 4.5 | 🟨 IN PROGRESS | เริ่มหน้าจัดการการจองของ admin (ผัง realtime + ชื่อผู้ค้า, ตาราง, ยกเลิก/จองแทน, export xlsx) + ยกเลิกรอบ/วันขายแล้วยกเลิกการจองที่ค้าง (จาก 3.2) |
+| 2026-10-31 | 4.5 | ✅ DONE | หน้าจัดการการจองของ admin (ผัง realtime + ชื่อผู้จอง, ตาราง, ยกเลิก/จองแทน, export xlsx), ยกเลิกรอบ/วันขายแล้วยกเลิกการจองตาม, ห้ามปิดล็อคที่มีการจอง; AC admin ยกเลิกแล้วผู้ค้าเห็นทันที + audit — unit 165 / integration 215 / E2E 26 ผ่าน — ถัดไป: 4.6 Concurrency & Load Test |

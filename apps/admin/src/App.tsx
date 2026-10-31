@@ -4,6 +4,7 @@ import Button from '@mui/material/Button';
 import Typography from '@mui/material/Typography';
 import { AuthBootstrap, Protected } from './components/guards';
 import { AdminUsersPage } from './pages/AdminUsersPage';
+import { BookingsPage } from './pages/BookingsPage';
 import { HomePage } from './pages/HomePage';
 import { LoginPage } from './pages/LoginPage';
 import { MarketDayPage } from './pages/MarketDayPage';
@@ -33,6 +34,14 @@ export function App() {
             element={
               <Protected permission={Permission.VENDORS_REVIEW}>
                 <VendorsPage />
+              </Protected>
+            }
+          />
+          <Route
+            path="/bookings"
+            element={
+              <Protected permission={Permission.BOOKINGS_CANCEL}>
+                <BookingsPage />
               </Protected>
             }
           />

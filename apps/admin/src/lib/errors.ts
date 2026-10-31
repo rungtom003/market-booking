@@ -16,3 +16,8 @@ export function errorMessage(error: unknown): string {
   }
   return errorMessageTh('INTERNAL_ERROR');
 }
+
+/** code ของ error จาก API (ไม่ใช่ error ของ API = '') */
+export function errorCode(error: unknown): string {
+  return isAxiosError<ApiErrorResponse>(error) ? (error.response?.data?.error?.code ?? '') : '';
+}

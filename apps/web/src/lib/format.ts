@@ -22,15 +22,6 @@ export function formatBaht(amount: number): string {
   return `${baht.format(amount)} บาท`;
 }
 
-export const BOOKING_STATUS_TH: Record<BookingStatus, string> = {
-  HOLD: 'รอยืนยัน',
-  PENDING_PAYMENT: 'รอชำระเงิน',
-  PENDING_VERIFY: 'รอตรวจสลิป',
-  CONFIRMED: 'จองสำเร็จ',
-  CANCELLED: 'ยกเลิกแล้ว',
-  EXPIRED: 'หมดเวลา',
-};
-
 /** สีป้ายสถานะ (Tailwind) */
 export const BOOKING_STATUS_STYLE: Record<BookingStatus, string> = {
   HOLD: 'bg-amber-100 text-amber-900',

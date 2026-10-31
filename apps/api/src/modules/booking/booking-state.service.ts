@@ -1,5 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import { BookingStatus, ErrorCode, canTransition } from '@market-booking/shared';
+import {
+  ACTIVE_BOOKING_STATUSES,
+  BookingStatus,
+  ErrorCode,
+  canTransition,
+} from '@market-booking/shared';
 import { Prisma } from '../../generated/prisma/client';
 import { AppException } from '../../common/exceptions/app.exception';
 import { BOOKING_FIELDS, BookingEventRow, BookingRow, EVENT_FIELDS } from './booking-mapper';
@@ -59,5 +64,21 @@ export class BookingStateService {
       select: EVENT_FIELDS,
     });
     return [...holds, ...unpaid];
+  }
+
+  /**
+   * ยกเลิกทุกการจองที่ยังมีผลตาม `where` (เช่น ยกเลิกรอบ/วันขาย) — เรียกใน transaction เดียวกับการยกเลิกนั้น
+   * คืนแถวที่เปลี่ยนไว้ส่ง event หลัง commit
+   */
+  cancelActive(
+    db: BookingDb,
+    where: Prisma.BookingWhereInput,
+    data: { cancelledAt: Date; cancelReason: string; cancelledByAdminId: string },
+  ): Promise<BookingEventRow[]> {
+    return db.booking.updateManyAndReturn({
+      where: { ...where, status: { in: [...ACTIVE_BOOKING_STATUSES] } },
+      data: { ...data, status: BookingStatus.CANCELLED, version: { increment: 1 } },
+      select: EVENT_FIELDS,
+    });
   }
 }

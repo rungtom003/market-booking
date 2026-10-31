@@ -1,5 +1,11 @@
 import type {
   AddMarketDaysInput,
+  AdminBooking,
+  AdminBookingListQuery,
+  AdminCreateBookingInput,
+  AdminMarketDayOption,
+  AdminMarketDayStalls,
+  Booking,
   AdminLoginResponse,
   AdminUser,
   AdminUserListQuery,
@@ -159,6 +165,34 @@ export const adminApi = {
           input,
         ),
       ),
+  },
+
+  bookings: {
+    list: async (query: Partial<AdminBookingListQuery>) =>
+      (
+        await apiClient.get<PaginatedResponse<AdminBooking>>('/admin/bookings', {
+          params: params(query),
+        })
+      ).data,
+    create: (input: Partial<AdminCreateBookingInput>) =>
+      unwrap(apiClient.post<ApiResponse<AdminBooking>>('/admin/bookings', input)),
+    cancel: (id: string, reason: string) =>
+      unwrap(apiClient.post<ApiResponse<Booking>>(`/admin/bookings/${id}/cancel`, { reason })),
+    days: () => unwrap(apiClient.get<ApiResponse<AdminMarketDayOption[]>>('/admin/market-days')),
+    dayStalls: (marketDayId: string) =>
+      unwrap(
+        apiClient.get<ApiResponse<AdminMarketDayStalls>>(
+          `/admin/market-days/${marketDayId}/stalls`,
+        ),
+      ),
+    /** ดาวน์โหลด xlsx — คืน blob + ชื่อไฟล์จาก Content-Disposition */
+    exportDay: async (marketDayId: string) => {
+      const res = await apiClient.get<Blob>(`/admin/market-days/${marketDayId}/bookings.xlsx`, {
+        responseType: 'blob',
+      });
+      const name = /filename="([^"]+)"/.exec(String(res.headers['content-disposition']))?.[1];
+      return { blob: res.data, filename: name ?? 'bookings.xlsx' };
+    },
   },
 
   users: {

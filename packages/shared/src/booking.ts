@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import { BookingStatus } from './enums.js';
+import { type MarketDayStall, type MarketDayStalls, priceSchema } from './market.js';
+import { paginationQuerySchema } from './pagination.js';
 
 const { PENDING_PAYMENT, PENDING_VERIFY, CONFIRMED, CANCELLED, EXPIRED } = BookingStatus;
 
@@ -11,6 +13,16 @@ export const BOOKING_TRANSITIONS: Record<BookingStatus, readonly BookingStatus[]
   CONFIRMED: [CANCELLED],
   CANCELLED: [],
   EXPIRED: [],
+};
+
+/** ชื่อสถานะภาษาไทย — ใช้ทั้งเว็บผู้ค้า, admin และไฟล์ export */
+export const BOOKING_STATUS_TH: Record<BookingStatus, string> = {
+  HOLD: 'รอยืนยัน',
+  PENDING_PAYMENT: 'รอชำระเงิน',
+  PENDING_VERIFY: 'รอตรวจสลิป',
+  CONFIRMED: 'จองสำเร็จ',
+  CANCELLED: 'ยกเลิกแล้ว',
+  EXPIRED: 'หมดเวลา',
 };
 
 export function canTransition(from: BookingStatus, to: BookingStatus): boolean {
@@ -52,4 +64,70 @@ export interface Booking {
   /** ยกเลิกโดยเจ้าหน้าที่ (ไม่เปิดเผยว่าใคร) */
   cancelledByAdmin: boolean;
   createdAt: string;
+}
+
+// ───────────── admin ─────────────
+
+/** สถานะที่กรองได้ในตารางการจอง — `ACTIVE` = HOLD/รอชำระ/รอตรวจ/ยืนยันแล้ว */
+export const adminBookingStatusFilterSchema = z.enum([
+  'ACTIVE',
+  BookingStatus.HOLD,
+  PENDING_PAYMENT,
+  PENDING_VERIFY,
+  CONFIRMED,
+  CANCELLED,
+  EXPIRED,
+]);
+export type AdminBookingStatusFilter = z.infer<typeof adminBookingStatusFilterSchema>;
+
+export const adminBookingListQuerySchema = paginationQuerySchema.extend({
+  marketDayId: z.uuid().optional(),
+  status: adminBookingStatusFilterSchema.optional(),
+  /** ค้นหาชื่อ / ชื่อร้าน / เบอร์ผู้ค้า หรือรหัสล็อค */
+  q: z.string().trim().max(100).optional(),
+});
+export type AdminBookingListQuery = z.infer<typeof adminBookingListQuerySchema>;
+
+/**
+ * จองแทนผู้ค้า (Overview §11 `POST /admin/bookings`) — ข้ามรอบ/โควตา/ล็อคสงวน/ปิดเฉพาะวัน/ประเภทสินค้าได้
+ * แต่ไม่ข้าม unique index (ล็อคที่มีการจองอยู่ = `STALL_TAKEN`); ไม่ระบุราคา = ราคาของวันนั้น
+ */
+export const adminCreateBookingSchema = z
+  .object({
+    vendorId: z.uuid('กรุณาเลือกผู้ค้า'),
+    stallId: z.uuid(),
+    marketDayId: z.uuid(),
+    status: z.enum([CONFIRMED, PENDING_PAYMENT]).default(CONFIRMED),
+    amount: priceSchema.optional(),
+  })
+  .strict();
+export type AdminCreateBookingInput = z.infer<typeof adminCreateBookingSchema>;
+
+export interface AdminBooking extends Booking {
+  vendor: { id: string; name: string; shopName: string | null; phone: string };
+}
+
+/** ตัวเลือกวันขายในหน้าจัดการการจอง — วันขายของรอบที่ไม่ใช่ DRAFT ตั้งแต่ 30 วันก่อน */
+export interface AdminMarketDayOption {
+  id: string;
+  marketDate: string;
+  roundId: string;
+  roundName: string;
+  isCancelled: boolean;
+  /** การจองที่ยังมีผล */
+  activeBookings: number;
+}
+
+/** ผังวันขายฝั่ง admin — เห็นผู้ค้าของแต่ละล็อค (ห้ามส่งให้ผู้ค้า) */
+export interface AdminMarketDayStalls extends Omit<MarketDayStalls, 'stalls'> {
+  stalls: (MarketDayStall & {
+    booking: {
+      id: string;
+      status: BookingStatus;
+      amount: number;
+      holdExpiresAt: string | null;
+      paymentDueAt: string | null;
+      vendor: { id: string; name: string; shopName: string | null; phone: string };
+    } | null;
+  })[];
 }

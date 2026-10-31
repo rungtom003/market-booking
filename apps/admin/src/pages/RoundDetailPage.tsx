@@ -166,7 +166,7 @@ export function RoundDetailPage() {
               onClick={() =>
                 setConfirm({
                   title: 'ยกเลิกรอบนี้?',
-                  text: 'วันขายทั้งหมดของรอบจะถูกยกเลิก และผู้ค้าจะไม่เห็นรอบนี้อีก — ย้อนกลับไม่ได้',
+                  text: 'วันขายทั้งหมดของรอบ และการจองที่มีอยู่ทั้งหมดจะถูกยกเลิก ผู้ค้าจะไม่เห็นรอบนี้อีก — ย้อนกลับไม่ได้',
                   label: 'ยืนยันยกเลิกรอบ',
                   run: () => cancel.mutate(),
                 })
@@ -242,7 +242,15 @@ export function RoundDetailPage() {
                         size="small"
                         color={d.isCancelled ? 'primary' : 'warning'}
                         onClick={() =>
-                          setDayCancelled.mutate({ day: d, isCancelled: !d.isCancelled })
+                          // ยกเลิกวันที่มีการจอง = ยกเลิกการจองทั้งหมดของวันนั้น → ถามก่อน
+                          !d.isCancelled && d.bookingCount > 0
+                            ? setConfirm({
+                                title: 'ยกเลิกวันขายนี้?',
+                                text: `การจอง ${d.bookingCount} รายการของวัน${formatIsoDateTh(d.marketDate)} จะถูกยกเลิกทั้งหมด — ย้อนกลับไม่ได้`,
+                                label: 'ยืนยันยกเลิกวัน',
+                                run: () => setDayCancelled.mutate({ day: d, isCancelled: true }),
+                              })
+                            : setDayCancelled.mutate({ day: d, isCancelled: !d.isCancelled })
                         }
                       >
                         {d.isCancelled ? 'คืนสถานะ' : 'ยกเลิกวัน'}

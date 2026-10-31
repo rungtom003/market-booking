@@ -42,7 +42,15 @@ describe('roundPhase (Overview §8.3)', () => {
 describe('RoundService.assertRoundOpen', () => {
   function serviceWith(day: unknown) {
     const prisma = { marketDay: { findFirst: jest.fn().mockResolvedValue(day) } };
-    return new RoundService(prisma as unknown as PrismaService, null!, null!, null!, null!);
+    return new RoundService(
+      prisma as unknown as PrismaService,
+      null!,
+      null!,
+      null!,
+      null!,
+      null!,
+      null!,
+    );
   }
   const day = (overrides: Record<string, unknown> = {}) => ({
     id: 'day-1',

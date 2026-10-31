@@ -9,22 +9,15 @@ import {
   Post,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import {
-  Booking,
-  Permission,
-  adminCancelBookingSchema,
-  cancelBookingSchema,
-  holdBookingSchema,
-} from '@market-booking/shared';
+import { Booking, cancelBookingSchema, holdBookingSchema } from '@market-booking/shared';
 import { createZodDto } from 'nestjs-zod';
-import { CurrentAdmin, CurrentVendor, RequirePermission } from '../auth/decorators';
-import type { AdminPrincipal, VendorPrincipal } from '../auth/principal';
+import { CurrentVendor } from '../auth/decorators';
+import type { VendorPrincipal } from '../auth/principal';
 import { RequireApprovedVendor } from '../vendor/vendor-approved.guard';
 import { BookingService } from './booking.service';
 
 class HoldBookingDto extends createZodDto(holdBookingSchema) {}
 class CancelBookingDto extends createZodDto(cancelBookingSchema) {}
-class AdminCancelBookingDto extends createZodDto(adminCancelBookingSchema) {}
 
 @ApiTags('bookings')
 @ApiBearerAuth()
@@ -69,24 +62,5 @@ export class BookingController {
   @ApiOperation({ summary: 'การจองของฉัน (วันขายล่าสุดก่อน ไม่เกิน 100 รายการ)' })
   mine(@CurrentVendor() vendor: VendorPrincipal): Promise<Booking[]> {
     return this.bookings.listMine(vendor);
-  }
-}
-
-@ApiTags('admin / bookings')
-@ApiBearerAuth()
-@RequirePermission(Permission.BOOKINGS_CANCEL)
-@Controller('admin/bookings')
-export class BookingAdminController {
-  constructor(private readonly bookings: BookingService) {}
-
-  @Post(':id/cancel')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'ยกเลิกแทนผู้ค้าได้ทุกเวลา (ต้องระบุเหตุผล, ลง audit log)' })
-  cancel(
-    @CurrentAdmin() admin: AdminPrincipal,
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body() body: AdminCancelBookingDto,
-  ): Promise<Booking> {
-    return this.bookings.cancelByAdmin(admin, id, body);
   }
 }

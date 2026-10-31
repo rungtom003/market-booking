@@ -26,7 +26,7 @@ import TableRow from '@mui/material/TableRow';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import { adminApi } from '../api/admin';
-import { errorMessage } from '../lib/errors';
+import { errorCode, errorMessage } from '../lib/errors';
 import { formatBaht } from '../lib/format';
 
 type Notice = { severity: 'success' | 'error'; text: string } | null;
@@ -207,7 +207,12 @@ function OverrideDialog({
       onClose();
       onSaved(result);
     },
-    onError: (e) => setError(errorMessage(e)),
+    onError: (e) =>
+      setError(
+        errorCode(e) === 'RESOURCE_IN_USE'
+          ? 'ล็อคนี้มีการจองอยู่ ปิดไม่ได้ — ยกเลิกการจองก่อนที่หน้า "จัดการการจอง"'
+          : errorMessage(e),
+      ),
   });
 
   const submit = () => {

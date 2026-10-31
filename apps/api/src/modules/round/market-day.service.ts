@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import {
+  ACTIVE_BOOKING_STATUSES,
   AddMarketDaysInput,
   ErrorCode,
   RoundDetail,
@@ -14,6 +15,9 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import type { AdminPrincipal } from '../auth/principal';
 import { MarketService } from '../market/market.service';
+import { BookingEvents } from '../booking/booking-events';
+import { type BookingEventRow, isLapsed, toEvent } from '../booking/booking-mapper';
+import { BookingStateService } from '../booking/booking-state.service';
 import { compareStalls } from '../market-setup/stall-mapper';
 import { fromIsoDate, marketDateIssues, toIsoDate } from './round-rules';
 import { ROUND_FIELDS, RoundRow, RoundService, toRoundDetail } from './round.service';
@@ -40,6 +44,8 @@ export class MarketDayService {
     private readonly audit: AuditService,
     private readonly markets: MarketService,
     private readonly rounds: RoundService,
+    private readonly bookingState: BookingStateService,
+    private readonly bookingEvents: BookingEvents,
   ) {}
 
   /**
@@ -110,7 +116,7 @@ export class MarketDayService {
     }
   }
 
-  /** ยกเลิก/คืนสถานะวันขาย — Phase 4: ยกเลิกวันต้องยกเลิกการจองของวันนั้นด้วย */
+  /** ยกเลิก/คืนสถานะวันขาย — ยกเลิกวัน = ยกเลิกการจองที่ยังมีผลของวันนั้นด้วย (transaction เดียวกัน) */
   async update(
     admin: AdminPrincipal,
     roundId: string,
@@ -126,9 +132,17 @@ export class MarketDayService {
     const date = toIsoDate(day.marketDate);
     if (!input.isCancelled) await this.assertDatesAllowed(round, [date], now);
 
+    let cancelled: BookingEventRow[] = [];
     try {
       const detail = await this.prisma.$transaction(async (tx) => {
         await tx.marketDay.update({ where: { id: dayId }, data: input });
+        if (input.isCancelled) {
+          cancelled = await this.bookingState.cancelActive(
+            tx,
+            { marketDayId: dayId },
+            { cancelledAt: now, cancelReason: 'วันขายถูกยกเลิก', cancelledByAdminId: admin.id },
+          );
+        }
         await this.audit.log(
           {
             actorType: 'ADMIN',
@@ -136,12 +150,17 @@ export class MarketDayService {
             action: input.isCancelled ? 'market_day.cancel' : 'market_day.restore',
             entity: { type: 'market_day', id: dayId },
             before: { marketDate: date, isCancelled: day.isCancelled },
-            after: { marketDate: date, isCancelled: input.isCancelled },
+            after: {
+              marketDate: date,
+              isCancelled: input.isCancelled,
+              ...(cancelled.length > 0 && { cancelledBookings: cancelled.length }),
+            },
           },
           tx,
         );
         return this.detail(tx, roundId, now);
       });
+      this.bookingEvents.emitChanged(cancelled.map(toEvent));
       this.rounds.notifyChanged(round.marketId, detail);
       return detail;
     } catch (error) {
@@ -207,7 +226,7 @@ export class MarketDayService {
 
   /**
    * ปิดล็อค/เปลี่ยนราคาเฉพาะวัน — ค่าว่างทั้งคู่ (`priceOverride: null`, `isClosed: false`) = ลบ override
-   * Phase 4: ปิดล็อคที่มีการจองอยู่แล้วต้องตัดสินใจเรื่องการจองนั้น (ตอนนี้ยังไม่มีการจอง)
+   * ปิดล็อคที่มีการจองอยู่ไม่ได้ (`RESOURCE_IN_USE`) — ให้ยกเลิกการจองนั้นก่อน (หน้าจัดการการจอง)
    */
   async setOverride(
     admin: AdminPrincipal,
@@ -238,6 +257,20 @@ export class MarketDayService {
     };
     const clear = input.priceOverride === null && !input.isClosed;
     if (clear && !existing) return null;
+    if (input.isClosed) {
+      const now = new Date();
+      const active = (
+        await this.prisma.booking.findMany({
+          where: { stallId, marketDayId, status: { in: [...ACTIVE_BOOKING_STATUSES] } },
+          select: { status: true, holdExpiresAt: true, paymentDueAt: true },
+        })
+      ).filter((b) => !isLapsed(b, now));
+      if (active.length > 0) {
+        throw new AppException(ErrorCode.RESOURCE_IN_USE, 'Stall has an active booking', {
+          bookings: active.length,
+        });
+      }
+    }
 
     return this.prisma.$transaction(async (tx) => {
       let id = existing?.id ?? null;

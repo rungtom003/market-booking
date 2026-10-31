@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { Permission } from '@market-booking/shared';
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
+import BookOnlineIcon from '@mui/icons-material/BookOnline';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import EventIcon from '@mui/icons-material/Event';
 import GridViewIcon from '@mui/icons-material/GridView';
@@ -24,6 +25,12 @@ export const NAV_ITEMS: NavItem[] = [
     label: 'ผู้ค้า',
     icon: <StorefrontIcon />,
     permission: Permission.VENDORS_REVIEW,
+  },
+  {
+    to: '/bookings',
+    label: 'จัดการการจอง',
+    icon: <BookOnlineIcon />,
+    permission: Permission.BOOKINGS_CANCEL,
   },
   {
     to: '/rounds',
