@@ -235,18 +235,29 @@ export interface MarketLayout {
 }
 
 /**
- * สถานะของล็อคในวันขาย — Phase 3.1 มีแค่ว่าง/ไม่เปิดจอง (สงวนไว้ หรือปิดเฉพาะวัน)
- * Phase 4 เพิ่มสถานะจาก booking (HELD/BOOKED/MINE)
+ * สถานะของล็อคในวันขาย (ชื่อเดียวกับ `stall:updated.state` — Overview §10.2)
+ * HOLD = มีคนกดจองค้างไว้, BOOKED = รอชำระ/รอตรวจสลิป/ยืนยันแล้ว,
+ * CLOSED = สงวนไว้ / ปิดเฉพาะวัน / วันขายถูกยกเลิก
  */
 export const StallDayStatus = {
   AVAILABLE: 'AVAILABLE',
-  UNAVAILABLE: 'UNAVAILABLE',
+  HOLD: 'HOLD',
+  BOOKED: 'BOOKED',
+  CLOSED: 'CLOSED',
 } as const;
 export type StallDayStatus = (typeof StallDayStatus)[keyof typeof StallDayStatus];
+
+export interface MarketDayStall extends MapStall {
+  status: StallDayStatus;
+  /** การจองนี้เป็นของผู้ค้าที่ดูอยู่ */
+  mine: boolean;
+  /** id การจอง — ส่งเฉพาะของตัวเอง (ไม่เปิดเผยข้อมูลผู้ค้าคนอื่น) */
+  bookingId: string | null;
+}
 
 /** `GET /market-days/:id/stalls` — ราคาเป็นราคาของวันนั้น (รวม override) */
 export interface MarketDayStalls {
   marketDay: { id: string; roundId: string; marketDate: string; isCancelled: boolean };
   zones: MapZone[];
-  stalls: (MapStall & { status: StallDayStatus })[];
+  stalls: MarketDayStall[];
 }

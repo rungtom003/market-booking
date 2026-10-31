@@ -12,6 +12,7 @@ import { AppConfigModule } from './config/config.module';
 import { AdminUserModule } from './modules/admin-user/admin-user.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { BookingModule } from './modules/booking/booking.module';
 import { HealthModule } from './modules/health/health.module';
 import { MarketModule } from './modules/market/market.module';
 import { MarketSetupModule } from './modules/market-setup/market-setup.module';
@@ -50,6 +51,7 @@ import { REDIS, RedisModule } from './redis/redis.module';
     VendorModule,
     MarketSetupModule,
     RoundModule,
+    BookingModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

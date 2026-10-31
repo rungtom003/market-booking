@@ -57,8 +57,8 @@
 | 3 | Market Setup | ✅ DONE | 2026-10-31 | 2026-10-31 |
 | 3.1 | ↳ Zones, Categories, Stalls (API + Admin UI) | ✅ DONE | 2026-10-31 | 2026-10-31 |
 | 3.2 | ↳ Booking Rounds & Market Days (API + Admin UI) | ✅ DONE | 2026-10-31 | 2026-10-31 |
-| 4 | Realtime Booking ⭐ | ⬜ TODO | | |
-| 4.1 | ↳ Booking Core API + Concurrency | ⬜ TODO | | |
+| 4 | Realtime Booking ⭐ | 🟨 IN PROGRESS | 2026-10-31 | |
+| 4.1 | ↳ Booking Core API + Concurrency | ✅ DONE | 2026-10-31 | 2026-10-31 |
 | 4.2 | ↳ Expiry Worker (BullMQ) | ⬜ TODO | | |
 | 4.3 | ↳ Realtime Gateway (Socket.IO) | ⬜ TODO | | |
 | 4.4 | ↳ Vendor Web: หน้าผังและจองล็อค | ⬜ TODO | | |
@@ -418,28 +418,40 @@
 ---
 
 ## Phase 4 — Realtime Booking ⭐ (ส่วนสำคัญที่สุด)
-**สถานะ:** ⬜ TODO · **Dependencies:** Phase 3
+**สถานะ:** 🟨 IN PROGRESS · **Dependencies:** Phase 3
 
 ### 4.1 Booking Core API + Concurrency
-**สถานะ:** ⬜ TODO · **Dependencies:** 3.2 · **เริ่ม:** – · **เสร็จ:** –
+**สถานะ:** ✅ DONE · **Dependencies:** 3.2 · **เริ่ม:** 2026-10-31 · **เสร็จ:** 2026-10-31
 
 **Tasks**
-- [ ] `BookingStateService.transition(bookingId, from[], to, ctx)` — ตาราง transition ตาม Overview §8.2, `UPDATE ... WHERE status IN (from)` ตรวจ rowCount
-- [ ] `POST /bookings/hold` ตามขั้นตอน §9.4 ทั้ง 5 ข้อ ใน Transaction เดียว พร้อม `pg_advisory_xact_lock` ต่อ (vendor, market_day)
-- [ ] จับ Prisma `P2002` → `STALL_TAKEN` (409)
-- [ ] Snapshot ราคา (`amount`) รวม override
-- [ ] `POST /bookings/:id/confirm` → `CONFIRMED` หรือ `PENDING_PAYMENT` ตาม `payment_required` (ตั้ง `payment_due_at`)
-- [ ] `POST /bookings/:id/cancel` (ตรวจ `cancel_before_hours`) และ `/admin/bookings/:id/cancel`
-- [ ] `GET /bookings/me`
-- [ ] `GET /market-days/:id/stalls` รวมสถานะ: AVAILABLE/HOLD/BOOKED/CLOSED + `mine` (ห้ามส่งข้อมูลผู้ค้าคนอื่น)
-- [ ] Event emitter ภายใน (`booking.changed`) ให้ 4.2/4.3 subscribe — Service ไม่เรียก Gateway ตรง
-- [ ] Unit + integration test ทุก error code
+- [x] `BookingStateService.transition(bookingId, from[], to, ctx)` — ตาราง transition ตาม Overview §8.2, `UPDATE ... WHERE status IN (from)` ตรวจ rowCount
+- [x] `POST /bookings/hold` ตามขั้นตอน §9.4 ทั้ง 5 ข้อ ใน Transaction เดียว พร้อม `pg_advisory_xact_lock` ต่อ (vendor, market_day)
+- [x] จับ Prisma `P2002` → `STALL_TAKEN` (409)
+- [x] Snapshot ราคา (`amount`) รวม override
+- [x] `POST /bookings/:id/confirm` → `CONFIRMED` หรือ `PENDING_PAYMENT` ตาม `payment_required` (ตั้ง `payment_due_at`)
+- [x] `POST /bookings/:id/cancel` (ตรวจ `cancel_before_hours`) และ `/admin/bookings/:id/cancel`
+- [x] `GET /bookings/me`
+- [x] `GET /market-days/:id/stalls` รวมสถานะ: AVAILABLE/HOLD/BOOKED/CLOSED + `mine` (ห้ามส่งข้อมูลผู้ค้าคนอื่น)
+- [x] Event emitter ภายใน (`booking.changed`) ให้ 4.2/4.3 subscribe — Service ไม่เรียก Gateway ตรง
+- [x] Unit + integration test ทุก error code
 
 **Acceptance Criteria**
 - Integration test: 50 request พร้อมกันจองล็อคเดียว → สำเร็จ 1, ที่เหลือ `STALL_TAKEN`
 - Vendor quota 1 ยิง hold 2 ล็อคพร้อมกัน → สำเร็จ 1, อีกอัน `QUOTA_EXCEEDED`
 
-**Agent Notes:** –
+**Agent Notes:**
+- ✅ AC ข้อ 1: `bookings.int-spec.ts` — ผู้ค้า 50 คนยิง `POST /bookings/hold` ล็อคเดียวพร้อมกัน (server ฟังพอร์ตจริง) → 201 หนึ่งรายการ, 409 `STALL_TAKEN` 49 รายการ, DB มี HOLD 1 แถว, event 1 ครั้ง (รันซ้ำหลายรอบผ่านทุกครั้ง)
+- ✅ AC ข้อ 2: ผู้ค้าโควตา 1 ยิง hold 2 ล็อคพร้อมกัน → สำเร็จ 1, อีกอัน `QUOTA_EXCEEDED` (`details.limit`)
+- API (`apps/api/src/modules/booking/`): `BookingService` (hold/confirm/cancelByVendor/cancelByAdmin/listMine), `BookingStateService` (`transition(db, id, from[], to, data, where)` ตรวจตาราง `BOOKING_TRANSITIONS` ใน shared + `UPDATE … WHERE status IN (from)` + `version++`; `expireLapsed(db, where, now)`), `BookingEvents` (`onChanged`/`emitChanged`)
+- hold ใน transaction เดียว: `pg_advisory_xact_lock(hashtext(vendor), hashtext(day))` → `RoundService.assertRoundOpen(db: tx)` → ล็อค active/ไม่สงวน/ไม่ปิดวันนั้น → ประเภทสินค้าตรงโซน → expire hold/รอชำระที่หมดเวลา (ล็อคนี้ + ของผู้ค้าในวันนั้น) → นับโควตา → INSERT; P2002 → `STALL_TAKEN` (`details.mine`) — rollback แล้วไม่มี event
+- confirm: `payment_required` + ราคา > 0 → `PENDING_PAYMENT` (`payment_due_at`), นอกนั้น `CONFIRMED`; เงื่อนไข `hold_expires_at > now` อยู่ใน UPDATE ด้วย (กันชนกับเวลาหมด)
+- cancel: ผู้ค้ายกเลิก HOLD ได้ทุกเมื่อ, สถานะอื่นต้องก่อน 00:00 วันขาย (เวลาตลาด) − `cancel_before_hours`; admin (`BOOKINGS_CANCEL`) ยกเลิกได้ทุกเวลา ต้องมีเหตุผล + audit `booking.cancel`
+- `GET /market-days/:id/stalls` เปลี่ยน `status` เป็น `AVAILABLE/HOLD/BOOKED/CLOSED` (เดิม `UNAVAILABLE` → `CLOSED`) + `mine`/`bookingId` — ไม่ส่ง vendor id ของคนอื่น (มี test ตรวจ)
+- **4.2 ต่อได้เลย**: subscribe `BookingEvents.onChanged` (HOLD → ตั้ง job ที่ `holdExpiresAt`, PENDING_PAYMENT → ที่ `paymentDueAt`, สถานะอื่น → ลบ job); processor เรียก `BookingStateService.expireLapsed(prisma, { id }, now)` ได้เลย (idempotent — เปลี่ยนเฉพาะที่หมดเวลาจริง) แล้ว `emitChanged`
+- **4.3 ต่อได้เลย**: event มี `marketDayId/stallId/vendorId/status/holdExpiresAt/paymentDueAt` — map เป็น `stall:updated` (HOLD → HOLD, PENDING_*/CONFIRMED → BOOKED, CANCELLED/EXPIRED → AVAILABLE) และ `booking:changed` ห้อง vendor
+- rate limit hold 5/10 วินาที/ผู้ค้า นับเองด้วย Redis (`rl:hold:<vendorId>`) เพราะ ThrottlerGuard ทำงานก่อน auth
+- ยังไม่ทำ (ส่งต่อ 4.5): ยกเลิกรอบ/ยกเลิกวันขาย/ปิดล็อครายวันที่มีการจองอยู่ ยังไม่ยกเลิกการจองให้อัตโนมัติ; `GET /admin/bookings` และจองแทนผู้ค้า
+- ทดสอบ: unit 159 (+25: ตาราง transition, `transition` mock, `isLapsed`, `BookingEvents`, schema), integration 194 (+18 `bookings.int-spec.ts` ครอบคลุมทุก error code ของการจอง), E2E 20 (ไม่มี UI ใหม่ — หน้าจองอยู่ 4.4)
 
 ### 4.2 Expiry Worker (BullMQ)
 **สถานะ:** ⬜ TODO · **Dependencies:** 4.1 · **เริ่ม:** – · **เสร็จ:** –
@@ -708,3 +720,5 @@
 | 2026-10-31 | 3.2 | 🟨 IN PROGRESS | เริ่มรอบการจอง + วันขาย (CRUD, publish/cancel, validation §9.3), `RoundService.getPhase`/`assertRoundOpen`, override รายวัน, `GET /rounds/current`, หน้า admin + countdown ผู้ค้า |
 | 2026-10-31 | 3.2 | ✅ DONE | รอบการจอง + วันขาย (CRUD, publish/cancel, validation §9.3, partial unique วันขาย), `getPhase`/`assertRoundOpen`, override ล็อครายวัน, `GET /rounds/current` + serverTime; หน้า admin รอบ/ปฏิทิน/ตั้งค่าล็อครายวัน, การ์ดรอบ + Countdown ผู้ค้า — unit 134 / integration 176 / E2E 20 ผ่าน |
 | 2026-10-31 | 3 | ✅ DONE | Market Setup ครบ (3.1–3.2) — ถัดไป: 4.1 Booking Core API + Concurrency |
+| 2026-10-31 | 4.1 | 🟨 IN PROGRESS | เริ่ม hold/confirm/cancel + advisory lock + partial unique, state transition, snapshot ผังรวมสถานะจอง, event ภายใน, concurrency test |
+| 2026-10-31 | 4.1 | ✅ DONE | hold/confirm/cancel (+admin cancel), advisory lock + partial unique, `BookingStateService`, expire ที่หมดเวลาในการจอง, snapshot ผัง AVAILABLE/HOLD/BOOKED/CLOSED + mine, `BookingEvents`; AC concurrency 50→1 และโควตา 2→1 ผ่าน — unit 159 / integration 194 / E2E 20 ผ่าน — ถัดไป: 4.2 Expiry Worker |

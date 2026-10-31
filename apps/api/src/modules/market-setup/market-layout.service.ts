@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import {
+  ACTIVE_BOOKING_STATUSES,
+  BookingStatus,
   ErrorCode,
   MapZone,
   MarketDayStalls,
@@ -8,6 +10,7 @@ import {
 } from '@market-booking/shared';
 import { AppException } from '../../common/exceptions/app.exception';
 import { PrismaService } from '../../prisma/prisma.service';
+import { isLapsed } from '../booking/booking-mapper';
 import { compareStalls, toMapStall } from './stall-mapper';
 
 const GEOMETRY = {
@@ -44,10 +47,15 @@ export class MarketLayoutService {
   }
 
   /**
-   * ผังของวันขาย — ราคา/การปิดล็อคตาม `stall_day_overrides` ของวันนั้น
-   * Phase 3.1 ยังไม่รวมสถานะการจอง (Phase 4.1 เพิ่ม HELD/BOOKED)
+   * ผังของวันขาย — ราคา/การปิดล็อคตาม `stall_day_overrides` ของวันนั้น + สถานะการจอง
+   * `mine`/`bookingId` เฉพาะการจองของ `vendorId` (ไม่ส่งข้อมูลผู้ค้าคนอื่น)
    */
-  async marketDayStalls(marketId: string, marketDayId: string): Promise<MarketDayStalls> {
+  async marketDayStalls(
+    marketId: string,
+    marketDayId: string,
+    vendorId: string,
+    now: Date = new Date(),
+  ): Promise<MarketDayStalls> {
     // ตลาดอื่น = ไม่พบ (ไม่บอกว่ามีอยู่)
     const day = await this.prisma.marketDay.findFirst({
       where: { id: marketDayId, marketId },
@@ -55,7 +63,7 @@ export class MarketLayoutService {
     });
     if (!day) throw new AppException(ErrorCode.NOT_FOUND, 'Market day not found');
 
-    const [zones, stalls] = await Promise.all([
+    const [zones, stalls, bookings] = await Promise.all([
       this.zones(marketId),
       this.prisma.stall.findMany({
         where: { marketId, isActive: true },
@@ -67,7 +75,20 @@ export class MarketLayoutService {
           },
         },
       }),
+      this.prisma.booking.findMany({
+        where: { marketDayId, status: { in: [...ACTIVE_BOOKING_STATUSES] } },
+        select: {
+          id: true,
+          stallId: true,
+          vendorId: true,
+          status: true,
+          holdExpiresAt: true,
+          paymentDueAt: true,
+        },
+      }),
     ]);
+    // หมดเวลาแล้วแต่ worker ยังไม่เปลี่ยนสถานะ = ว่าง (จองทับได้ — BookingService expire ให้ตอนจอง)
+    const bookingOf = new Map(bookings.filter((b) => !isLapsed(b, now)).map((b) => [b.stallId, b]));
 
     return {
       marketDay: {
@@ -80,11 +101,22 @@ export class MarketLayoutService {
       zones,
       stalls: stalls.sort(compareStalls).map(({ overrides, isReserved, ...s }) => {
         const override = overrides[0];
+        const booking = bookingOf.get(s.id);
         const closed = isReserved || override?.isClosed === true || day.isCancelled;
+        const mine = booking?.vendorId === vendorId;
         return {
           ...toMapStall(s),
           ...(override?.priceOverride != null && { price: Number(override.priceOverride) }),
-          status: closed ? StallDayStatus.UNAVAILABLE : StallDayStatus.AVAILABLE,
+          // มีการจองอยู่ แสดงสถานะการจองแม้ล็อคถูกปิดภายหลัง
+          status: booking
+            ? booking.status === BookingStatus.HOLD
+              ? StallDayStatus.HOLD
+              : StallDayStatus.BOOKED
+            : closed
+              ? StallDayStatus.CLOSED
+              : StallDayStatus.AVAILABLE,
+          mine,
+          bookingId: mine ? booking.id : null,
         };
       }),
     };

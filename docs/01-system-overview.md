@@ -172,6 +172,7 @@ market-booking/
 │   │   │       ├── market/      # ตลาดหลัก (MarketService)
 │   │   │       ├── market-setup/ # product categories, zones, stalls, ผังตลาด
 │   │   │       ├── round/        # รอบการจอง, วันขาย, override ล็อครายวัน, /rounds/current
+│   │   │       ├── booking/      # hold/confirm/cancel, BookingStateService, BookingEvents (booking.changed)
 │   │   │       ├── round/       # booking_rounds, market_days
 │   │   │       ├── booking/
 │   │   │       ├── payment/
@@ -554,7 +555,7 @@ Vendor กด "ยืนยันการจอง" → POST /bookings/:id/conf
 | Endpoint | Limit |
 |---|---|
 | `POST /auth/otp/request` | 1 ครั้ง/60 วินาที, 5 ครั้ง/ชั่วโมง ต่อเบอร์ |
-| `POST /bookings/hold` | 5 ครั้ง/10 วินาที ต่อ vendor |
+| `POST /bookings/hold` | 5 ครั้ง/10 วินาที ต่อ vendor (นับใน `BookingService` ด้วย Redis เพราะ throttler ทำงานก่อนรู้ว่าใคร login) |
 | API ทั่วไป | 100 ครั้ง/นาที ต่อ IP |
 
 ---
@@ -592,11 +593,11 @@ Vendor กด "ยืนยันการจอง" → POST /bookings/:id/conf
 | POST | `/vendors/me/images` | presigned upload — ได้ `{ key, url, headers }` แล้ว PUT ไฟล์ตรงไป MinIO แล้วส่ง `key` ไปกับ `PATCH /vendors/me` |
 | GET | `/market/layout` | ผังตลาด (โซน + ล็อคที่เปิดใช้งาน) — ดูได้ก่อนเปิดรอบ (ผู้ค้า APPROVED) |
 | GET | `/rounds/current` | ผู้ค้า APPROVED — `{ serverTime, round }`: รอบที่เปิดอยู่ (ปิดก่อนขึ้นก่อน) หรือรอบถัดไปที่ใกล้ที่สุด, `round: null` ถ้าไม่มี; `serverTime` ใช้หา offset ให้ Countdown |
-| GET | `/market-days/:id/stalls` | snapshot ผัง + สถานะ (3.1: ราคา/ปิดล็อคตาม override, AVAILABLE/UNAVAILABLE; 4.1 เพิ่มสถานะจองจริง) |
-| POST | `/bookings/hold` | `{ stallId, marketDayId }` |
-| POST | `/bookings/:id/confirm` | |
-| POST | `/bookings/:id/cancel` | |
-| GET | `/bookings/me` | |
+| GET | `/market-days/:id/stalls` | snapshot ผัง: ราคาของวัน (รวม override) + `status` `AVAILABLE`/`HOLD`/`BOOKED`/`CLOSED` + `mine` และ `bookingId` (เฉพาะของตัวเอง); hold/รอชำระที่หมดเวลาแล้วนับเป็นว่าง |
+| POST | `/bookings/hold` | `{ stallId, marketDayId }` → 201 การจอง HOLD (`amount` = ราคาของวันนั้น, `holdExpiresAt` = now + `hold_minutes`); ชน → `STALL_TAKEN` (`details.mine`) |
+| POST | `/bookings/:id/confirm` | HOLD → `PENDING_PAYMENT` (ตั้ง `paymentDueAt`) หรือ `CONFIRMED` ถ้า `payment_required = false` หรือราคา 0; หมดเวลา → `HOLD_EXPIRED` |
+| POST | `/bookings/:id/cancel` | `{ reason? }` — HOLD ยกเลิกได้ทุกเมื่อ; สถานะอื่นต้องก่อน 00:00 วันขาย − `cancel_before_hours` |
+| GET | `/bookings/me` | วันขายล่าสุดก่อน ≤ 100 รายการ (hold/รอชำระที่หมดเวลาแสดงเป็น `EXPIRED`) |
 | POST | `/bookings/:id/payments` | อัปโหลดสลิป |
 | GET | `/bookings/:id/checkin-qr` | |
 | POST / DELETE | `/waitlists` / `/waitlists/:id` | |
@@ -621,7 +622,7 @@ Vendor กด "ยืนยันการจอง" → POST /bookings/:id/conf
 | GET | `/admin/market-days/:id/overrides` |
 | PUT / DELETE | `/admin/market-days/:id/overrides/:stallId` (PUT `{ priceOverride, isClosed }`; ค่าว่างทั้งคู่ = ลบ → `data: null`) |
 | GET | `/admin/bookings?marketDayId=&status=` |
-| POST | `/admin/bookings/:id/cancel` |
+| POST | `/admin/bookings/:id/cancel` (`{ reason }` บังคับ, สิทธิ์ `BOOKINGS_CANCEL`, ลง audit `booking.cancel`) |
 | POST | `/admin/bookings` (จองแทนผู้ค้า) |
 | GET | `/admin/payments?status=PENDING` |
 | POST | `/admin/payments/:id/approve` · `/reject` |
@@ -642,6 +643,8 @@ Code ของผู้ค้า (เพิ่มใน Phase 2.1): `PHONE_ALREA
 Code ของการตั้งค่าตลาด (เพิ่มใน Phase 3.1): `STALL_CODE_TAKEN` (`details.codes`), `RESOURCE_IN_USE` (ลบไม่ได้เพราะมีข้อมูลอ้างถึง — `details` เป็นจำนวน เช่น `{ bookings, waitlists }`)
 
 Code ของรอบการจอง (เพิ่มใน Phase 3.2): `MARKET_DATE_TAKEN` (`details.dates`), `ROUND_ALREADY_OPENED`; publish/cancel/ลบ/แก้รอบผิดสถานะ → `INVALID_STATE_TRANSITION` (`details.status`); `ROUND_NOT_OPEN` มี `details: { phase, openAt, closeAt, marketDayCancelled }`
+
+รายละเอียดของ code การจอง (Phase 4.1): `QUOTA_EXCEEDED` → `details.limit`, `STALL_TAKEN` → `details.mine`, `HOLD_EXPIRED` → `details.holdExpiresAt`, `CANCEL_WINDOW_PASSED` → `details: { deadline, cancelBeforeHours }`, `INVALID_STATE_TRANSITION` → `details.status` (สถานะปัจจุบัน)
 
 `OTP_INVALID` มี `details.attemptsLeft`; ขอ OTP ถี่เกิน → `RATE_LIMITED` พร้อม `details.retryAfterSeconds`
 
@@ -835,6 +838,12 @@ VITE_LINE_LIFF_ID=        (ฝั่ง web — ว่าง = ซ่อนป�
 | 2026-10-31 | ขอบเวลา: `open_at` พอดี = OPEN, `close_at` พอดี = CLOSED; `close_at` ≤ 00:00 ของวันขายวันแรกตาม `markets.timezone` | ตรงกับ §8.3; ใช้เวลาท้องถิ่นของตลาดไม่ใช่ UTC |
 | 2026-10-31 | หน้า admin กรอก/แสดงเวลารอบเป็นเวลาไทย (UTC+7) เสมอ ไม่ขึ้นกับ timezone ของเครื่อง | ตลาดอยู่ไทย และ `formatDateTime` แสดง Asia/Bangkok อยู่แล้ว — กันกรอกเพี้ยนเมื่อเครื่อง admin ตั้ง timezone อื่น |
 | 2026-10-31 | override ล็อครายวันอยู่ที่ `/admin/market-days/:id/overrides/:stallId` (PUT แบบ upsert) | ตั้งทีละล็อคจากผังของวันนั้น; ค่าว่าง = ลบ ทำให้ไม่มีแถวค้างที่ไม่มีผล |
+| 2026-10-31 | สถานะล็อครายวันใช้ชื่อเดียวกับ `stall:updated.state`: `AVAILABLE`/`HOLD`/`BOOKED`/`CLOSED` (เดิม 3.1 ใช้ `UNAVAILABLE`) + `mine`/`bookingId` | snapshot กับ event realtime (4.3) ใช้ค่าเดียวกัน; ล็อคที่มีการจองแสดงสถานะการจองแม้ถูกปิดภายหลัง |
+| 2026-10-31 | hold/รอชำระที่เลยเวลาแล้ว: ตอนจองเปลี่ยนเป็น `EXPIRED` ใน transaction เดียวกับ INSERT (ล็อคนั้น + ของผู้ค้าคนนั้นในวันนั้น) และ snapshot นับเป็นว่าง | ไม่ต้องพึ่ง worker (4.2) ให้ทันเวลา — ล็อคว่างจริงตามเวลา server เสมอ |
+| 2026-10-31 | Event ภายใน `booking.changed` เป็น service `BookingEvents` เขียนเอง (ไม่ใช้ `@nestjs/event-emitter`), ส่งหลัง commit, listener พังไม่กระทบ request | ไม่เพิ่ม dependency; event ของ transaction ที่ rollback ไม่ถูกส่ง |
+| 2026-10-31 | rate limit ของ hold (5/10 วินาที/ผู้ค้า) นับใน `BookingService` ด้วย Redis INCR; Redis ล่ม = ไม่จำกัด | `ThrottlerGuard` เป็น global guard ที่ทำงานก่อน auth guard จึงยังไม่รู้ vendor id; การจองไม่ควรล่มเพราะ Redis |
+| 2026-10-31 | ยืนยันการจองราคา 0 บาท → `CONFIRMED` ทันทีแม้ `payment_required` | ไม่มีอะไรให้ชำระ — ไม่ค้างเป็น `PENDING_PAYMENT` จนหมดเวลา |
+| 2026-10-31 | advisory lock ของ hold = `pg_advisory_xact_lock(hashtext(vendor_id), hashtext(market_day_id))`; transaction `maxWait/timeout` 10 วินาที | กุญแจ 2 ส่วนลดโอกาส hash ชน; ตอนเปิดรอบ request พร้อมกันมากต้องรอ connection pool ได้ |
 
 ### Open Questions
 - [ ] ใช้กับตลาดเดียวหรือหลายตลาด (ตอนนี้ schema รองรับแล้ว แต่ UI ยังเป็นตลาดเดียว)

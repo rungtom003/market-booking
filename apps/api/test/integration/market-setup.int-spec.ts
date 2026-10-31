@@ -559,7 +559,7 @@ describe('Market setup: categories, zones, stalls, layout (integration)', () => 
       expect(res.body.error.code).toBe('VENDOR_NOT_APPROVED');
     });
 
-    it('GET /market-days/:id/stalls: ราคา/ปิดล็อคตามวัน, สงวนไว้ = UNAVAILABLE', async () => {
+    it('GET /market-days/:id/stalls: ราคา/ปิดล็อคตามวัน, สงวนไว้ = CLOSED', async () => {
       const day = await makeMarketDay(marketId, '2026-12-12');
       await prisma.stallDayOverride.createMany({
         data: [
@@ -581,8 +581,8 @@ describe('Market setup: categories, zones, stalls, layout (integration)', () => 
       });
       const byId = new Map(body.stalls.map((s) => [s.id, s]));
       expect(byId.get(open.id)).toMatchObject({ status: 'AVAILABLE', price: 100 });
-      expect(byId.get(reserved.id)?.status).toBe('UNAVAILABLE');
-      expect(byId.get(closedToday.id)?.status).toBe('UNAVAILABLE');
+      expect(byId.get(reserved.id)?.status).toBe('CLOSED');
+      expect(byId.get(closedToday.id)?.status).toBe('CLOSED');
       expect(byId.get(repriced.id)).toMatchObject({ status: 'AVAILABLE', price: 250 });
       expect(byId.has(inactive.id)).toBe(false);
       // M3 ก่อน M10 (เรียงแบบตัวเลข)

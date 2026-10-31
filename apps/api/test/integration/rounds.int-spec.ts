@@ -534,7 +534,7 @@ describe('Booking rounds, market days, overrides (integration)', () => {
         .set(asAdmin())
         .send({ priceOverride: null, isClosed: true })
         .expect(200);
-      expect((await stalls()).stalls[0]).toMatchObject({ price: 100, status: 'UNAVAILABLE' });
+      expect((await stalls()).stalls[0]).toMatchObject({ price: 100, status: 'CLOSED' });
 
       const cleared = await http()
         .put(`${base}/${stallId}`)

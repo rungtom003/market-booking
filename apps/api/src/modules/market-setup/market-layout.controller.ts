@@ -21,11 +21,13 @@ export class MarketLayoutController {
   }
 
   @Get('market-days/:id/stalls')
-  @ApiOperation({ summary: 'ผังของวันขาย (ราคา/ปิดล็อคตามวัน) — Phase 4 เพิ่มสถานะการจอง' })
+  @ApiOperation({
+    summary: 'ผังของวันขาย: ราคา/ปิดล็อคตามวัน + สถานะ AVAILABLE/HOLD/BOOKED/CLOSED และ mine',
+  })
   marketDayStalls(
     @CurrentVendor() vendor: VendorPrincipal,
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<MarketDayStalls> {
-    return this.layout.marketDayStalls(vendor.marketId, id);
+    return this.layout.marketDayStalls(vendor.marketId, id, vendor.id);
   }
 }
