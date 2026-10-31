@@ -56,7 +56,9 @@ jobs:
       # เริ่มก่อน install เพื่อให้ boot เสร็จระหว่างรอ
       - name: Start MinIO
         run: |
-          docker run -d --name minio -p 9000:9000 \n            -e MINIO_ROOT_USER="$MINIO_ACCESS_KEY" -e MINIO_ROOT_PASSWORD="$MINIO_SECRET_KEY" \n            "$MINIO_IMAGE" server /data
+          docker run -d --name minio -p 9000:9000 \
+            -e MINIO_ROOT_USER="$MINIO_ACCESS_KEY" -e MINIO_ROOT_PASSWORD="$MINIO_SECRET_KEY" \
+            "$MINIO_IMAGE" server /data
 
       # อ่านเวอร์ชันจาก "packageManager" ใน package.json
       - uses: pnpm/action-setup@v6
