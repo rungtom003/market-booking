@@ -1,14 +1,13 @@
 import { execSync } from 'node:child_process';
+import Redis from 'ioredis';
 import { Client } from 'pg';
-import { testDatabaseUrl } from './test-db-url';
+import { testDatabaseUrl, testRedisUrl } from './test-db-url';
 
-/** สร้าง DB test (ถ้ายังไม่มี) แล้ว apply migration ทั้งหมด — รันครั้งเดียวก่อน integration test ทุกไฟล์ */
-export default async function globalSetup(): Promise<void> {
-  const url = new URL(testDatabaseUrl());
+async function ensureDatabase(url: URL): Promise<void> {
   const dbName = decodeURIComponent(url.pathname.slice(1));
-
   const admin = new URL(url);
   admin.pathname = '/postgres';
+
   const client = new Client({ connectionString: admin.toString() });
   await client.connect();
   try {
@@ -19,10 +18,26 @@ export default async function globalSetup(): Promise<void> {
   } finally {
     await client.end();
   }
+}
+
+/**
+ * รันครั้งเดียวก่อน integration test ทุกไฟล์:
+ * สร้าง DB test (ถ้ายังไม่มี) + apply migration ทั้งหมด และล้าง Redis db ของ test
+ */
+export default async function globalSetup(): Promise<void> {
+  const dbUrl = new URL(testDatabaseUrl());
+  await ensureDatabase(dbUrl);
 
   // migrate deploy ไม่ลบข้อมูล และไม่ต้องตอบคำถามแบบ interactive
   execSync('pnpm exec prisma migrate deploy', {
     stdio: 'inherit',
-    env: { ...process.env, DATABASE_URL: url.toString() },
+    env: { ...process.env, DATABASE_URL: dbUrl.toString() },
   });
+
+  const redis = new Redis(testRedisUrl());
+  try {
+    await redis.flushdb();
+  } finally {
+    redis.disconnect();
+  }
 }

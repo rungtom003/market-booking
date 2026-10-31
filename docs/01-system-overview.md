@@ -608,6 +608,23 @@ Vendor กด "ยืนยันการจอง" → POST /bookings/:id/conf
 ### Error Codes หลัก
 `ROUND_NOT_OPEN`, `STALL_TAKEN`, `STALL_UNAVAILABLE`, `QUOTA_EXCEEDED`, `CATEGORY_NOT_ALLOWED`, `VENDOR_NOT_APPROVED`, `VENDOR_SUSPENDED`, `HOLD_EXPIRED`, `INVALID_STATE_TRANSITION`, `CANCEL_WINDOW_PASSED`, `OTP_INVALID`, `RATE_LIMITED`
 
+Code ทั่วไป (เพิ่มใน Phase 1.2): `VALIDATION_ERROR`, `BAD_REQUEST`, `UNAUTHORIZED`, `FORBIDDEN`, `NOT_FOUND`, `CONFLICT`, `INTERNAL_ERROR`
+
+| HTTP | Code |
+|---|---|
+| 400 | `VALIDATION_ERROR` (`details` = `[{ path, message, code }]` รายฟิลด์), `BAD_REQUEST`, `OTP_INVALID` |
+| 401 | `UNAUTHORIZED` |
+| 403 | `FORBIDDEN`, `VENDOR_NOT_APPROVED`, `VENDOR_SUSPENDED` |
+| 404 | `NOT_FOUND` |
+| 409 | `CONFLICT`, `ROUND_NOT_OPEN`, `STALL_TAKEN`, `STALL_UNAVAILABLE`, `QUOTA_EXCEEDED`, `HOLD_EXPIRED`, `INVALID_STATE_TRANSITION`, `CANCEL_WINDOW_PASSED` |
+| 422 | `CATEGORY_NOT_ALLOWED` |
+| 429 | `RATE_LIMITED` |
+| 500 | `INTERNAL_ERROR` (ไม่ส่งข้อความจริงออกไป — ดูใน log ด้วย `x-request-id`) |
+
+- รายการ code อยู่ที่ `packages/shared/src/error-codes.ts`, ตาราง status ที่ `apps/api/src/common/exceptions/error-status.ts`
+- `message` เป็นภาษาอังกฤษสำหรับ developer — frontend แสดงข้อความไทยจาก `code`
+- ทุก response มี header `x-request-id` (รับค่าจาก client ได้ถ้าเป็น `[A-Za-z0-9_-]{1,64}`)
+
 ---
 
 ## 12. System Settings
@@ -671,8 +688,12 @@ Vendor กด "ยืนยันการจอง" → POST /bookings/:id/conf
 ```
 NODE_ENV=development
 PORT=3000
+LOG_LEVEL=info
+RATE_LIMIT_PER_MINUTE=100
 DATABASE_URL=postgresql://market:market_dev@localhost:5433/market_booking
+TEST_DATABASE_URL=postgresql://market:market_dev@localhost:5433/market_booking_test
 REDIS_URL=redis://localhost:6379
+# TEST_REDIS_URL=redis://localhost:6379/15
 JWT_ACCESS_SECRET=
 JWT_REFRESH_SECRET=
 MINIO_ENDPOINT=localhost
@@ -687,6 +708,8 @@ SMS_PROVIDER=mock
 SMS_API_KEY=
 WEB_ORIGIN=http://localhost:5173
 ADMIN_ORIGIN=http://localhost:5174
+SEED_ADMIN_USERNAME=admin
+SEED_ADMIN_PASSWORD=
 ```
 > ไฟล์ `.env.example` จริงใส่ค่า dev ของ JWT/MinIO ไว้ให้รันกับ `docker-compose.yml` ได้ทันที — production ต้องตั้งใหม่ทั้งหมด (env schema บังคับ secret ≥ 32 ตัวอักษรเมื่อ `NODE_ENV=production`)
 
@@ -712,6 +735,12 @@ ADMIN_ORIGIN=http://localhost:5174
 | 2026-10-31 | ใช้ `bcryptjs` (pure JS) แทน `bcrypt` (native) | ไม่ต้อง build native module บน Windows/Alpine; hash `$2b$` ใช้แทนกันได้ cost 12 เท่าเดิม |
 | 2026-10-31 | Postgres ใน docker-compose ใช้ host port **5433** (`POSTGRES_PORT`) | เครื่อง dev Windows มักมี PostgreSQL ติดตั้งอยู่ที่ 5432 แล้วชนกัน (เจอจริงตอน Phase 1.1) |
 | 2026-10-31 | Integration test ใช้ DB แยก (`*_test`, สร้างอัตโนมัติ) + `TRUNCATE` ระหว่าง test, รันด้วย `--experimental-vm-modules` | ไม่แตะข้อมูล dev; Prisma 7 โหลด WASM ด้วย dynamic `import()` ซึ่ง Jest CJS ต้องเปิด vm modules |
+| 2026-10-31 | **Validation ใช้ Zod ทั้งระบบ** ผ่าน `nestjs-zod` (`createZodDto` + global `ZodValidationPipe`) — ไม่ใช้ class-validator | schema เดียวใน `packages/shared` ใช้ได้ทั้ง API และ React Hook Form; env ก็ใช้ Zod อยู่แล้ว; Swagger อ่าน schema ผ่าน `cleanupOpenApiDoc` (ผู้ใช้เลือก) |
+| 2026-10-31 | เพิ่ม error code ทั่วไป + ตาราง HTTP status (§11) | ให้ error ทุกชนิด (404 router, 429 throttler, JSON ผิด, Prisma, 500) ออก format เดียวกัน |
+| 2026-10-31 | Logger `nestjs-pino` 4.6 (pino 9) + request id ผ่าน AsyncLocalStorage | `nestjs-pino` 5 ต้องการ Nest 11; request id เดียวกันใน log / header / audit; redact header และ key อ่อนไหว |
+| 2026-10-31 | Rate limit `@nestjs/throttler` + `@nest-lab/throttler-storage-redis` (ioredis 5) | นับใน Redis ใช้ได้หลาย instance; ioredis 6 เพิ่งออก major จึงใช้ 5 ที่ storage รองรับแน่นอน |
+| 2026-10-31 | Swagger (`/api/docs`) เปิดเฉพาะ `NODE_ENV !== production` | ไม่เปิดเผยโครงสร้าง API บน production (เปิดได้ภายหลังถ้าต้องการ) |
+| 2026-10-31 | Test ที่ boot `AppModule` ย้ายไป integration (`pnpm test:int`), Redis ของ test ใช้ db 15 | AppModule ต้องใช้ Redis (rate limit) — `pnpm test` คง unit test ล้วนที่ไม่ต้องมี infra |
 
 ### Open Questions
 - [ ] ใช้กับตลาดเดียวหรือหลายตลาด (ตอนนี้ schema รองรับแล้ว แต่ UI ยังเป็นตลาดเดียว)

@@ -1,5 +1,16 @@
-/** Error code หลักของระบบ (Overview §11) */
+/** Error code ของระบบ (Overview §11) — frontend แปลงเป็นข้อความภาษาไทยจาก code นี้ */
 export const ErrorCode = {
+  // ทั่วไป
+  VALIDATION_ERROR: 'VALIDATION_ERROR',
+  BAD_REQUEST: 'BAD_REQUEST',
+  UNAUTHORIZED: 'UNAUTHORIZED',
+  FORBIDDEN: 'FORBIDDEN',
+  NOT_FOUND: 'NOT_FOUND',
+  CONFLICT: 'CONFLICT',
+  RATE_LIMITED: 'RATE_LIMITED',
+  INTERNAL_ERROR: 'INTERNAL_ERROR',
+
+  // ธุรกิจ
   ROUND_NOT_OPEN: 'ROUND_NOT_OPEN',
   STALL_TAKEN: 'STALL_TAKEN',
   STALL_UNAVAILABLE: 'STALL_UNAVAILABLE',
@@ -11,7 +22,14 @@ export const ErrorCode = {
   INVALID_STATE_TRANSITION: 'INVALID_STATE_TRANSITION',
   CANCEL_WINDOW_PASSED: 'CANCEL_WINDOW_PASSED',
   OTP_INVALID: 'OTP_INVALID',
-  RATE_LIMITED: 'RATE_LIMITED',
 } as const;
 
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];
+
+/** รายละเอียดของ VALIDATION_ERROR — 1 รายการต่อ field ที่ผิด */
+export interface ValidationIssue {
+  /** เช่น `phone` หรือ `items.0.price` */
+  path: string;
+  message: string;
+  code: string;
+}

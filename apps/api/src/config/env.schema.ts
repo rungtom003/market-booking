@@ -8,6 +8,9 @@ const secret = z.string().min(isProduction ? 32 : 1);
 export const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(3000),
+  LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
+  /** rate limit "API ทั่วไป" ต่อ IP (Overview §10.4) */
+  RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(100),
 
   DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }),
   REDIS_URL: z.url({ protocol: /^rediss?$/ }),

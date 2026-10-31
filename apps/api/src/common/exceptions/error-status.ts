@@ -1,0 +1,36 @@
+import { HttpStatus } from '@nestjs/common';
+import { ErrorCode } from '@market-booking/shared';
+
+/** HTTP status ของแต่ละ error code (Overview §11) */
+export const ERROR_HTTP_STATUS: Record<ErrorCode, HttpStatus> = {
+  VALIDATION_ERROR: HttpStatus.BAD_REQUEST,
+  BAD_REQUEST: HttpStatus.BAD_REQUEST,
+  UNAUTHORIZED: HttpStatus.UNAUTHORIZED,
+  FORBIDDEN: HttpStatus.FORBIDDEN,
+  NOT_FOUND: HttpStatus.NOT_FOUND,
+  CONFLICT: HttpStatus.CONFLICT,
+  RATE_LIMITED: HttpStatus.TOO_MANY_REQUESTS,
+  INTERNAL_ERROR: HttpStatus.INTERNAL_SERVER_ERROR,
+
+  ROUND_NOT_OPEN: HttpStatus.CONFLICT,
+  STALL_TAKEN: HttpStatus.CONFLICT,
+  STALL_UNAVAILABLE: HttpStatus.CONFLICT,
+  QUOTA_EXCEEDED: HttpStatus.CONFLICT,
+  CATEGORY_NOT_ALLOWED: HttpStatus.UNPROCESSABLE_ENTITY,
+  VENDOR_NOT_APPROVED: HttpStatus.FORBIDDEN,
+  VENDOR_SUSPENDED: HttpStatus.FORBIDDEN,
+  HOLD_EXPIRED: HttpStatus.CONFLICT,
+  INVALID_STATE_TRANSITION: HttpStatus.CONFLICT,
+  CANCEL_WINDOW_PASSED: HttpStatus.CONFLICT,
+  OTP_INVALID: HttpStatus.BAD_REQUEST,
+};
+
+/** ใช้กับ HttpException ทั่วไปที่ไม่ได้มาจาก AppException (เช่น 404 ของ router, 429 ของ throttler) */
+export const STATUS_ERROR_CODE: Partial<Record<number, ErrorCode>> = {
+  [HttpStatus.BAD_REQUEST]: ErrorCode.BAD_REQUEST,
+  [HttpStatus.UNAUTHORIZED]: ErrorCode.UNAUTHORIZED,
+  [HttpStatus.FORBIDDEN]: ErrorCode.FORBIDDEN,
+  [HttpStatus.NOT_FOUND]: ErrorCode.NOT_FOUND,
+  [HttpStatus.CONFLICT]: ErrorCode.CONFLICT,
+  [HttpStatus.TOO_MANY_REQUESTS]: ErrorCode.RATE_LIMITED,
+};

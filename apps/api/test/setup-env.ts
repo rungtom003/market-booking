@@ -1,8 +1,9 @@
-// ConfigModule.forRoot() validate env ตอน import module (ก่อน beforeAll) จึงต้องตั้งค่าที่นี่
-// ค่าใน process.env มีความสำคัญกว่าไฟล์ .env ทำให้ test ไม่ขึ้นกับเครื่องที่รัน
-Object.assign(process.env, {
+// ConfigModule.forRoot() validate env ตอน import module (ก่อน beforeAll) จึงต้องตั้งค่าที่นี่ (Jest setupFiles)
+// ใส่เฉพาะตัวที่ยังไม่มี — integration test ตั้ง DATABASE_URL/REDIS_URL ของ test ไว้ก่อนแล้ว
+const defaults: Record<string, string> = {
   NODE_ENV: 'test',
-  DATABASE_URL: 'postgresql://market:market_dev@localhost:5432/market_booking',
+  LOG_LEVEL: 'silent',
+  DATABASE_URL: 'postgresql://market:market_dev@localhost:5433/market_booking',
   REDIS_URL: 'redis://localhost:6379',
   JWT_ACCESS_SECRET: 'test-access',
   JWT_REFRESH_SECRET: 'test-refresh',
@@ -12,4 +13,8 @@ Object.assign(process.env, {
   MINIO_BUCKET: 'test',
   WEB_ORIGIN: 'http://localhost:5173',
   ADMIN_ORIGIN: 'http://localhost:5174',
-});
+};
+
+for (const [key, value] of Object.entries(defaults)) {
+  process.env[key] ??= value;
+}

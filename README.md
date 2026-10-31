@@ -33,6 +33,7 @@ pnpm dev
 | App           | URL                                                                           |
 | ------------- | ----------------------------------------------------------------------------- |
 | API (NestJS)  | http://localhost:3000/api/v1/health                                           |
+| API docs      | http://localhost:3000/api/docs (Swagger — ไม่เปิดบน production)               |
 | Vendor web    | http://localhost:5173                                                         |
 | Admin web     | http://localhost:5174                                                         |
 | MinIO console | http://localhost:9001 (user/pass ตาม `MINIO_ACCESS_KEY` / `MINIO_SECRET_KEY`) |
@@ -41,20 +42,20 @@ pnpm dev
 
 ## Scripts (รันที่ root)
 
-| คำสั่ง                              | ทำอะไร                                                               |
-| ----------------------------------- | -------------------------------------------------------------------- |
-| `pnpm dev`                          | build `shared` แล้วรัน api + web + admin + shared (watch) แบบขนาน    |
-| `pnpm build`                        | build ทุก package ตามลำดับ dependency                                |
-| `pnpm lint` / `pnpm lint:fix`       | ESLint ทั้ง monorepo                                                 |
-| `pnpm format` / `pnpm format:check` | Prettier                                                             |
-| `pnpm typecheck`                    | `tsc --noEmit` ทุก package                                           |
-| `pnpm test`                         | Jest (api: unit + e2e ผ่าน Supertest) — ไม่ต้องมี DB                 |
-| `pnpm test:int`                     | Integration test กับ PostgreSQL จริง (DB `*_test` สร้างให้อัตโนมัติ) |
-| `pnpm codegen`                      | build `shared` + `prisma generate` (dev/typecheck/test เรียกให้เอง)  |
-| `pnpm db:migrate`                   | แก้ `schema.prisma` แล้วสร้าง migration ใหม่ (interactive)           |
-| `pnpm db:deploy` / `pnpm db:seed`   | apply migration / ใส่ข้อมูลตัวอย่าง (รันซ้ำได้)                      |
-| `pnpm db:reset`                     | ⚠️ ลบข้อมูลทั้ง DB dev แล้ว migrate + seed ใหม่                      |
-| `pnpm prisma <คำสั่ง>`              | เรียก Prisma CLI ของ apps/api เช่น `pnpm prisma studio`              |
+| คำสั่ง                              | ทำอะไร                                                                                                                       |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm dev`                          | build `shared` แล้วรัน api + web + admin + shared (watch) แบบขนาน                                                            |
+| `pnpm build`                        | build ทุก package ตามลำดับ dependency                                                                                        |
+| `pnpm lint` / `pnpm lint:fix`       | ESLint ทั้ง monorepo                                                                                                         |
+| `pnpm format` / `pnpm format:check` | Prettier                                                                                                                     |
+| `pnpm typecheck`                    | `tsc --noEmit` ทุก package                                                                                                   |
+| `pnpm test`                         | Unit test (Jest) — ไม่ต้องมี DB/Redis                                                                                        |
+| `pnpm test:int`                     | Integration test กับ PostgreSQL + Redis จริง (DB `*_test` สร้างให้อัตโนมัติ, Redis db 15) — ต้อง `docker compose up -d` ก่อน |
+| `pnpm codegen`                      | build `shared` + `prisma generate` (dev/typecheck/test เรียกให้เอง)                                                          |
+| `pnpm db:migrate`                   | แก้ `schema.prisma` แล้วสร้าง migration ใหม่ (interactive)                                                                   |
+| `pnpm db:deploy` / `pnpm db:seed`   | apply migration / ใส่ข้อมูลตัวอย่าง (รันซ้ำได้)                                                                              |
+| `pnpm db:reset`                     | ⚠️ ลบข้อมูลทั้ง DB dev แล้ว migrate + seed ใหม่                                                                              |
+| `pnpm prisma <คำสั่ง>`              | เรียก Prisma CLI ของ apps/api เช่น `pnpm prisma studio`                                                                      |
 
 รันเฉพาะ package: `pnpm --filter @market-booking/api test`
 

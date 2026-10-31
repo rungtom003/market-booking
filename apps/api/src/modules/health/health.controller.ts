@@ -1,9 +1,15 @@
 import { Controller, Get } from '@nestjs/common';
+import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
+import { SkipThrottle } from '@nestjs/throttler';
 import type { HealthStatus } from '@market-booking/shared';
 
+@ApiTags('health')
 @Controller('health')
 export class HealthController {
+  // uptime monitor เรียกถี่ ไม่ควรโดน rate limit
+  @SkipThrottle()
   @Get()
+  @ApiOkResponse({ description: '`{ data: { status: "ok", uptime, timestamp } }`' })
   check(): HealthStatus {
     return {
       status: 'ok',

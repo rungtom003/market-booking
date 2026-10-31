@@ -46,7 +46,7 @@
 | 0 | Project Setup | ✅ DONE | 2026-10-31 | 2026-10-31 |
 | 1 | Backend Foundation | 🟨 IN PROGRESS | 2026-10-31 | |
 | 1.1 | ↳ Database Schema & Seed | ✅ DONE | 2026-10-31 | 2026-10-31 |
-| 1.2 | ↳ Core Infrastructure (config, error, logging, audit) | ⬜ TODO | | |
+| 1.2 | ↳ Core Infrastructure (config, error, logging, audit) | ✅ DONE | 2026-10-31 | 2026-10-31 |
 | 1.3 | ↳ Admin Auth & RBAC | ⬜ TODO | | |
 | 1.4 | ↳ Vendor Auth (OTP + LINE) | ⬜ TODO | | |
 | 1.5 | ↳ Settings Module | ⬜ TODO | | |
@@ -156,24 +156,39 @@
 - Phase 3.2: `market_days` unique (market_id, market_date) ครอบคลุมรอบที่ CANCELLED ด้วย — ถ้าต้องให้ใช้วันซ้ำได้หลังยกเลิกรอบ ต้องเปลี่ยนเป็น partial unique
 
 ### 1.2 Core Infrastructure
-**สถานะ:** ⬜ TODO · **Dependencies:** 1.1 · **เริ่ม:** – · **เสร็จ:** –
+**สถานะ:** ✅ DONE · **Dependencies:** 1.1 · **เริ่ม:** 2026-10-31 · **เสร็จ:** 2026-10-31
 
 **Tasks**
-- [ ] Global prefix `/api/v1`, Swagger ที่ `/api/docs`
-- [ ] Global exception filter → format `{ error: { code, message, details } }` + `AppException(code)` class
-- [ ] Response interceptor `{ data, meta }`
-- [ ] Validation pipe (Zod หรือ class-validator — เลือกหนึ่งและใช้ทั้งระบบ, บันทึกใน Decision Log)
-- [ ] Logger (pino) + request id, ห้าม log ข้อมูลอ่อนไหว
-- [ ] Helmet, CORS ตาม env, ThrottlerModule + Redis storage
-- [ ] `AuditModule`: `AuditService.log({ actorType, actorId, action, entity, before, after })`
-- [ ] Redis module (ioredis) ใช้ร่วม
-- [ ] Pagination helper (`page`, `pageSize`, `meta.total`)
+- [x] Global prefix `/api/v1`, Swagger ที่ `/api/docs`
+- [x] Global exception filter → format `{ error: { code, message, details } }` + `AppException(code)` class
+- [x] Response interceptor `{ data, meta }`
+- [x] Validation pipe (Zod หรือ class-validator — เลือกหนึ่งและใช้ทั้งระบบ, บันทึกใน Decision Log) _(เลือก Zod ผ่าน nestjs-zod)_
+- [x] Logger (pino) + request id, ห้าม log ข้อมูลอ่อนไหว
+- [x] Helmet, CORS ตาม env, ThrottlerModule + Redis storage
+- [x] `AuditModule`: `AuditService.log({ actorType, actorId, action, entity, before, after })`
+- [x] Redis module (ioredis) ใช้ร่วม
+- [x] Pagination helper (`page`, `pageSize`, `meta.total`)
 
 **Acceptance Criteria**
 - Error ทุกประเภทออก format เดียวกัน, มี unit test ของ filter
 - เรียก API เกิน limit ได้ 429 + `RATE_LIMITED`
 
-**Agent Notes:** –
+**Agent Notes:**
+- ✅ AC ข้อ 1: error ทุกชนิดออก `{ error: { code, message, details? } }` — unit test `src/common/filters/to-error-response.spec.ts` (AppException, HttpException ของ Nest, throttler, JSON ผิด, Prisma P2002/P2025, error ไม่คาดคิด → 500 ไม่รั่วข้อความ) + integration test ผ่าน HTTP จริงใน `test/integration/app.int-spec.ts`
+- ✅ AC ข้อ 2: ยิงเกิน limit → 429 `RATE_LIMITED` (integration test ตั้ง `RATE_LIMIT_PER_MINUTE=5`), ตัวนับอยู่ใน Redis
+- ไฟล์สำคัญ (`apps/api/src/`): `common/exceptions/app.exception.ts` + `error-status.ts` (code → HTTP), `common/filters/`, `common/interceptors/response.interceptor.ts`, `common/pipes/zod-validation.pipe.ts`, `common/pagination/paginated-result.ts`, `common/request-context.ts` (AsyncLocalStorage), `common/redact.ts`, `common/logger/logger.module.ts`, `redis/redis.module.ts` (token `REDIS`), `modules/audit/`, `setup-swagger.ts`
+- **วิธีใช้ใน Phase ถัดไป**:
+  - โยน error: `throw new AppException(ErrorCode.X, 'message', details?)` — status มาจากตารางอัตโนมัติ (ดู Overview §11)
+  - DTO: `class XDto extends createZodDto(xSchema) {}` โดย `xSchema` อยู่ใน `packages/shared` (frontend ใช้ตัวเดียวกัน) — pipe global ตรวจให้เอง
+  - รายการแบ่งหน้า: รับ `@Query() q: PaginationQueryDto` (จาก `paginationQuerySchema`) → `prisma.x.findMany({ ...toSkipTake(q) })` → `return PaginatedResult.of(items, total, q)`
+  - Audit: `auditService.log({ actorType, actorId, action: 'vendor.approve', entity: { type: 'vendor', id }, before, after }, tx)` — ส่ง `tx` เมื่ออยู่ใน `$transaction`; ip/user-agent ใส่ให้อัตโนมัติ; key อ่อนไหวถูก [REDACTED]
+  - Rate limit เฉพาะ endpoint (OTP, hold ใน §10.4): `@Throttle({ default: { limit, ttl } })`; ไม่จำกัด: `@SkipThrottle()`
+- Controller คืนค่าธรรมดา — interceptor ห่อ `{ data }` ให้; ไฟล์ใช้ `StreamableFile` (ไม่ห่อ)
+- 1.3 ต้องเพิ่ม actor (admin/vendor id) ลง request context เพื่อให้ audit/log รู้ว่าใครทำ — ตอนนี้ `RequestContext` มีแค่ requestId/ip/userAgent
+- Phase 6: หลัง Nginx ต้องตั้ง `app.set('trust proxy', …)` ไม่งั้น rate limit/audit เห็น IP ของ proxy แทน IP จริง
+- Test ที่ boot `AppModule` (เดิม `health.e2e-spec.ts`) ย้ายไปเป็น `test/integration/app.int-spec.ts` เพราะต้องใช้ Redis; `pnpm test` = unit ล้วน
+- Helmet CSP default ใช้กับ Swagger UI ได้ (ตรวจใน Chrome แล้ว ไม่มี console error)
+- ถ้ารัน `pnpm typecheck`/`test` ระหว่าง `pnpm dev` จะเห็น TS2307 ชั่วคราวใน watch ของ api (เพราะ build:shared ลบ `dist` ก่อน build ใหม่) — หายเองภายในวินาที
 
 ### 1.3 Admin Auth & RBAC
 **สถานะ:** ⬜ TODO · **Dependencies:** 1.2 · **เริ่ม:** – · **เสร็จ:** –
@@ -598,3 +613,4 @@
 | 2026-10-31 | 0 | ✅ DONE | push ขึ้น github.com/rungtom003/market-booking, CI บน `main` ผ่าน — Phase ถัดไป: 1.1 Database Schema & Seed |
 | 2026-10-31 | 1.1 | 🟨 IN PROGRESS | schema 16 ตาราง + partial index 4 ตัว, migration init, PrismaService, seed, enum ใน shared, integration test (14 ผ่าน), CI เพิ่ม postgres — เหลือรัน `migrate reset` (รอผู้ใช้ยินยอม) |
 | 2026-10-31 | 1.1 | ✅ DONE | `pnpm db:reset` ผ่าน (ผู้ใช้ยินยอม), lint/format/typecheck/test (13)/test:int (14)/build ผ่าน — Phase ถัดไป: 1.2 Core Infrastructure |
+| 2026-10-31 | 1.2 | ✅ DONE | error format/filter, `{ data, meta }`, Zod pipe (nestjs-zod), pino + request id + redact, Helmet/CORS, throttler บน Redis, AuditService, pagination, Swagger `/api/docs` — unit 45 / integration 33 ผ่าน — ถัดไป: 1.3 Admin Auth & RBAC |

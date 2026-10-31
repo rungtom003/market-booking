@@ -21,6 +21,8 @@ describe('validateEnv', () => {
     const env = validateEnv(validEnv);
 
     expect(env.PORT).toBe(3000);
+    expect(env.LOG_LEVEL).toBe('info');
+    expect(env.RATE_LIMIT_PER_MINUTE).toBe(100);
     expect(env.MINIO_PORT).toBe(9000);
     expect(env.SMS_PROVIDER).toBe('mock');
   });
