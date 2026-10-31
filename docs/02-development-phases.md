@@ -44,8 +44,8 @@
 | Phase | ชื่อ | สถานะ | เริ่ม | เสร็จ |
 |---|---|---|---|---|
 | 0 | Project Setup | ✅ DONE | 2026-10-31 | 2026-10-31 |
-| 1 | Backend Foundation | ⬜ TODO | | |
-| 1.1 | ↳ Database Schema & Seed | ⬜ TODO | | |
+| 1 | Backend Foundation | 🟨 IN PROGRESS | 2026-10-31 | |
+| 1.1 | ↳ Database Schema & Seed | ✅ DONE | 2026-10-31 | 2026-10-31 |
 | 1.2 | ↳ Core Infrastructure (config, error, logging, audit) | ⬜ TODO | | |
 | 1.3 | ↳ Admin Auth & RBAC | ⬜ TODO | | |
 | 1.4 | ↳ Vendor Auth (OTP + LINE) | ⬜ TODO | | |
@@ -126,23 +126,34 @@
 ---
 
 ## Phase 1 — Backend Foundation
-**สถานะ:** ⬜ TODO · **Dependencies:** Phase 0
+**สถานะ:** 🟨 IN PROGRESS · **Dependencies:** Phase 0
 
 ### 1.1 Database Schema & Seed
-**สถานะ:** ⬜ TODO · **Dependencies:** 0 · **เริ่ม:** – · **เสร็จ:** –
+**สถานะ:** ✅ DONE · **Dependencies:** 0 · **เริ่ม:** 2026-10-31 · **เสร็จ:** 2026-10-31
 
 **Tasks**
-- [ ] `schema.prisma` ครบทุกตารางและ Enum ตาม Overview §7 (ใช้ `@map` เป็น snake_case)
-- [ ] Migration แรก + raw SQL migration สำหรับ partial index ทั้ง 4 ตัวใน §7.2
-- [ ] `PrismaService` + graceful shutdown
-- [ ] `seed.ts`: 1 market, SUPER_ADMIN 1 คน (รหัสจาก env), product categories ตัวอย่าง, 2 zones, 20 stalls, settings ค่า default ทั้งหมด
-- [ ] ย้าย Enum ไป export ผ่าน `packages/shared` (ให้ frontend ใช้ได้)
+- [x] `schema.prisma` ครบทุกตารางและ Enum ตาม Overview §7 (ใช้ `@map` เป็น snake_case)
+- [x] Migration แรก + raw SQL migration สำหรับ partial index ทั้ง 4 ตัวใน §7.2 _(ประกาศใน schema ด้วย preview `partialIndexes` แทน raw SQL — ดู Decision Log)_
+- [x] `PrismaService` + graceful shutdown
+- [x] `seed.ts`: 1 market, SUPER_ADMIN 1 คน (รหัสจาก env), product categories ตัวอย่าง, 2 zones, 20 stalls, settings ค่า default ทั้งหมด
+- [x] ย้าย Enum ไป export ผ่าน `packages/shared` (ให้ frontend ใช้ได้)
 
 **Acceptance Criteria**
 - `pnpm prisma migrate reset` สำเร็จและมีข้อมูล seed
 - ทดสอบ SQL: insert booking active 2 รายการ stall/day เดียวกัน → error unique violation; ถ้ารายการแรกเป็น `EXPIRED` → insert ได้
 
-**Agent Notes:** –
+**Agent Notes:**
+- ✅ AC ข้อ 2 ผ่าน: `apps/api/test/integration/booking-unique.int-spec.ts` (`pnpm test:int`) — active ซ้ำทุกสถานะ → `P2002`, รายการแรก EXPIRED/CANCELLED → insert ได้, insert พร้อมกัน 3 ตัว → สำเร็จ 1, raw SQL insert ก็โดนบล็อก
+- ✅ AC ข้อ 1 ผ่าน (ผู้ใช้ยินยอมให้รัน reset): `pnpm db:reset` → reset DB dev, apply migration, seed ครบ (1 market, 1 SUPER_ADMIN `$2b$12$`, 5 categories, 2 zones, 20 stalls, 13 settings); seed รันซ้ำแล้ว skip — **Prisma 7 `migrate reset` ไม่ seed เอง** จึงใช้ `pnpm db:reset` (reset + seed)
+- ⚠️ Prisma บล็อก `migrate reset` เมื่อ AI agent สั่ง — agent ต้องขอความยินยอมผู้ใช้ทุกครั้ง (ใส่ env `PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION`) ส่วน integration test ใช้ `migrate deploy` + `TRUNCATE` จึงไม่ติดเงื่อนไขนี้
+- ไฟล์สำคัญ: `apps/api/prisma/schema.prisma`, `prisma/migrations/20261031022514_init`, `prisma/seed.ts` (export `seed()` ให้ test เรียกได้), `apps/api/prisma.config.ts`, `src/prisma/prisma.service.ts`, `packages/shared/src/enums.ts` (+ `ACTIVE_BOOKING_STATUSES`, `PaymentMethod`, `ActorType`, `RoundPhase`), `packages/shared/src/settings.ts` (`SETTING_DEFAULTS` — 1.5 เพิ่ม Zod schema ต่อจากนี้)
+- **Prisma 7**: import client จาก `src/generated/prisma/client` (ไม่ใช่ `@prisma/client`), enum จาก `.../enums`; ต้องส่ง `adapter` เสมอ; ไม่ generate อัตโนมัติ → ใช้ `pnpm codegen`; `migrate dev` ใช้ได้เฉพาะ terminal แบบ interactive (agent ใช้ `migrate dev --create-only` แล้ว `migrate deploy`)
+- ก่อนสร้าง migration ใหม่ ให้รัน `pnpm prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma` ตรวจ drift — CI ตรวจด้วย `--exit-code`
+- `PrismaService` ไม่ `$connect()` ตอน boot (connect ตอน query แรก) ทำให้ unit/e2e test ไม่ต้องมี DB; ถ้าต้องการ fail-fast ให้เพิ่ม DB ping ใน health check (Phase 1.2)
+- Enum มี 2 ชุด (Prisma + shared) — `src/prisma/enums.spec.ts` ตรวจว่าตรงกัน แก้ enum ต้องแก้ทั้งสองที่
+- Integration test: helper `createTestPrisma()`/`truncateAll()` ใน `test/integration/test-db.ts`; ไฟล์ `*.int-spec.ts`; ใช้ DB `market_booking_test` (กันรันบน DB ที่ชื่อไม่ลงท้าย `_test`) — Phase 4.1 ใช้โครงนี้ทำ concurrent test ได้เลย
+- Postgres ของ docker-compose ย้ายไป host port **5433** เพราะเครื่องนี้มี PostgreSQL ของ Windows ฟัง 5432 อยู่ (ทำให้ `P1000` auth failed)
+- Phase 3.2: `market_days` unique (market_id, market_date) ครอบคลุมรอบที่ CANCELLED ด้วย — ถ้าต้องให้ใช้วันซ้ำได้หลังยกเลิกรอบ ต้องเปลี่ยนเป็น partial unique
 
 ### 1.2 Core Infrastructure
 **สถานะ:** ⬜ TODO · **Dependencies:** 1.1 · **เริ่ม:** – · **เสร็จ:** –
@@ -585,3 +596,5 @@
 | 2026-10-31 | — | — | สร้างเอกสารแผนการพัฒนา |
 | 2026-10-31 | 0 | 🟨 IN PROGRESS | ตั้ง monorepo (api/web/admin/shared), docker-compose, env validation, lint/format/test, husky, CI workflow, README — AC ข้อ 1 ผ่าน, เหลือยืนยัน CI บน GitHub หลัง push |
 | 2026-10-31 | 0 | ✅ DONE | push ขึ้น github.com/rungtom003/market-booking, CI บน `main` ผ่าน — Phase ถัดไป: 1.1 Database Schema & Seed |
+| 2026-10-31 | 1.1 | 🟨 IN PROGRESS | schema 16 ตาราง + partial index 4 ตัว, migration init, PrismaService, seed, enum ใน shared, integration test (14 ผ่าน), CI เพิ่ม postgres — เหลือรัน `migrate reset` (รอผู้ใช้ยินยอม) |
+| 2026-10-31 | 1.1 | ✅ DONE | `pnpm db:reset` ผ่าน (ผู้ใช้ยินยอม), lint/format/typecheck/test (13)/test:int (14)/build ผ่าน — Phase ถัดไป: 1.2 Core Infrastructure |

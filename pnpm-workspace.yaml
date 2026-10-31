@@ -2,9 +2,15 @@ packages:
   - apps/*
   - packages/*
 
-# pnpm 11 ไม่รัน install script ของ dependency เว้นแต่อนุญาต — ทุกตัวด้านล่างมี prebuilt binary ไม่ต้อง build
+# pnpm 11 ไม่รัน install script ของ dependency เว้นแต่อนุญาต
 allowBuilds:
-  '@nestjs/core': false # แค่ข้อความ opencollective
+  # ต้องรัน: ดาวน์โหลด schema engine ที่ prisma migrate ใช้
+  '@prisma/engines': true
+  prisma: true
+  # ต้องรัน: ตรวจ/ติดตั้ง binary ของ esbuild (ใช้โดย tsx)
+  esbuild: true
+  # ไม่ต้องรัน: มี prebuilt binary หรือเป็นแค่ข้อความ
+  '@nestjs/core': false
   '@parcel/watcher': false
   unrs-resolver: false
 

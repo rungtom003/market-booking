@@ -315,6 +315,7 @@ modules/booking/
 **`market_days`**
 | Column | Type | หมายเหตุ |
 |---|---|---|
+| market_id | uuid FK | เก็บซ้ำกับ round เพื่อบังคับ unique (market, date) ระดับ DB |
 | round_id | uuid FK | |
 | market_date | date | unique ต่อ (market, date) |
 | checkin_open_at, checkin_close_at | timestamptz null | ใช้ตัดสิน No-show |
@@ -341,7 +342,8 @@ modules/booking/
 | version | int | optimistic lock |
 
 ```sql
--- หัวใจของการกันจองซ้ำ (เขียนใน Prisma migration แบบ raw SQL)
+-- หัวใจของการกันจองซ้ำ — ประกาศใน schema.prisma (preview feature `partialIndexes`) แล้ว Prisma สร้าง SQL นี้ให้
+-- (ใน schema เขียน predicate เป็น `status = ANY (ARRAY[...])` ซึ่งเป็นรูปที่ PostgreSQL normalize แล้ว — ดู Decision Log)
 CREATE UNIQUE INDEX uq_active_booking
   ON bookings (stall_id, market_day_id)
   WHERE status IN ('HOLD','PENDING_PAYMENT','PENDING_VERIFY','CONFIRMED');
@@ -669,7 +671,7 @@ Vendor กด "ยืนยันการจอง" → POST /bookings/:id/conf
 ```
 NODE_ENV=development
 PORT=3000
-DATABASE_URL=postgresql://market:market_dev@localhost:5432/market_booking
+DATABASE_URL=postgresql://market:market_dev@localhost:5433/market_booking
 REDIS_URL=redis://localhost:6379
 JWT_ACCESS_SECRET=
 JWT_REFRESH_SECRET=
@@ -704,6 +706,12 @@ ADMIN_ORIGIN=http://localhost:5174
 | 2026-10-31 | `packages/shared` build คู่ ESM + CJS ลง `dist/` (conditional `exports`) | Vite ต้องการ ESM, NestJS/Jest เป็น CommonJS — script root `dev`/`typecheck`/`test` build shared ให้ก่อน |
 | 2026-10-31 | Frontend dev เรียก API ผ่าน Vite proxy (`/api`, `/socket.io`) ด้วย path สัมพัทธ์ `/api/v1` | ให้ dev ตรงกับ production ที่ Nginx proxy, ไม่ต้องมี env URL ฝั่ง frontend |
 | 2026-10-31 | เพิ่ม env `PORT` (default 3000) | กำหนด port API ได้โดยไม่แก้โค้ด |
+| 2026-10-31 | Prisma 7.10 + driver adapter `@prisma/adapter-pg`, client generate ลง `apps/api/src/generated/prisma` (gitignore, CJS) | Prisma 7 ไม่มี Rust query engine แล้ว ต้องใช้ adapter; ไฟล์ generate ไม่ commit — root `pnpm codegen` สร้างให้ก่อน dev/typecheck/test |
+| 2026-10-31 | Partial index ทั้ง 4 ตัวประกาศใน `schema.prisma` ด้วย preview feature `partialIndexes` แทน raw SQL migration | raw SQL ที่ไม่อยู่ใน schema ถูก `prisma migrate` มองเป็น drift และสร้าง `DROP INDEX` ใน migration ถัดไป — ต้องเขียน predicate รูป `= ANY (ARRAY[...])` (รูปที่ PG normalize) ไม่งั้นยัง drift; CI ตรวจ `migrate diff --exit-code` |
+| 2026-10-31 | เพิ่ม `market_id` ใน `market_days` | บังคับ "วันขายไม่ซ้ำต่อตลาด" ด้วย unique index ได้ (เดิมมีแค่ `round_id`) |
+| 2026-10-31 | ใช้ `bcryptjs` (pure JS) แทน `bcrypt` (native) | ไม่ต้อง build native module บน Windows/Alpine; hash `$2b$` ใช้แทนกันได้ cost 12 เท่าเดิม |
+| 2026-10-31 | Postgres ใน docker-compose ใช้ host port **5433** (`POSTGRES_PORT`) | เครื่อง dev Windows มักมี PostgreSQL ติดตั้งอยู่ที่ 5432 แล้วชนกัน (เจอจริงตอน Phase 1.1) |
+| 2026-10-31 | Integration test ใช้ DB แยก (`*_test`, สร้างอัตโนมัติ) + `TRUNCATE` ระหว่าง test, รันด้วย `--experimental-vm-modules` | ไม่แตะข้อมูล dev; Prisma 7 โหลด WASM ด้วย dynamic `import()` ซึ่ง Jest CJS ต้องเปิด vm modules |
 
 ### Open Questions
 - [ ] ใช้กับตลาดเดียวหรือหลายตลาด (ตอนนี้ schema รองรับแล้ว แต่ UI ยังเป็นตลาดเดียว)

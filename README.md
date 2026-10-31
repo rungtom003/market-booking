@@ -20,10 +20,13 @@ pnpm install
 # 2. สร้างไฟล์ env (ค่าใน .env.example ใช้กับ docker-compose ได้ทันที)
 cp .env.example .env
 
-# 3. เปิด PostgreSQL, Redis, MinIO
+# 3. เปิด PostgreSQL (host port 5433), Redis, MinIO
 docker compose up -d
 
-# 4. รันทุก app พร้อมกัน (watch mode)
+# 4. สร้างตาราง + ข้อมูลตัวอย่าง (1 ตลาด, 2 โซน, 20 ล็อค, SUPER_ADMIN ตาม SEED_ADMIN_* ใน .env)
+pnpm db:deploy && pnpm db:seed
+
+# 5. รันทุก app พร้อมกัน (watch mode)
 pnpm dev
 ```
 
@@ -38,14 +41,20 @@ pnpm dev
 
 ## Scripts (รันที่ root)
 
-| คำสั่ง                              | ทำอะไร                                                            |
-| ----------------------------------- | ----------------------------------------------------------------- |
-| `pnpm dev`                          | build `shared` แล้วรัน api + web + admin + shared (watch) แบบขนาน |
-| `pnpm build`                        | build ทุก package ตามลำดับ dependency                             |
-| `pnpm lint` / `pnpm lint:fix`       | ESLint ทั้ง monorepo                                              |
-| `pnpm format` / `pnpm format:check` | Prettier                                                          |
-| `pnpm typecheck`                    | `tsc --noEmit` ทุก package                                        |
-| `pnpm test`                         | Jest (api: unit + e2e ผ่าน Supertest)                             |
+| คำสั่ง                              | ทำอะไร                                                               |
+| ----------------------------------- | -------------------------------------------------------------------- |
+| `pnpm dev`                          | build `shared` แล้วรัน api + web + admin + shared (watch) แบบขนาน    |
+| `pnpm build`                        | build ทุก package ตามลำดับ dependency                                |
+| `pnpm lint` / `pnpm lint:fix`       | ESLint ทั้ง monorepo                                                 |
+| `pnpm format` / `pnpm format:check` | Prettier                                                             |
+| `pnpm typecheck`                    | `tsc --noEmit` ทุก package                                           |
+| `pnpm test`                         | Jest (api: unit + e2e ผ่าน Supertest) — ไม่ต้องมี DB                 |
+| `pnpm test:int`                     | Integration test กับ PostgreSQL จริง (DB `*_test` สร้างให้อัตโนมัติ) |
+| `pnpm codegen`                      | build `shared` + `prisma generate` (dev/typecheck/test เรียกให้เอง)  |
+| `pnpm db:migrate`                   | แก้ `schema.prisma` แล้วสร้าง migration ใหม่ (interactive)           |
+| `pnpm db:deploy` / `pnpm db:seed`   | apply migration / ใส่ข้อมูลตัวอย่าง (รันซ้ำได้)                      |
+| `pnpm db:reset`                     | ⚠️ ลบข้อมูลทั้ง DB dev แล้ว migrate + seed ใหม่                      |
+| `pnpm prisma <คำสั่ง>`              | เรียก Prisma CLI ของ apps/api เช่น `pnpm prisma studio`              |
 
 รันเฉพาะ package: `pnpm --filter @market-booking/api test`
 
@@ -60,7 +69,7 @@ docs/            เอกสารออกแบบและแผนงาน
 ```
 
 `packages/shared` build เป็นทั้ง ESM (สำหรับ Vite) และ CommonJS (สำหรับ NestJS/Jest) ลง `dist/` —
-`pnpm dev`, `typecheck`, `test` จะ build ให้ก่อนเสมอ ถ้า import จาก shared ไม่เจอ ให้รัน `pnpm build:shared`
+`pnpm dev`, `typecheck`, `test` จะ build ให้ก่อนเสมอ ถ้า import จาก shared หรือ `src/generated/prisma` ไม่เจอ ให้รัน `pnpm codegen`
 
 ## Commit
 
@@ -70,5 +79,6 @@ docs/            เอกสารออกแบบและแผนงาน
 ## ปัญหาที่พบบ่อย
 
 - **API ขึ้น `Invalid environment variables`** — ยังไม่ได้ `cp .env.example .env` หรือค่าบางตัวผิดรูปแบบ ข้อความจะบอกชื่อตัวแปร
-- **Port ชน (5432/6379/9000/3000/5173/5174)** — ปิดโปรแกรมที่ใช้ port นั้นอยู่ หรือแก้ port ใน `docker-compose.yml` / `.env`
+- **Port ชน (5433/6379/9000/3000/5173/5174)** — ปิดโปรแกรมที่ใช้ port นั้นอยู่ หรือแก้ port ใน `docker-compose.yml` / `.env`
+- **`P1000: Authentication failed`** — มี PostgreSQL ตัวอื่นฟัง port เดียวกันอยู่ (เช่นที่ติดตั้งบน Windows) — compose ใช้ 5433 อยู่แล้ว ถ้ายังชนให้ตั้ง `POSTGRES_PORT` แล้วแก้ `DATABASE_URL` ให้ตรง
 - **รีเซ็ตข้อมูล infra ทั้งหมด** — `docker compose down -v` (ลบ volume ของ postgres/redis/minio)

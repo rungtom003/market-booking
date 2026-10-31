@@ -10,3 +10,6 @@ coverage
 .vscode/*
 !.vscode/extensions.json
 .idea
+
+# Prisma client (สร้างด้วย prisma generate)
+apps/api/src/generated

@@ -1,5 +1,6 @@
 dist
 coverage
+**/generated
 node_modules
 pnpm-lock.yaml
 # เอกสารออกแบบแก้ด้วยมือ ไม่ให้ Prettier จัดตารางใหม่

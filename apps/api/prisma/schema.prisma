@@ -1,0 +1,446 @@
+// Source of truth: docs/01-system-overview.md §7
+// ตาราง/คอลัมน์ใน DB เป็น snake_case ผ่าน @map / @@map — โค้ดใช้ camelCase
+// Enum ต้องตรงกับ packages/shared/src/enums.ts (มี test ตรวจใน src/prisma/enums.spec.ts)
+
+generator client {
+  provider        = "prisma-client"
+  output          = "../src/generated/prisma"
+  moduleFormat    = "cjs"
+  // partial index (เช่น uq_active_booking) ประกาศใน schema ได้ ไม่ต้องเขียน raw SQL แยก
+  // ถ้าเขียน raw SQL เอง prisma migrate dev จะเห็นเป็น drift และสร้าง DROP INDEX ใน migration ถัดไป
+  previewFeatures = ["partialIndexes"]
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ───────────────────────────── Enums ─────────────────────────────
+
+enum VendorStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+enum AdminRole {
+  SUPER_ADMIN
+  ADMIN
+  STAFF
+  FINANCE
+}
+
+enum RoundStatus {
+  DRAFT
+  PUBLISHED
+  CANCELLED
+}
+
+enum BookingStatus {
+  HOLD
+  PENDING_PAYMENT
+  PENDING_VERIFY
+  CONFIRMED
+  CANCELLED
+  EXPIRED
+}
+
+enum PaymentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum WaitlistStatus {
+  WAITING
+  NOTIFIED
+  FULFILLED
+  EXPIRED
+  CANCELLED
+}
+
+// ───────────────────────────── Market ─────────────────────────────
+
+model Market {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  name      String   @db.VarChar(200)
+  address   String
+  timezone  String   @default("Asia/Bangkok") @db.VarChar(50)
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  vendors           Vendor[]
+  adminUsers        AdminUser[]
+  productCategories ProductCategory[]
+  zones             Zone[]
+  stalls            Stall[]
+  bookingRounds     BookingRound[]
+  marketDays        MarketDay[]
+  bookings          Booking[]
+  systemSettings    SystemSetting[]
+  announcements     Announcement[]
+
+  @@map("markets")
+}
+
+model ProductCategory {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  marketId  String   @map("market_id") @db.Uuid
+  name      String   @db.VarChar(100)
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  market  Market   @relation(fields: [marketId], references: [id])
+  vendors Vendor[]
+
+  @@index([marketId, sortOrder])
+  @@map("product_categories")
+}
+
+model Zone {
+  id                 String   @id @default(uuid(7)) @db.Uuid
+  marketId           String   @map("market_id") @db.Uuid
+  name               String   @db.VarChar(100)
+  color              String   @db.VarChar(7)
+  /// ว่าง = ขายได้ทุกประเภท (array ไม่มี FK — ตรวจที่ service)
+  allowedCategoryIds String[] @default([]) @map("allowed_category_ids") @db.Uuid
+  sortOrder          Int      @default(0) @map("sort_order")
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  market    Market     @relation(fields: [marketId], references: [id])
+  stalls    Stall[]
+  waitlists Waitlist[]
+
+  @@index([marketId, sortOrder])
+  @@map("zones")
+}
+
+model Stall {
+  id         String   @id @default(uuid(7)) @db.Uuid
+  marketId   String   @map("market_id") @db.Uuid
+  zoneId     String   @map("zone_id") @db.Uuid
+  code       String   @db.VarChar(20)
+  widthM     Decimal  @map("width_m") @db.Decimal(5, 2)
+  lengthM    Decimal  @map("length_m") @db.Decimal(5, 2)
+  /// ราคาต่อวันขาย
+  price      Decimal  @db.Decimal(10, 2)
+  /// ตำแหน่ง/ขนาดบนผัง (หน่วย px ของ canvas)
+  posX       Decimal  @default(0) @map("pos_x") @db.Decimal(10, 2)
+  posY       Decimal  @default(0) @map("pos_y") @db.Decimal(10, 2)
+  rot        Decimal  @default(0) @db.Decimal(6, 2)
+  shapeW     Decimal  @map("shape_w") @db.Decimal(10, 2)
+  shapeH     Decimal  @map("shape_h") @db.Decimal(10, 2)
+  isActive   Boolean  @default(true) @map("is_active")
+  /// สงวนไว้ ไม่เปิดให้จองออนไลน์
+  isReserved Boolean  @default(false) @map("is_reserved")
+  note       String?
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  market    Market             @relation(fields: [marketId], references: [id])
+  zone      Zone               @relation(fields: [zoneId], references: [id])
+  overrides StallDayOverride[]
+  bookings  Booking[]
+  waitlists Waitlist[]
+
+  @@unique([marketId, code])
+  @@index([zoneId])
+  @@map("stalls")
+}
+
+// ───────────────────────────── People ─────────────────────────────
+
+model Vendor {
+  id                String       @id @default(uuid(7)) @db.Uuid
+  marketId          String       @map("market_id") @db.Uuid
+  firstName         String       @map("first_name") @db.VarChar(100)
+  lastName          String       @map("last_name") @db.VarChar(100)
+  phone             String       @db.VarChar(20)
+  phoneVerifiedAt   DateTime?    @map("phone_verified_at") @db.Timestamptz(6)
+  lineUserId        String?      @unique @map("line_user_id") @db.VarChar(64)
+  address           String
+  shopName          String?      @map("shop_name") @db.VarChar(200)
+  productCategoryId String?      @map("product_category_id") @db.Uuid
+  /// object key ใน MinIO
+  idCardImageKey    String?      @map("id_card_image_key") @db.VarChar(255)
+  shopImageKey      String?      @map("shop_image_key") @db.VarChar(255)
+  pdpaConsentAt     DateTime     @map("pdpa_consent_at") @db.Timestamptz(6)
+  status            VendorStatus @default(PENDING)
+  reviewedById      String?      @map("reviewed_by") @db.Uuid
+  reviewedAt        DateTime?    @map("reviewed_at") @db.Timestamptz(6)
+  rejectReason      String?      @map("reject_reason")
+  /// ใช้กับระบบ No-show
+  suspendedUntil    DateTime?    @map("suspended_until") @db.Timestamptz(6)
+  noshowCount       Int          @default(0) @map("noshow_count")
+  createdAt         DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  market          Market           @relation(fields: [marketId], references: [id])
+  productCategory ProductCategory? @relation(fields: [productCategoryId], references: [id])
+  reviewedBy      AdminUser?       @relation("VendorReviewedBy", fields: [reviewedById], references: [id])
+  bookings        Booking[]
+  waitlists       Waitlist[]
+
+  @@unique([marketId, phone])
+  /// หน้า "รออนุมัติ" เรียงตามเวลาสมัคร (§9.2)
+  @@index([marketId, status, createdAt])
+  @@map("vendors")
+}
+
+model AdminUser {
+  id           String    @id @default(uuid(7)) @db.Uuid
+  /// null = ทุกตลาด (SUPER_ADMIN)
+  marketId     String?   @map("market_id") @db.Uuid
+  username     String    @unique @db.VarChar(50)
+  /// bcrypt cost 12
+  passwordHash String    @map("password_hash") @db.VarChar(255)
+  displayName  String    @map("display_name") @db.VarChar(100)
+  role         AdminRole
+  isActive     Boolean   @default(true) @map("is_active")
+  lastLoginAt  DateTime? @map("last_login_at") @db.Timestamptz(6)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  market            Market?         @relation(fields: [marketId], references: [id])
+  reviewedVendors   Vendor[]        @relation("VendorReviewedBy")
+  createdRounds     BookingRound[]  @relation("RoundCreatedBy")
+  cancelledBookings Booking[]       @relation("BookingCancelledBy")
+  verifiedPayments  Payment[]       @relation("PaymentVerifiedBy")
+  updatedSettings   SystemSetting[] @relation("SettingUpdatedBy")
+
+  @@map("admin_users")
+}
+
+// ───────────────────────────── Rounds ─────────────────────────────
+
+model BookingRound {
+  id                 String      @id @default(uuid(7)) @db.Uuid
+  marketId           String      @map("market_id") @db.Uuid
+  name               String      @db.VarChar(200)
+  openAt             DateTime    @map("open_at") @db.Timestamptz(6)
+  closeAt            DateTime    @map("close_at") @db.Timestamptz(6)
+  /// ต่อ 1 วันขาย
+  maxStallsPerVendor Int         @map("max_stalls_per_vendor")
+  /// สถานะเปิด/ปิดจองไม่เก็บ — คำนวณจาก PUBLISHED + เวลา server (§7.1)
+  status             RoundStatus @default(DRAFT)
+  createdById        String      @map("created_by") @db.Uuid
+  createdAt          DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  market     Market      @relation(fields: [marketId], references: [id])
+  createdBy  AdminUser   @relation("RoundCreatedBy", fields: [createdById], references: [id])
+  marketDays MarketDay[]
+
+  @@index([marketId, status, openAt])
+  @@map("booking_rounds")
+}
+
+model MarketDay {
+  id             String    @id @default(uuid(7)) @db.Uuid
+  /// เก็บซ้ำกับ round เพื่อบังคับ unique (market, date) ระดับ DB
+  marketId       String    @map("market_id") @db.Uuid
+  roundId        String    @map("round_id") @db.Uuid
+  marketDate     DateTime  @map("market_date") @db.Date
+  /// ใช้ตัดสิน No-show
+  checkinOpenAt  DateTime? @map("checkin_open_at") @db.Timestamptz(6)
+  checkinCloseAt DateTime? @map("checkin_close_at") @db.Timestamptz(6)
+  isCancelled    Boolean   @default(false) @map("is_cancelled")
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  market    Market             @relation(fields: [marketId], references: [id])
+  round     BookingRound       @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  overrides StallDayOverride[]
+  bookings  Booking[]
+  waitlists Waitlist[]
+
+  @@unique([marketId, marketDate])
+  @@index([roundId])
+  @@map("market_days")
+}
+
+/// ปิดล็อคหรือเปลี่ยนราคาเฉพาะวัน
+model StallDayOverride {
+  id            String   @id @default(uuid(7)) @db.Uuid
+  stallId       String   @map("stall_id") @db.Uuid
+  marketDayId   String   @map("market_day_id") @db.Uuid
+  priceOverride Decimal? @map("price_override") @db.Decimal(10, 2)
+  isClosed      Boolean  @default(false) @map("is_closed")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  stall     Stall     @relation(fields: [stallId], references: [id])
+  marketDay MarketDay @relation(fields: [marketDayId], references: [id], onDelete: Cascade)
+
+  @@unique([stallId, marketDayId])
+  @@index([marketDayId])
+  @@map("stall_day_overrides")
+}
+
+// ───────────────────────────── Booking ─────────────────────────────
+
+model Booking {
+  id                 String        @id @default(uuid(7)) @db.Uuid
+  marketId           String        @map("market_id") @db.Uuid
+  vendorId           String        @map("vendor_id") @db.Uuid
+  stallId            String        @map("stall_id") @db.Uuid
+  marketDayId        String        @map("market_day_id") @db.Uuid
+  status             BookingStatus
+  /// snapshot ราคา ณ เวลาจอง (รวม override)
+  amount             Decimal       @db.Decimal(10, 2)
+  holdExpiresAt      DateTime?     @map("hold_expires_at") @db.Timestamptz(6)
+  paymentDueAt       DateTime?     @map("payment_due_at") @db.Timestamptz(6)
+  confirmedAt        DateTime?     @map("confirmed_at") @db.Timestamptz(6)
+  cancelledAt        DateTime?     @map("cancelled_at") @db.Timestamptz(6)
+  cancelReason       String?       @map("cancel_reason")
+  cancelledByAdminId String?       @map("cancelled_by_admin_id") @db.Uuid
+  checkedInAt        DateTime?     @map("checked_in_at") @db.Timestamptz(6)
+  /// สำหรับ QR check-in
+  checkinToken       String?       @unique @map("checkin_token") @db.VarChar(64)
+  /// optimistic lock
+  version            Int           @default(0)
+  createdAt          DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  market           Market     @relation(fields: [marketId], references: [id])
+  vendor           Vendor     @relation(fields: [vendorId], references: [id])
+  stall            Stall      @relation(fields: [stallId], references: [id])
+  marketDay        MarketDay  @relation(fields: [marketDayId], references: [id])
+  cancelledByAdmin AdminUser? @relation("BookingCancelledBy", fields: [cancelledByAdminId], references: [id])
+  payments         Payment[]
+
+  // predicate ของ partial index ต้องเขียนในรูปที่ PostgreSQL normalize แล้ว (`= ANY (ARRAY[...])`)
+  // ถ้าเขียน `IN (...)` (เหมือน §7.2) prisma migrate จะเห็นเป็น drift และสร้าง DROP/CREATE ทุก migration
+  // — ผลลัพธ์ใน DB เหมือนกันทุกประการ (migration init ใช้รูป IN และได้ index ตัวเดียวกัน)
+  /// หัวใจของการกันจองซ้ำ: 1 ล็อค/วันขาย มี active booking ได้รายการเดียว — DB เป็นผู้ตัดสิน (§5 ข้อ 1)
+  @@unique([stallId, marketDayId], map: "uq_active_booking", where: raw("status = ANY (ARRAY['HOLD'::\"BookingStatus\", 'PENDING_PAYMENT'::\"BookingStatus\", 'PENDING_VERIFY'::\"BookingStatus\", 'CONFIRMED'::\"BookingStatus\"])"))
+  /// นับโควต้าของ vendor ต่อวันขาย
+  @@index([vendorId, marketDayId], map: "ix_bookings_vendor_day", where: raw("status = ANY (ARRAY['HOLD'::\"BookingStatus\", 'PENDING_PAYMENT'::\"BookingStatus\", 'PENDING_VERIFY'::\"BookingStatus\", 'CONFIRMED'::\"BookingStatus\"])"))
+  /// expiry sweeper
+  @@index([holdExpiresAt], map: "ix_bookings_hold_exp", where: raw("status = 'HOLD'"))
+  @@index([paymentDueAt], map: "ix_bookings_pay_due", where: raw("status = 'PENDING_PAYMENT'"))
+  @@index([marketDayId, status])
+  @@map("bookings")
+}
+
+model Payment {
+  id           String        @id @default(uuid(7)) @db.Uuid
+  /// 1 booking มีได้หลาย payment (สลิปถูกปฏิเสธแล้วส่งใหม่)
+  bookingId    String        @map("booking_id") @db.Uuid
+  /// PROMPTPAY_SLIP | CASH (ดู PaymentMethod ใน packages/shared)
+  method       String        @db.VarChar(20)
+  amount       Decimal       @db.Decimal(10, 2)
+  slipImageKey String?       @map("slip_image_key") @db.VarChar(255)
+  status       PaymentStatus @default(PENDING)
+  verifiedById String?       @map("verified_by") @db.Uuid
+  verifiedAt   DateTime?     @map("verified_at") @db.Timestamptz(6)
+  rejectReason String?       @map("reject_reason")
+  createdAt    DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  booking    Booking    @relation(fields: [bookingId], references: [id])
+  verifiedBy AdminUser? @relation("PaymentVerifiedBy", fields: [verifiedById], references: [id])
+
+  @@index([bookingId])
+  @@index([status, createdAt])
+  @@map("payments")
+}
+
+model Waitlist {
+  id          String         @id @default(uuid(7)) @db.Uuid
+  vendorId    String         @map("vendor_id") @db.Uuid
+  marketDayId String         @map("market_day_id") @db.Uuid
+  /// เจาะจงล็อค หรือ null = ทั้งโซน
+  stallId     String?        @map("stall_id") @db.Uuid
+  zoneId      String?        @map("zone_id") @db.Uuid
+  position    Int
+  status      WaitlistStatus @default(WAITING)
+  notifiedAt  DateTime?      @map("notified_at") @db.Timestamptz(6)
+  expiresAt   DateTime?      @map("expires_at") @db.Timestamptz(6)
+  createdAt   DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  vendor    Vendor    @relation(fields: [vendorId], references: [id])
+  marketDay MarketDay @relation(fields: [marketDayId], references: [id], onDelete: Cascade)
+  stall     Stall?    @relation(fields: [stallId], references: [id])
+  zone      Zone?     @relation(fields: [zoneId], references: [id])
+
+  @@index([marketDayId, status, position])
+  @@index([vendorId])
+  @@map("waitlists")
+}
+
+// ───────────────────────────── System ─────────────────────────────
+
+model SystemSetting {
+  id          String   @id @default(uuid(7)) @db.Uuid
+  marketId    String   @map("market_id") @db.Uuid
+  key         String   @db.VarChar(100)
+  value       Json
+  updatedById String?  @map("updated_by") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  market    Market     @relation(fields: [marketId], references: [id])
+  updatedBy AdminUser? @relation("SettingUpdatedBy", fields: [updatedById], references: [id])
+
+  @@unique([marketId, key])
+  @@map("system_settings")
+}
+
+model Announcement {
+  id        String    @id @default(uuid(7)) @db.Uuid
+  marketId  String    @map("market_id") @db.Uuid
+  title     String    @db.VarChar(200)
+  body      String
+  publishAt DateTime  @map("publish_at") @db.Timestamptz(6)
+  expireAt  DateTime? @map("expire_at") @db.Timestamptz(6)
+  isPinned  Boolean   @default(false) @map("is_pinned")
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  market Market @relation(fields: [marketId], references: [id])
+
+  @@index([marketId, publishAt])
+  @@map("announcements")
+}
+
+/// append only — ไม่มี updated_at; actor เป็น polymorphic (ADMIN/VENDOR/SYSTEM) จึงไม่มี FK
+model AuditLog {
+  id         String   @id @default(uuid(7)) @db.Uuid
+  actorType  String   @map("actor_type") @db.VarChar(20)
+  actorId    String?  @map("actor_id") @db.Uuid
+  action     String   @db.VarChar(100)
+  entityType String   @map("entity_type") @db.VarChar(50)
+  entityId   String?  @map("entity_id") @db.Uuid
+  before     Json?
+  after      Json?
+  ip         String?  @db.VarChar(45)
+  userAgent  String?  @map("user_agent") @db.VarChar(500)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([entityType, entityId])
+  @@index([actorType, actorId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model NotificationLog {
+  id        String    @id @default(uuid(7)) @db.Uuid
+  channel   String    @db.VarChar(20)
+  recipient String    @db.VarChar(100)
+  template  String    @db.VarChar(100)
+  payload   Json
+  status    String    @db.VarChar(20)
+  error     String?
+  sentAt    DateTime? @map("sent_at") @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([status, createdAt])
+  @@map("notification_logs")
+}
