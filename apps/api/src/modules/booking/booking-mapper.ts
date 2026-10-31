@@ -17,7 +17,8 @@ export const EVENT_FIELDS = {
 
 export type BookingEventRow = Prisma.BookingGetPayload<{ select: typeof EVENT_FIELDS }>;
 
-export const BOOKING_FIELDS = {
+/** คอลัมน์ของตารางอย่างเดียว (ไม่มี relation) */
+export const SCALAR_FIELDS = {
   ...EVENT_FIELDS,
   amount: true,
   confirmedAt: true,
@@ -25,6 +26,10 @@ export const BOOKING_FIELDS = {
   cancelReason: true,
   cancelledByAdminId: true,
   createdAt: true,
+} satisfies Prisma.BookingSelect;
+
+export const BOOKING_FIELDS = {
+  ...SCALAR_FIELDS,
   stall: { select: { code: true, zone: { select: { name: true } } } },
   marketDay: { select: { marketDate: true, round: { select: { name: true } } } },
 } satisfies Prisma.BookingSelect;

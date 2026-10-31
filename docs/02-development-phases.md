@@ -57,13 +57,13 @@
 | 3 | Market Setup | ✅ DONE | 2026-10-31 | 2026-10-31 |
 | 3.1 | ↳ Zones, Categories, Stalls (API + Admin UI) | ✅ DONE | 2026-10-31 | 2026-10-31 |
 | 3.2 | ↳ Booking Rounds & Market Days (API + Admin UI) | ✅ DONE | 2026-10-31 | 2026-10-31 |
-| 4 | Realtime Booking ⭐ | 🟨 IN PROGRESS | 2026-10-31 | |
+| 4 | Realtime Booking ⭐ | ✅ DONE | 2026-10-31 | 2026-10-31 |
 | 4.1 | ↳ Booking Core API + Concurrency | ✅ DONE | 2026-10-31 | 2026-10-31 |
 | 4.2 | ↳ Expiry Worker (BullMQ) | ✅ DONE | 2026-10-31 | 2026-10-31 |
 | 4.3 | ↳ Realtime Gateway (Socket.IO) | ✅ DONE | 2026-10-31 | 2026-10-31 |
 | 4.4 | ↳ Vendor Web: หน้าผังและจองล็อค | ✅ DONE | 2026-10-31 | 2026-10-31 |
 | 4.5 | ↳ Admin Web: จัดการการจอง | ✅ DONE | 2026-10-31 | 2026-10-31 |
-| 4.6 | ↳ Concurrency & Load Test | ⬜ TODO | | |
+| 4.6 | ↳ Concurrency & Load Test | ✅ DONE | 2026-10-31 | 2026-10-31 |
 | 5 | Payment | ⬜ TODO | | |
 | 5.1 | ↳ Payment API + PromptPay QR | ⬜ TODO | | |
 | 5.2 | ↳ Vendor & Admin Payment UI | ⬜ TODO | | |
@@ -418,7 +418,7 @@
 ---
 
 ## Phase 4 — Realtime Booking ⭐ (ส่วนสำคัญที่สุด)
-**สถานะ:** 🟨 IN PROGRESS · **Dependencies:** Phase 3
+**สถานะ:** ✅ DONE · **Dependencies:** Phase 3
 
 ### 4.1 Booking Core API + Concurrency
 **สถานะ:** ✅ DONE · **Dependencies:** 3.2 · **เริ่ม:** 2026-10-31 · **เสร็จ:** 2026-10-31
@@ -558,19 +558,27 @@
 - ทดสอบ: unit 165, integration 215 (+8 `admin-bookings.int-spec.ts`), E2E 26 (+1)
 
 ### 4.6 Concurrency & Load Test
-**สถานะ:** ⬜ TODO · **Dependencies:** 4.4 · **เริ่ม:** – · **เสร็จ:** –
+**สถานะ:** ✅ DONE · **Dependencies:** 4.4 · **เริ่ม:** 2026-10-31 · **เสร็จ:** 2026-10-31
 
 **Tasks**
-- [ ] Script seed: 1,000 vendor APPROVED + 300 ล็อค + รอบที่เปิดอยู่
-- [ ] k6: 500 virtual users เชื่อม socket + ยิง hold พร้อมกันตอนเปิดรอบ
-- [ ] SQL ตรวจหลังทดสอบ: ไม่มี active booking ซ้ำ, ไม่มีใครเกินโควต้า
-- [ ] บันทึกผล p95 latency, error rate, CPU/RAM ใน `docs/load-test-results.md`
-- [ ] แก้ bottleneck ที่พบ (index, connection pool, emit batching)
+- [x] Script seed: 1,000 vendor APPROVED + 300 ล็อค + รอบที่เปิดอยู่
+- [x] k6: 500 virtual users เชื่อม socket + ยิง hold พร้อมกันตอนเปิดรอบ
+- [x] SQL ตรวจหลังทดสอบ: ไม่มี active booking ซ้ำ, ไม่มีใครเกินโควต้า
+- [x] บันทึกผล p95 latency, error rate, CPU/RAM ใน `docs/load-test-results.md`
+- [x] แก้ bottleneck ที่พบ (index, connection pool, emit batching)
 
 **Acceptance Criteria**
 - ผ่านเป้าหมาย Non-functional ใน Overview §13
 
-**Agent Notes:** –
+**Agent Notes:**
+- ✅ AC (เป้า §13) — รายละเอียดใน `docs/load-test-results.md`: socket 500/500, hold p95 **18.8 ms** ที่ 100 req/s (error 0%), `stall:updated` p95 10 ms (150,000 event ถึงครบ), จองซ้ำ **0**, เกินโควตา **0**; รอบ 2 instance ผ่านเช่นกัน (event ข้าม instance ผ่าน Redis ภายใต้ load)
+- ⚠️ วัดบนเครื่อง dev (Windows 11 client, 20 CPU) ไม่ใช่ VPS 2 vCPU / 4 GB — **ต้องรัน `pnpm test:load` ซ้ำบน VPS ใน Phase 6** (ชี้ DB/Redis ด้วย `LOAD_DATABASE_URL`/`LOAD_REDIS_URL`, เพิ่ม instance ด้วย `LOAD_API_INSTANCES`)
+- เครื่องมือ: `apps/api/scripts/load-test.ts` (DB `*_load` + Redis db 13, seed 1,000 ผู้ค้า/300 ล็อค/รอบเปิดในอีก 40 วินาที, token ลงชื่อด้วย secret เดียวกับ API, เปิด API N instance, เก็บ CPU/RAM + docker stats, ตรวจ SQL) และ `load-test/k6/booking-rush.js` (k6 1.0.0 ผ่าน Docker; Socket.IO ผ่าน `k6/ws` พูด Engine.IO v4 เอง); ผลดิบที่ `load-test/.data/` (gitignore — มี token)
+- แก้ bottleneck: keep-alive 5 s → 65 s (เดิม EOF ~2%), guard ไม่ UPDATE ทุก request, `expireLapsed` UPDATE เดียว, INSERT การจองไม่อ่าน relation ซ้ำ, env `DATABASE_POOL_SIZE`
+- สิ่งที่วัดได้แต่ไม่มีเป้า: ผู้ค้า 500 คนกดพร้อมกันได้คำตอบครบใน ~1.6 วินาที (1 instance p50 1.54 s; 2 instance p50 0.94 s) — คอขวดคือ CPU ของ Node process เดียว (~330 hold/วินาที) ไม่ใช่ pool (10 vs 30 เท่ากัน); emit batching ยังไม่จำเป็น (ปิด socket แล้ว latency เท่าเดิม)
+- เจอระหว่างทดสอบ (สภาพแวดล้อม): Windows client จำกัด listen backlog 200 → `connection refused` เมื่อเปิด 500 connection ในมิลลิวินาทีเดียว — แก้ใน script ให้ใกล้พฤติกรรมจริง (เปิดผังกระจายกัน, กดจองบน keep-alive connection) ไม่ใช่ปัญหาบน Linux/Nginx
+- ข้อเสนอ Phase 6: API 2 instance หลัง Nginx, `DATABASE_POOL_SIZE` × instance ≤ `max_connections`, ตั้ง `--max-old-space-size` (RAM ~500 MB/instance ตอน peak บนเครื่องนี้)
+- ทดสอบปกติยังผ่านทั้งหมด: unit 166 (+1 env), integration 215, E2E 26
 
 ---
 
@@ -769,3 +777,6 @@
 | 2026-10-31 | 4.4 | ✅ DONE | หน้าผังวันขาย (socket อัปเดตผัง, filter โซน, bottom sheet, นับถอยหลังเปิดจอง/hold, ยืนยัน/ยกเลิก, STALL_TAKEN แนะนำล็อคใกล้เคียง), หน้าการจองของฉัน, ปุ่มเลือกวันขายบนหน้าแรก; AC แย่งล็อค 2 คน + เน็ตหลุด 10 วินาที ผ่าน — unit 165 / integration 207 / E2E 25 ผ่าน — ถัดไป: 4.5 Admin Web จัดการการจอง |
 | 2026-10-31 | 4.5 | 🟨 IN PROGRESS | เริ่มหน้าจัดการการจองของ admin (ผัง realtime + ชื่อผู้ค้า, ตาราง, ยกเลิก/จองแทน, export xlsx) + ยกเลิกรอบ/วันขายแล้วยกเลิกการจองที่ค้าง (จาก 3.2) |
 | 2026-10-31 | 4.5 | ✅ DONE | หน้าจัดการการจองของ admin (ผัง realtime + ชื่อผู้จอง, ตาราง, ยกเลิก/จองแทน, export xlsx), ยกเลิกรอบ/วันขายแล้วยกเลิกการจองตาม, ห้ามปิดล็อคที่มีการจอง; AC admin ยกเลิกแล้วผู้ค้าเห็นทันที + audit — unit 165 / integration 215 / E2E 26 ผ่าน — ถัดไป: 4.6 Concurrency & Load Test |
+| 2026-10-31 | 4.6 | 🟨 IN PROGRESS | เริ่ม load test: seed 1,000 ผู้ค้า/300 ล็อค (DB แยก _load), k6 500 socket + ยิง hold ตอนเปิดรอบ, ตรวจ SQL, วัด p95/CPU/RAM |
+| 2026-10-31 | 4.6 | ✅ DONE | load test (k6 + orchestrator `pnpm test:load`): 500 socket, กด hold พร้อมกัน 500 คน + 100 req/s — p95 18.8 ms, event p95 10 ms, จองซ้ำ 0, เกินโควตา 0; แก้ keep-alive EOF, guard UPDATE ทุก request, query ใน hold; ผลที่ docs/load-test-results.md |
+| 2026-10-31 | 4 | ✅ DONE | Realtime Booking ครบ (4.1–4.6) — ถัดไป: 5.1 Payment API + PromptPay QR |

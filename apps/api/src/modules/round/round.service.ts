@@ -136,7 +136,14 @@ export class RoundService {
         marketDate: true,
         isCancelled: true,
         round: {
-          select: { id: true, status: true, openAt: true, closeAt: true, maxStallsPerVendor: true },
+          select: {
+            id: true,
+            name: true,
+            status: true,
+            openAt: true,
+            closeAt: true,
+            maxStallsPerVendor: true,
+          },
         },
       },
     });

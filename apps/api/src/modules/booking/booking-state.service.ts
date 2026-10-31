@@ -52,18 +52,22 @@ export class BookingStateService {
     where: Prisma.BookingWhereInput,
     now: Date,
   ): Promise<BookingEventRow[]> {
-    const data = { status: BookingStatus.EXPIRED, version: { increment: 1 } };
-    const holds = await db.booking.updateManyAndReturn({
-      where: { ...where, status: BookingStatus.HOLD, holdExpiresAt: { lte: now } },
-      data,
+    // UPDATE เดียว (อยู่ใน transaction ของการจองทุกครั้ง — load test 4.6)
+    return db.booking.updateManyAndReturn({
+      where: {
+        AND: [
+          where,
+          {
+            OR: [
+              { status: BookingStatus.HOLD, holdExpiresAt: { lte: now } },
+              { status: BookingStatus.PENDING_PAYMENT, paymentDueAt: { lte: now } },
+            ],
+          },
+        ],
+      },
+      data: { status: BookingStatus.EXPIRED, version: { increment: 1 } },
       select: EVENT_FIELDS,
     });
-    const unpaid = await db.booking.updateManyAndReturn({
-      where: { ...where, status: BookingStatus.PENDING_PAYMENT, paymentDueAt: { lte: now } },
-      data,
-      select: EVENT_FIELDS,
-    });
-    return [...holds, ...unpaid];
   }
 
   /**

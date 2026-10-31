@@ -27,12 +27,20 @@ export class VendorApprovedGuard implements CanActivate {
     const principal = context.switchToHttp().getRequest<Request>().principal;
     if (principal?.actorType !== 'VENDOR') throw new AppException(ErrorCode.FORBIDDEN);
 
-    await this.status.liftExpiredSuspension(principal.id);
-    const vendor = await this.prisma.vendor.findUnique({
+    // อ่านก่อน แล้วเขียนเฉพาะเมื่อการระงับหมดเวลาแล้วจริง (เดิม UPDATE ทุก request — เจอใน load test 4.6)
+    let vendor = await this.prisma.vendor.findUnique({
       where: { id: principal.id },
       select: { status: true, suspendedUntil: true },
     });
     if (!vendor) throw new AppException(ErrorCode.UNAUTHORIZED, 'Vendor account not found');
+    if (
+      vendor.status === 'SUSPENDED' &&
+      vendor.suspendedUntil &&
+      vendor.suspendedUntil <= new Date()
+    ) {
+      await this.status.liftExpiredSuspension(principal.id);
+      vendor = { status: 'APPROVED', suspendedUntil: null };
+    }
 
     if (vendor.status === 'SUSPENDED') {
       throw new AppException(ErrorCode.VENDOR_SUSPENDED, 'Your account is suspended', {

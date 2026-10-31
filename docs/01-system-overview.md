@@ -197,7 +197,9 @@ market-booking/
 │   └── stall-map/               # React component ผังตลาด (SVG) ใช้ทั้ง web/admin — Vite compile จาก source
 ├── docs/
 │   ├── 01-system-overview.md    # ไฟล์นี้
-│   └── 02-development-phases.md
+│   ├── 02-development-phases.md
+│   └── load-test-results.md     # ผล load test (Phase 4.6)
+├── load-test/k6/                # สคริปต์ k6 — รันด้วย `pnpm test:load` (apps/api/scripts/load-test.ts)
 ├── docker/
 │   ├── nginx/nginx.conf
 │   └── docker-compose.prod.yml
@@ -746,6 +748,7 @@ TEST_DATABASE_URL=postgresql://market:market_dev@localhost:5433/market_booking_t
 REDIS_URL=redis://localhost:6379
 # TEST_REDIS_URL=redis://localhost:6379/15
 WORKERS_ENABLED=true     (BullMQ worker + job ประจำใน process นี้; test ปิดไว้)
+# DATABASE_POOL_SIZE=10  (connection pool ต่อ API instance — รวมทุก instance ≤ max_connections ของ Postgres)
 JWT_ACCESS_SECRET=
 JWT_REFRESH_SECRET=
 MINIO_ENDPOINT=localhost
@@ -867,6 +870,10 @@ VITE_LINE_LIFF_ID=        (ฝั่ง web — ว่าง = ซ่อนป�
 | 2026-10-31 | หน้าจัดการการจองของ admin ใช้สิทธิ์ `BOOKINGS_CANCEL` (SUPER_ADMIN/ADMIN/STAFF) สำหรับดู/ยกเลิก/จองแทน/export | งานหน้างานกลุ่มเดียวกัน; FINANCE ดูผ่านรายงาน (Phase 8) |
 | 2026-10-31 | export xlsx ใช้ `exceljs` 4.4 และลง audit log ทุกครั้ง | มีชื่อ+เบอร์ผู้ค้า (ข้อมูลส่วนบุคคล — PDPA); Phase 8 รายงานใช้ library เดียวกัน |
 | 2026-10-31 | ผัง admin โหลดผ่าน REST ทุกครั้งที่ได้ `stall:updated` ของวันนั้น (ไม่แก้ cache จาก event) และแสดงชื่อผู้จองในล็อคด้วย `StallMap.subLabel` | ชื่อผู้ค้าห้ามอยู่ใน event สาธารณะ (§10.3) |
+| 2026-10-31 | load test ใช้ k6 จาก Docker (`grafana/k6:1.0.0`) + orchestrator `pnpm test:load` (DB `*_load`, Redis db 13); Socket.IO ทดสอบผ่าน `k6/ws` โดยพูด Engine.IO v4 เอง | ไม่ต้องติดตั้ง k6 บนเครื่อง; ไม่แตะข้อมูล dev; k6 ไม่มี client Socket.IO ในตัว |
+| 2026-10-31 | HTTP `keepAliveTimeout` 65 s / `headersTimeout` 66 s | ค่าเริ่มต้น 5 s ทำให้ request ล้มแบบ EOF ~2% เมื่อ client ใช้ connection ซ้ำ (load test) — ต้องมากกว่า keepalive ของ Nginx |
+| 2026-10-31 | env `DATABASE_POOL_SIZE` (ค่าเริ่มต้น 10 ตาม pg) และขยายด้วยหลาย API instance แทนการเพิ่ม pool | load test: pool 10 vs 30 ไม่ต่าง (คอขวดคือ CPU ของ Node process เดียว ~330 hold/วินาที), 2 instance ลดเวลาช่วงกดพร้อมกันได้ |
+| 2026-10-31 | `VendorApprovedGuard` อ่านสถานะก่อน แล้วปลดการระงับที่หมดเวลาเฉพาะเมื่อจำเป็น (เดิม UPDATE ทุก request) | ลด write ต่อ request ของผู้ค้าทุกตัว (เจอใน load test) |
 
 ### Open Questions
 - [ ] ใช้กับตลาดเดียวหรือหลายตลาด (ตอนนี้ schema รองรับแล้ว แต่ UI ยังเป็นตลาดเดียว)

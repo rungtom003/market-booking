@@ -21,7 +21,14 @@ import { MarketService } from '../market/market.service';
 import { RoundService } from '../round/round.service';
 import { SettingsService } from '../settings/settings.service';
 import { BookingEvents } from './booking-events';
-import { BOOKING_FIELDS, BookingEventRow, BookingRow, toBooking, toEvent } from './booking-mapper';
+import {
+  BOOKING_FIELDS,
+  BookingEventRow,
+  BookingRow,
+  SCALAR_FIELDS,
+  toBooking,
+  toEvent,
+} from './booking-mapper';
 import { BookingStateService } from './booking-state.service';
 
 const ACTIVE: BookingStatus[] = [...ACTIVE_BOOKING_STATUSES];
@@ -81,10 +88,11 @@ export class BookingService {
         const stall = await tx.stall.findFirst({
           where: { id: stallId, marketId: vendor.marketId },
           select: {
+            code: true,
             isActive: true,
             isReserved: true,
             price: true,
-            zone: { select: { allowedCategoryIds: true } },
+            zone: { select: { name: true, allowedCategoryIds: true } },
             overrides: { where: { marketDayId }, select: { priceOverride: true, isClosed: true } },
           },
         });
@@ -137,10 +145,15 @@ export class BookingService {
             amount: override?.priceOverride ?? stall.price,
             holdExpiresAt: new Date(now.getTime() + holdMinutes * 60_000),
           },
-          select: BOOKING_FIELDS,
+          // ไม่ให้ Prisma อ่าน relation ซ้ำ — ล็อค/วันขาย/รอบอ่านมาแล้วใน transaction นี้ (load test 4.6)
+          select: SCALAR_FIELDS,
         });
         changed.push(booking);
-        return booking;
+        return {
+          ...booking,
+          stall: { code: stall.code, zone: { name: stall.zone.name } },
+          marketDay: { marketDate: day.marketDate, round: { name: day.round.name } },
+        } satisfies BookingRow;
       }, TX_OPTIONS);
 
       this.events.emitChanged(changed.map(toEvent));

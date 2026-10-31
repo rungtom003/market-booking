@@ -55,5 +55,12 @@ export default tseslint.config(
       globals: globals.node,
     },
   },
+  {
+    // k6 (goja) — มี global ของตัวเองแทน Node
+    files: ['load-test/k6/**/*.js'],
+    languageOptions: {
+      globals: { __ENV: 'readonly', __VU: 'readonly', __ITER: 'readonly', open: 'readonly' },
+    },
+  },
   prettier,
 );

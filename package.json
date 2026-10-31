@@ -18,6 +18,7 @@
     "typecheck": "pnpm codegen && pnpm -r typecheck",
     "test": "pnpm codegen && pnpm -r test",
     "test:int": "pnpm codegen && pnpm --filter @market-booking/api test:int",
+    "test:load": "pnpm codegen && pnpm --filter @market-booking/api build && pnpm --filter @market-booking/api exec tsx scripts/load-test.ts",
     "test:e2e": "pnpm codegen && pnpm --filter @market-booking/api build && pnpm --filter @market-booking/e2e test:e2e",
     "prisma": "pnpm --filter @market-booking/api exec prisma",
     "db:migrate": "pnpm --filter @market-booking/api db:migrate",

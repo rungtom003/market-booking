@@ -25,6 +25,7 @@ describe('validateEnv', () => {
     expect(env.RATE_LIMIT_PER_MINUTE).toBe(100);
     expect(env.RATE_LIMIT_DISABLED).toBe(false);
     expect(env.WORKERS_ENABLED).toBe(true);
+    expect(env.DATABASE_POOL_SIZE).toBe(10);
     expect(env.MINIO_PORT).toBe(9000);
     expect(env.SMS_PROVIDER).toBe('mock');
   });
@@ -35,6 +36,13 @@ describe('validateEnv', () => {
     );
     expect(() => validateEnv({ ...validEnv, RATE_LIMIT_DISABLED: 'yes' })).toThrow(
       /RATE_LIMIT_DISABLED/,
+    );
+  });
+
+  it('parses DATABASE_POOL_SIZE (1–100)', () => {
+    expect(validateEnv({ ...validEnv, DATABASE_POOL_SIZE: '25' }).DATABASE_POOL_SIZE).toBe(25);
+    expect(() => validateEnv({ ...validEnv, DATABASE_POOL_SIZE: '0' })).toThrow(
+      /DATABASE_POOL_SIZE/,
     );
   });
 

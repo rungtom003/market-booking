@@ -22,6 +22,8 @@ export const envSchema = z.object({
     .refine((v) => !(v && isProduction), 'RATE_LIMIT_DISABLED cannot be true in production'),
 
   DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }),
+  /** connection pool ต่อ API instance — รวมทุก instance ต้องไม่เกิน max_connections ของ Postgres */
+  DATABASE_POOL_SIZE: z.coerce.number().int().min(1).max(100).default(10),
   REDIS_URL: z.url({ protocol: /^rediss?$/ }),
   /**
    * รัน BullMQ worker + job ประจำ (เช่น กวาดการจองที่หมดเวลา) ใน process นี้

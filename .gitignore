@@ -17,3 +17,6 @@ apps/api/src/generated
 # Playwright
 e2e/test-results
 e2e/playwright-report
+
+# Load test (fixture มี token, ผล k6)
+load-test/.data
