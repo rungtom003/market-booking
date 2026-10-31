@@ -62,7 +62,43 @@ export async function adminRequest(request: APIRequestContext) {
       const res = await request.post(`${API_URL}/admin/vendors/${id}/approve`, { headers });
       expect(res.ok()).toBeTruthy();
     },
+    /** สร้างรอบ + วันขาย แล้วเผยแพร่ — คืน id ไว้ยกเลิกตอนจบ test */
+    async publishRound(input: { name: string; openAt: Date; closeAt: Date; dates: string[] }) {
+      const created = await request.post(`${API_URL}/admin/rounds`, {
+        headers,
+        data: {
+          name: input.name,
+          openAt: input.openAt.toISOString(),
+          closeAt: input.closeAt.toISOString(),
+        },
+      });
+      expect(created.ok()).toBeTruthy();
+      const id = (await created.json()).data.id as string;
+      const days = await request.post(`${API_URL}/admin/rounds/${id}/market-days`, {
+        headers,
+        data: { dates: input.dates },
+      });
+      expect(days.ok(), await days.text()).toBeTruthy();
+      const published = await request.post(`${API_URL}/admin/rounds/${id}/publish`, { headers });
+      expect(published.ok()).toBeTruthy();
+      return id;
+    },
+    async cancelRound(id: string) {
+      await request.post(`${API_URL}/admin/rounds/${id}/cancel`, { headers });
+    },
   };
+}
+
+/** วันที่ (เวลาไทย) อีก `days` วันจากวันนี้ — YYYY-MM-DD */
+export function bangkokDate(days: number): string {
+  return new Date(Date.now() + days * 86_400_000 + 7 * 3_600_000).toISOString().slice(0, 10);
+}
+
+/** "1 วัน 02:03:04" / "00:00:17" → วินาที */
+export function parseCountdown(text: string): number {
+  const m = /(?:(\d+) วัน )?(\d{2}):(\d{2}):(\d{2})/.exec(text);
+  if (!m) throw new Error(`Not a countdown: ${text}`);
+  return Number(m[1] ?? 0) * 86_400 + Number(m[2]) * 3600 + Number(m[3]) * 60 + Number(m[4]);
 }
 
 /** ไม่มี scroll แนวนอน (เนื้อหาไม่ล้นจอ 360px) */

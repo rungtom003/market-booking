@@ -1,4 +1,5 @@
 import type {
+  AddMarketDaysInput,
   AdminLoginResponse,
   AdminUser,
   AdminUserListQuery,
@@ -12,15 +13,22 @@ import type {
   BulkCreateStallsResult,
   CreateAdminUserInput,
   CreateProductCategoryInput,
+  CreateRoundInput,
   CreateStallInput,
   CreateZoneInput,
   PaginatedResponse,
   ProductCategory,
+  Round,
+  RoundDetail,
+  SetStallDayOverrideInput,
   Settings,
   Stall,
+  StallDayOverride,
   SuspendVendorInput,
   UpdateAdminUserInput,
+  UpdateMarketDayInput,
   UpdateProductCategoryInput,
+  UpdateRoundInput,
   UpdateSettingsInput,
   UpdateStallInput,
   UpdateZoneInput,
@@ -114,6 +122,43 @@ export const adminApi = {
     update: (id: string, input: UpdateStallInput) =>
       unwrap(apiClient.patch<ApiResponse<Stall>>(`/admin/stalls/${id}`, input)),
     remove: (id: string) => apiClient.delete(`/admin/stalls/${id}`),
+  },
+
+  rounds: {
+    list: () => unwrap(apiClient.get<ApiResponse<Round[]>>('/admin/rounds')),
+    get: (id: string) => unwrap(apiClient.get<ApiResponse<RoundDetail>>(`/admin/rounds/${id}`)),
+    create: (input: CreateRoundInput) =>
+      unwrap(apiClient.post<ApiResponse<RoundDetail>>('/admin/rounds', input)),
+    update: (id: string, input: UpdateRoundInput) =>
+      unwrap(apiClient.patch<ApiResponse<RoundDetail>>(`/admin/rounds/${id}`, input)),
+    remove: (id: string) => apiClient.delete(`/admin/rounds/${id}`),
+    publish: (id: string) =>
+      unwrap(apiClient.post<ApiResponse<RoundDetail>>(`/admin/rounds/${id}/publish`)),
+    cancel: (id: string) =>
+      unwrap(apiClient.post<ApiResponse<RoundDetail>>(`/admin/rounds/${id}/cancel`)),
+    addDays: (id: string, input: AddMarketDaysInput) =>
+      unwrap(apiClient.post<ApiResponse<RoundDetail>>(`/admin/rounds/${id}/market-days`, input)),
+    updateDay: (id: string, dayId: string, input: UpdateMarketDayInput) =>
+      unwrap(
+        apiClient.patch<ApiResponse<RoundDetail>>(
+          `/admin/rounds/${id}/market-days/${dayId}`,
+          input,
+        ),
+      ),
+    removeDay: (id: string, dayId: string) =>
+      apiClient.delete(`/admin/rounds/${id}/market-days/${dayId}`),
+  },
+
+  marketDays: {
+    overrides: (id: string) =>
+      unwrap(apiClient.get<ApiResponse<StallDayOverride[]>>(`/admin/market-days/${id}/overrides`)),
+    setOverride: (id: string, stallId: string, input: SetStallDayOverrideInput) =>
+      unwrap(
+        apiClient.put<ApiResponse<StallDayOverride | null>>(
+          `/admin/market-days/${id}/overrides/${stallId}`,
+          input,
+        ),
+      ),
   },
 
   users: {

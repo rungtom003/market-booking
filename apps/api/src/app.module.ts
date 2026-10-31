@@ -16,6 +16,7 @@ import { HealthModule } from './modules/health/health.module';
 import { MarketModule } from './modules/market/market.module';
 import { MarketSetupModule } from './modules/market-setup/market-setup.module';
 import { NotifyModule } from './modules/notify/notify.module';
+import { RoundModule } from './modules/round/round.module';
 import { SettingsModule } from './modules/settings/settings.module';
 import { StorageModule } from './modules/storage/storage.module';
 import { VendorModule } from './modules/vendor/vendor.module';
@@ -48,6 +49,7 @@ import { REDIS, RedisModule } from './redis/redis.module';
     SettingsModule,
     VendorModule,
     MarketSetupModule,
+    RoundModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

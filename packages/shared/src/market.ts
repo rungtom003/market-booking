@@ -80,7 +80,7 @@ const metersSchema = z
   .number({ error: 'กรุณากรอกตัวเลข' })
   .min(0.1, 'ต้องมากกว่า 0')
   .max(999, 'มากเกินไป');
-const priceSchema = z
+export const priceSchema = z
   .number({ error: 'กรุณากรอกตัวเลข' })
   .min(0, 'ราคาต้องไม่ติดลบ')
   .max(1_000_000, 'ราคาสูงเกินไป');

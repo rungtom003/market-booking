@@ -33,6 +33,16 @@ export default async function globalSetup(): Promise<void> {
   execSync('pnpm exec prisma migrate deploy', { cwd: `${ROOT}/apps/api`, env, stdio: 'inherit' });
   execSync('pnpm exec tsx prisma/seed.ts', { cwd: `${ROOT}/apps/api`, env, stdio: 'inherit' });
 
+  // รอบจาก E2E ครั้งก่อนที่ค้าง (test ล้มก่อนเก็บกวาด) — ยกเลิกทิ้ง ไม่ให้วันขายชนหรือโผล่ใน /rounds/current
+  const db = new Client({ connectionString: E2E_DATABASE_URL });
+  await db.connect();
+  try {
+    await db.query("UPDATE booking_rounds SET status = 'CANCELLED' WHERE status <> 'CANCELLED'");
+    await db.query('UPDATE market_days SET is_cancelled = true WHERE NOT is_cancelled');
+  } finally {
+    await db.end();
+  }
+
   const redis = new Redis(E2E_REDIS_URL);
   try {
     await redis.flushdb();

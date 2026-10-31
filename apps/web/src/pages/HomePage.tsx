@@ -2,6 +2,7 @@ import { Link } from 'react-router';
 import type { VendorProfile } from '@market-booking/shared';
 import { useMyProfile } from '../api/vendor';
 import { Layout } from '../components/Layout';
+import { RoundCard } from '../components/RoundCard';
 import { Alert, Button, Card, Spinner, linkButtonClass } from '../components/ui';
 import { errorMessage } from '../lib/errors';
 import { formatPhone, formatThaiDateTime } from '../lib/format';
@@ -89,8 +90,9 @@ function StatusCard({ vendor }: { vendor: VendorProfile }) {
       return (
         <div className="flex flex-col gap-3">
           <Alert tone="success" title="บัญชีได้รับการอนุมัติแล้ว">
-            ระบบจองล็อคจะเปิดให้ใช้งานเร็วๆ นี้ ดูผังตลาดไว้ก่อนได้
+            ดูรอบการจองและผังตลาดได้ด้านล่าง
           </Alert>
+          <RoundCard />
           <Link to="/map" className={linkButtonClass}>
             ดูผังตลาด
           </Link>

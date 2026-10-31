@@ -6,6 +6,7 @@ export * from './error-messages.th.js';
 export * from './market.js';
 export * from './pagination.js';
 export * from './permissions.js';
+export * from './round.js';
 export * from './settings.js';
 export * from './socket-events.js';
 export * from './vendor.js';

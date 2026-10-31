@@ -1,4 +1,5 @@
 import type { ErrorCode } from './error-codes.js';
+import { formatIsoDateTh } from './round.js';
 
 type Details = Record<string, unknown> | undefined;
 
@@ -38,6 +39,16 @@ export const ERROR_MESSAGES_TH: Record<ErrorCode, string | ((details: Details) =
     return `รหัสล็อคซ้ำกับที่มีอยู่แล้ว: ${shown}${codes.length > 5 ? ` และอีก ${codes.length - 5} รายการ` : ''}`;
   },
   RESOURCE_IN_USE: 'ลบไม่ได้เพราะมีข้อมูลที่ใช้งานอยู่',
+  MARKET_DATE_TAKEN: (d) => {
+    const dates = Array.isArray(d?.dates) ? (d.dates as string[]) : [];
+    if (dates.length === 0) return 'วันขายนี้มีอยู่แล้ว';
+    const shown = dates
+      .slice(0, 5)
+      .map((date) => formatIsoDateTh(date))
+      .join(', ');
+    return `วันขายซ้ำกับรอบที่มีอยู่แล้ว: ${shown}${dates.length > 5 ? ` และอีก ${dates.length - 5} วัน` : ''}`;
+  },
+  ROUND_ALREADY_OPENED: 'รอบนี้เปิดจองแล้ว แก้เวลาเปิดจองไม่ได้',
   UPLOAD_INVALID: 'ไฟล์รูปไม่ถูกต้อง (รองรับ JPG, PNG, WebP ไม่เกิน 5 MB) กรุณาอัปโหลดใหม่',
 
   ROUND_NOT_OPEN: 'ยังไม่อยู่ในช่วงเวลาเปิดจอง',

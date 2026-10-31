@@ -159,6 +159,7 @@ test.describe('Admin: ตั้งค่าและสิทธิ์', () => {
     await expect(staff.getByRole('link', { name: 'ตั้งค่าระบบ' })).toHaveCount(0);
     await expect(staff.getByRole('link', { name: 'ผู้ดูแลระบบ' })).toHaveCount(0);
     await expect(staff.getByRole('link', { name: 'ล็อคและผังตลาด' })).toHaveCount(0);
+    await expect(staff.getByRole('link', { name: 'รอบการจอง' })).toHaveCount(0);
 
     await staff.goto(`${ADMIN_URL}/settings`);
     await expect(staff.getByText('คุณไม่มีสิทธิ์เข้าถึงหน้านี้')).toBeVisible();

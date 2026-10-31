@@ -6,6 +6,9 @@ import { AuthBootstrap, Protected } from './components/guards';
 import { AdminUsersPage } from './pages/AdminUsersPage';
 import { HomePage } from './pages/HomePage';
 import { LoginPage } from './pages/LoginPage';
+import { MarketDayPage } from './pages/MarketDayPage';
+import { RoundDetailPage } from './pages/RoundDetailPage';
+import { RoundsPage } from './pages/RoundsPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { StallsPage } from './pages/StallsPage';
 import { VendorsPage } from './pages/VendorsPage';
@@ -30,6 +33,30 @@ export function App() {
             element={
               <Protected permission={Permission.VENDORS_REVIEW}>
                 <VendorsPage />
+              </Protected>
+            }
+          />
+          <Route
+            path="/rounds"
+            element={
+              <Protected permission={Permission.ROUNDS_MANAGE}>
+                <RoundsPage />
+              </Protected>
+            }
+          />
+          <Route
+            path="/rounds/:id"
+            element={
+              <Protected permission={Permission.ROUNDS_MANAGE}>
+                <RoundDetailPage />
+              </Protected>
+            }
+          />
+          <Route
+            path="/rounds/:id/days/:dayId"
+            element={
+              <Protected permission={Permission.ROUNDS_MANAGE}>
+                <MarketDayPage />
               </Protected>
             }
           />

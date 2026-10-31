@@ -21,13 +21,13 @@ export default defineConfig({
     {
       // แอปผู้ค้า — เป้าหมาย Overview §13: ใช้งานได้ดีที่ความกว้าง 360px
       name: 'vendor-mobile-360',
-      testMatch: /(registration|market-map)\.spec\.ts/,
+      testMatch: /(registration|market-map|round-countdown)\.spec\.ts/,
       use: { ...devices['Pixel 5'], viewport: { width: 360, height: 740 } },
     },
     {
       // แอป admin — desktop-first
       name: 'admin-desktop',
-      testMatch: /admin(-market)?\.spec\.ts/,
+      testMatch: /admin(-market|-rounds)?\.spec\.ts/,
       use: { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 800 } },
     },
   ],

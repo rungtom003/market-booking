@@ -258,7 +258,8 @@ model MarketDay {
   bookings  Booking[]
   waitlists Waitlist[]
 
-  @@unique([marketId, marketDate])
+  /// วันที่ยกเลิกแล้ว (รวมวันของรอบที่ยกเลิก) ไม่นับ — ใช้วันเดิมในรอบใหม่ได้
+  @@unique([marketId, marketDate], map: "uq_market_day_date", where: raw("(NOT is_cancelled)"))
   @@index([roundId])
   @@map("market_days")
 }

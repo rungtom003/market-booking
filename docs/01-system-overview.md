@@ -171,6 +171,7 @@ market-booking/
 │   │   │       ├── settings/
 │   │   │       ├── market/      # ตลาดหลัก (MarketService)
 │   │   │       ├── market-setup/ # product categories, zones, stalls, ผังตลาด
+│   │   │       ├── round/        # รอบการจอง, วันขาย, override ล็อครายวัน, /rounds/current
 │   │   │       ├── round/       # booking_rounds, market_days
 │   │   │       ├── booking/
 │   │   │       ├── payment/
@@ -318,12 +319,12 @@ modules/booking/
 |---|---|---|
 | market_id | uuid FK | เก็บซ้ำกับ round เพื่อบังคับ unique (market, date) ระดับ DB |
 | round_id | uuid FK | |
-| market_date | date | unique ต่อ (market, date) |
+| market_date | date | unique ต่อ (market, date) เฉพาะวันที่ไม่ยกเลิก (partial index `uq_market_day_date`) |
 | checkin_open_at, checkin_close_at | timestamptz null | ใช้ตัดสิน No-show |
 | is_cancelled | boolean | |
 
 **`stall_day_overrides`** (optional) — stall_id, market_day_id, price_override, is_closed
-> ใช้ปิดล็อคหรือเปลี่ยนราคาเฉพาะวัน
+> ใช้ปิดล็อคหรือเปลี่ยนราคาเฉพาะวัน — ตั้งค่าว่างทั้งคู่ (`price_override` null + `is_closed` false) = ลบแถว
 
 **`bookings`**
 | Column | Type | หมายเหตุ |
@@ -448,7 +449,9 @@ DRAFT ── publish ──► PUBLISHED ── cancel ──► CANCELLED
                         ├─ open_at ≤ now < close_at → OPEN
                         └─ now ≥ close_at           → CLOSED
 ```
-- แก้ `open_at` ได้เฉพาะก่อนเปิดจอง; แก้ `close_at` ได้ตลอด (ต้องลง Audit Log)
+- แก้ `open_at` ได้เฉพาะก่อนเปิดจอง (เปิดแล้ว → `ROUND_ALREADY_OPENED`; รอบที่เผยแพร่แล้วต้องตั้งเป็นเวลาในอนาคต); แก้ `close_at` ได้ตลอดแต่ต้อง ≤ วันขายวันแรก (ต้องลง Audit Log)
+- publish ได้เมื่อมีวันขายอย่างน้อย 1 วัน และ `close_at` ยังไม่ผ่าน; ยกเลิกได้เฉพาะ PUBLISHED (วันขายทุกวันถูกยกเลิกตาม — วันที่เหล่านั้นใช้ในรอบใหม่ได้); ลบได้เฉพาะ DRAFT
+- `open_at` พอดี = OPEN, `close_at` พอดี = CLOSED — คำนวณที่ `roundPhase()` (`packages/shared/src/round.ts`) และ `RoundService.getPhase`; ตอนจองใช้ `RoundService.assertRoundOpen(marketDayId)` → `ROUND_NOT_OPEN`
 
 ---
 
@@ -474,7 +477,7 @@ DRAFT ── publish ──► PUBLISHED ── cancel ──► CANCELLED
 2. เพิ่มวันขาย (เลือกหลายวันจากปฏิทิน หรือสร้างแบบ "ทุกวันเสาร์-อาทิตย์ของเดือน")
 3. ตั้ง override ล็อคเฉพาะวัน (ถ้ามี)
 4. Publish → ผู้ค้าเห็นรอบที่กำลังจะเปิดพร้อม Countdown → ระบบส่งแจ้งเตือนก่อนเปิด X นาที (ตาม setting)
-- Validation: `open_at < close_at`, `close_at` ≤ วันขายวันแรก, วันขายต้องไม่ซ้ำกับรอบอื่น
+- Validation: `open_at < close_at`, `close_at` ≤ วันขายวันแรก (00:00 ตาม `markets.timezone`), วันขายต้องไม่ใช่วันที่ผ่านมาแล้ว และไม่ซ้ำกับวันที่ยังไม่ยกเลิกของรอบใดๆ (`MARKET_DATE_TAKEN`)
 
 ### 9.4 จองล็อค (Realtime)
 ```
@@ -588,7 +591,7 @@ Vendor กด "ยืนยันการจอง" → POST /bookings/:id/conf
 | GET / PATCH | `/vendors/me` | แก้ไขข้อมูล (REJECTED → ส่งใหม่เป็น PENDING) |
 | POST | `/vendors/me/images` | presigned upload — ได้ `{ key, url, headers }` แล้ว PUT ไฟล์ตรงไป MinIO แล้วส่ง `key` ไปกับ `PATCH /vendors/me` |
 | GET | `/market/layout` | ผังตลาด (โซน + ล็อคที่เปิดใช้งาน) — ดูได้ก่อนเปิดรอบ (ผู้ค้า APPROVED) |
-| GET | `/rounds/current` | รอบที่กำลังจะเปิด/เปิดอยู่ |
+| GET | `/rounds/current` | ผู้ค้า APPROVED — `{ serverTime, round }`: รอบที่เปิดอยู่ (ปิดก่อนขึ้นก่อน) หรือรอบถัดไปที่ใกล้ที่สุด, `round: null` ถ้าไม่มี; `serverTime` ใช้หา offset ให้ Countdown |
 | GET | `/market-days/:id/stalls` | snapshot ผัง + สถานะ (3.1: ราคา/ปิดล็อคตาม override, AVAILABLE/UNAVAILABLE; 4.1 เพิ่มสถานะจองจริง) |
 | POST | `/bookings/hold` | `{ stallId, marketDayId }` |
 | POST | `/bookings/:id/confirm` | |
@@ -611,8 +614,12 @@ Vendor กด "ยืนยันการจอง" → POST /bookings/:id/conf
 | CRUD | `/admin/zones`, `/admin/stalls`, `/admin/product-categories` (GET คืนทั้งหมดไม่แบ่งหน้า, DELETE → 204) |
 | POST | `/admin/stalls/bulk` (prefix + ช่วงเลข เช่น A1–A20 ≤ 200 ล็อค, วางเป็นตาราง; รหัสซ้ำตัวเดียว = ไม่สร้างเลย) |
 | PUT | `/admin/stalls/layout` (บันทึกตำแหน่งจาก Map Editor ทั้งชุด) |
-| CRUD | `/admin/rounds`, `/admin/rounds/:id/market-days` |
-| POST | `/admin/rounds/:id/publish` · `/cancel` |
+| CRUD | `/admin/rounds` (GET คืนทั้งหมด ใหม่สุดก่อน; GET `:id` รวมวันขาย; DELETE เฉพาะ DRAFT → 204) |
+| POST | `/admin/rounds/:id/publish` · `/cancel` (200 + รอบ) |
+| POST | `/admin/rounds/:id/market-days` (`{ dates: [YYYY-MM-DD] }` ≤ 62 วัน — วันที่เคยยกเลิกในรอบนี้ถูกคืนสถานะ) |
+| PATCH / DELETE | `/admin/rounds/:id/market-days/:dayId` (PATCH `{ isCancelled }`; DELETE เฉพาะวันที่ไม่มีการจอง/คิว) |
+| GET | `/admin/market-days/:id/overrides` |
+| PUT / DELETE | `/admin/market-days/:id/overrides/:stallId` (PUT `{ priceOverride, isClosed }`; ค่าว่างทั้งคู่ = ลบ → `data: null`) |
 | GET | `/admin/bookings?marketDayId=&status=` |
 | POST | `/admin/bookings/:id/cancel` |
 | POST | `/admin/bookings` (จองแทนผู้ค้า) |
@@ -634,6 +641,8 @@ Code ของผู้ค้า (เพิ่มใน Phase 2.1): `PHONE_ALREA
 
 Code ของการตั้งค่าตลาด (เพิ่มใน Phase 3.1): `STALL_CODE_TAKEN` (`details.codes`), `RESOURCE_IN_USE` (ลบไม่ได้เพราะมีข้อมูลอ้างถึง — `details` เป็นจำนวน เช่น `{ bookings, waitlists }`)
 
+Code ของรอบการจอง (เพิ่มใน Phase 3.2): `MARKET_DATE_TAKEN` (`details.dates`), `ROUND_ALREADY_OPENED`; publish/cancel/ลบ/แก้รอบผิดสถานะ → `INVALID_STATE_TRANSITION` (`details.status`); `ROUND_NOT_OPEN` มี `details: { phase, openAt, closeAt, marketDayCancelled }`
+
 `OTP_INVALID` มี `details.attemptsLeft`; ขอ OTP ถี่เกิน → `RATE_LIMITED` พร้อม `details.retryAfterSeconds`
 
 | HTTP | Code |
@@ -642,7 +651,7 @@ Code ของการตั้งค่าตลาด (เพิ่มใน 
 | 401 | `UNAUTHORIZED` (token หาย/ผิด/หมดอายุ → client ลอง refresh), `INVALID_CREDENTIALS` |
 | 403 | `FORBIDDEN`, `VENDOR_NOT_APPROVED`, `VENDOR_SUSPENDED` |
 | 404 | `NOT_FOUND` |
-| 409 | `CONFLICT`, `USERNAME_TAKEN`, `LINE_ALREADY_LINKED`, `PHONE_ALREADY_REGISTERED`, `STALL_CODE_TAKEN`, `RESOURCE_IN_USE`, `ROUND_NOT_OPEN`, `STALL_TAKEN`, `STALL_UNAVAILABLE`, `QUOTA_EXCEEDED`, `HOLD_EXPIRED`, `INVALID_STATE_TRANSITION`, `CANCEL_WINDOW_PASSED` |
+| 409 | `CONFLICT`, `USERNAME_TAKEN`, `LINE_ALREADY_LINKED`, `PHONE_ALREADY_REGISTERED`, `STALL_CODE_TAKEN`, `RESOURCE_IN_USE`, `MARKET_DATE_TAKEN`, `ROUND_ALREADY_OPENED`, `ROUND_NOT_OPEN`, `STALL_TAKEN`, `STALL_UNAVAILABLE`, `QUOTA_EXCEEDED`, `HOLD_EXPIRED`, `INVALID_STATE_TRANSITION`, `CANCEL_WINDOW_PASSED` |
 | 422 | `CATEGORY_NOT_ALLOWED` |
 | 429 | `RATE_LIMITED`, `ACCOUNT_LOCKED` |
 | 500 | `INTERNAL_ERROR` (ไม่ส่งข้อความจริงออกไป — ดูใน log ด้วย `x-request-id`) |
@@ -821,6 +830,11 @@ VITE_LINE_LIFF_ID=        (ฝั่ง web — ว่าง = ซ่อนป�
 | 2026-10-31 | ลบล็อค/โซน/ประเภทที่มีข้อมูลอ้างถึงไม่ได้ (`RESOURCE_IN_USE`) — ล็อคที่เคยมีการจองให้ปิด `is_active` แทน; ลบประเภทแล้วเอาออกจาก `zones.allowed_category_ids` อัตโนมัติ | เก็บประวัติการจอง; array ไม่มี FK จึงล้างเองใน transaction |
 | 2026-10-31 | รหัสล็อคเก็บตัวพิมพ์ใหญ่ (trim + uppercase) และเรียงแบบตัวเลข (A2 ก่อน A10) | กัน `a1`/`A1` ซ้ำกันทั้งที่ unique index เป็น case-sensitive |
 | 2026-10-31 | env `RATE_LIMIT_DISABLED` (ปิด rate limit ต่อ IP) ใช้กับ E2E — schema ห้าม `true` ใน production | E2E ยิงทุก request จาก IP เดียว เกิน limit login/OTP 10 ครั้ง/นาที; limit ต่อบัญชี/เบอร์ใน Redis ยังทำงาน |
+| 2026-10-31 | unique วันขาย `(market_id, market_date)` เป็น partial index `WHERE NOT is_cancelled`; ยกเลิกรอบ = ยกเลิกทุกวันขายของรอบ | ยกเลิกรอบแล้วต้องสร้างวันเดิมในรอบใหม่ได้ (Agent Notes 1.1) โดย DB ยังกันวันซ้ำของรอบที่ใช้งานอยู่ |
+| 2026-10-31 | `GET /rounds/current` คืน `serverTime`; หน้าเว็บคำนวณ offset = serverTime − กึ่งกลางเวลาส่ง/รับ แล้วนับถอยหลังจาก `Date.now() + offset` | Countdown ตรงเวลา server แม้นาฬิกาเครื่องผิด (คลาดไม่เกินครึ่ง RTT); ถึงเวลาแล้วถาม server อีกครั้ง (server ตัดสินสถานะเสมอ) |
+| 2026-10-31 | ขอบเวลา: `open_at` พอดี = OPEN, `close_at` พอดี = CLOSED; `close_at` ≤ 00:00 ของวันขายวันแรกตาม `markets.timezone` | ตรงกับ §8.3; ใช้เวลาท้องถิ่นของตลาดไม่ใช่ UTC |
+| 2026-10-31 | หน้า admin กรอก/แสดงเวลารอบเป็นเวลาไทย (UTC+7) เสมอ ไม่ขึ้นกับ timezone ของเครื่อง | ตลาดอยู่ไทย และ `formatDateTime` แสดง Asia/Bangkok อยู่แล้ว — กันกรอกเพี้ยนเมื่อเครื่อง admin ตั้ง timezone อื่น |
+| 2026-10-31 | override ล็อครายวันอยู่ที่ `/admin/market-days/:id/overrides/:stallId` (PUT แบบ upsert) | ตั้งทีละล็อคจากผังของวันนั้น; ค่าว่าง = ลบ ทำให้ไม่มีแถวค้างที่ไม่มีผล |
 
 ### Open Questions
 - [ ] ใช้กับตลาดเดียวหรือหลายตลาด (ตอนนี้ schema รองรับแล้ว แต่ UI ยังเป็นตลาดเดียว)

@@ -29,6 +29,12 @@ export const ErrorCode = {
   /** ลบไม่ได้เพราะมีข้อมูลอื่นอ้างถึง (เช่น ล็อคที่มีประวัติการจอง) — `details` บอกจำนวนที่อ้างถึง */
   RESOURCE_IN_USE: 'RESOURCE_IN_USE',
 
+  // รอบการจอง
+  /** วันขายซ้ำกับวันที่มีอยู่แล้ว (รอบนี้หรือรอบอื่นที่ยังไม่ยกเลิก) — `details.dates` (YYYY-MM-DD) */
+  MARKET_DATE_TAKEN: 'MARKET_DATE_TAKEN',
+  /** แก้เวลาเปิดจองหลังรอบเปิดจองแล้วไม่ได้ (Overview §8.3) */
+  ROUND_ALREADY_OPENED: 'ROUND_ALREADY_OPENED',
+
   // ธุรกิจ
   ROUND_NOT_OPEN: 'ROUND_NOT_OPEN',
   STALL_TAKEN: 'STALL_TAKEN',

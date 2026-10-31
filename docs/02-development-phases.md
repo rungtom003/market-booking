@@ -54,9 +54,9 @@
 | 2.1 | ↳ Vendor API & File Upload | ✅ DONE | 2026-10-31 | 2026-10-31 |
 | 2.2 | ↳ Vendor Web: สมัครสมาชิก | ✅ DONE | 2026-10-31 | 2026-10-31 |
 | 2.3 | ↳ Admin Web: Shell + อนุมัติสมาชิก + Settings | ✅ DONE | 2026-10-31 | 2026-10-31 |
-| 3 | Market Setup | 🟨 IN PROGRESS | 2026-10-31 | |
+| 3 | Market Setup | ✅ DONE | 2026-10-31 | 2026-10-31 |
 | 3.1 | ↳ Zones, Categories, Stalls (API + Admin UI) | ✅ DONE | 2026-10-31 | 2026-10-31 |
-| 3.2 | ↳ Booking Rounds & Market Days (API + Admin UI) | ⬜ TODO | | |
+| 3.2 | ↳ Booking Rounds & Market Days (API + Admin UI) | ✅ DONE | 2026-10-31 | 2026-10-31 |
 | 4 | Realtime Booking ⭐ | ⬜ TODO | | |
 | 4.1 | ↳ Booking Core API + Concurrency | ⬜ TODO | | |
 | 4.2 | ↳ Expiry Worker (BullMQ) | ⬜ TODO | | |
@@ -153,7 +153,7 @@
 - Enum มี 2 ชุด (Prisma + shared) — `src/prisma/enums.spec.ts` ตรวจว่าตรงกัน แก้ enum ต้องแก้ทั้งสองที่
 - Integration test: helper `createTestPrisma()`/`truncateAll()` ใน `test/integration/test-db.ts`; ไฟล์ `*.int-spec.ts`; ใช้ DB `market_booking_test` (กันรันบน DB ที่ชื่อไม่ลงท้าย `_test`) — Phase 4.1 ใช้โครงนี้ทำ concurrent test ได้เลย
 - Postgres ของ docker-compose ย้ายไป host port **5433** เพราะเครื่องนี้มี PostgreSQL ของ Windows ฟัง 5432 อยู่ (ทำให้ `P1000` auth failed)
-- Phase 3.2: `market_days` unique (market_id, market_date) ครอบคลุมรอบที่ CANCELLED ด้วย — ถ้าต้องให้ใช้วันซ้ำได้หลังยกเลิกรอบ ต้องเปลี่ยนเป็น partial unique
+- Phase 3.2: `market_days` unique (market_id, market_date) ครอบคลุมรอบที่ CANCELLED ด้วย — ถ้าต้องให้ใช้วันซ้ำได้หลังยกเลิกรอบ ต้องเปลี่ยนเป็น partial unique _(แก้แล้วใน 3.2: `uq_market_day_date WHERE NOT is_cancelled`)_
 
 ### 1.2 Core Infrastructure
 **สถานะ:** ✅ DONE · **Dependencies:** 1.1 · **เริ่ม:** 2026-10-31 · **เสร็จ:** 2026-10-31
@@ -356,7 +356,7 @@
 ---
 
 ## Phase 3 — Market Setup
-**สถานะ:** 🟨 IN PROGRESS · **Dependencies:** Phase 2
+**สถานะ:** ✅ DONE · **Dependencies:** Phase 2
 
 ### 3.1 Zones, Categories, Stalls
 **สถานะ:** ✅ DONE · **Dependencies:** 2.3 · **เริ่ม:** 2026-10-31 · **เสร็จ:** 2026-10-31
@@ -385,22 +385,35 @@
 - ยังไม่ทำ (ตามแผน): แก้ตำแหน่งด้วยการลากบนผัง (9.1), `stall_day_overrides` API (3.2), สถานะจองบนผัง (4.1/4.4)
 
 ### 3.2 Booking Rounds & Market Days
-**สถานะ:** ⬜ TODO · **Dependencies:** 3.1 · **เริ่ม:** – · **เสร็จ:** –
+**สถานะ:** ✅ DONE · **Dependencies:** 3.1 · **เริ่ม:** 2026-10-31 · **เสร็จ:** 2026-10-31
 
 **Tasks**
-- [ ] CRUD `/admin/rounds`, `/admin/rounds/:id/market-days`, publish/cancel
-- [ ] Validation ตาม Overview §9.3 (เวลา, วันซ้ำ, แก้ open_at หลังเปิดไม่ได้)
-- [ ] `RoundService.getPhase(round, now)` → `UPCOMING | OPEN | CLOSED` + `assertRoundOpen(marketDayId)` (unit test ครอบคลุมขอบเวลา)
-- [ ] `stall_day_overrides` API (ปิดล็อค/เปลี่ยนราคาเฉพาะวัน)
-- [ ] `GET /rounds/current` สำหรับผู้ค้า
-- [ ] Admin UI: ฟอร์มรอบ + ปฏิทินเลือกวันขาย + ตัวช่วย "ทุกเสาร์-อาทิตย์ของเดือน"
-- [ ] Vendor UI: การ์ดรอบที่กำลังจะเปิด + Countdown (ใช้ offset จากเวลา server)
+- [x] CRUD `/admin/rounds`, `/admin/rounds/:id/market-days`, publish/cancel
+- [x] Validation ตาม Overview §9.3 (เวลา, วันซ้ำ, แก้ open_at หลังเปิดไม่ได้)
+- [x] `RoundService.getPhase(round, now)` → `UPCOMING | OPEN | CLOSED` + `assertRoundOpen(marketDayId)` (unit test ครอบคลุมขอบเวลา)
+- [x] `stall_day_overrides` API (ปิดล็อค/เปลี่ยนราคาเฉพาะวัน)
+- [x] `GET /rounds/current` สำหรับผู้ค้า
+- [x] Admin UI: ฟอร์มรอบ + ปฏิทินเลือกวันขาย + ตัวช่วย "ทุกเสาร์-อาทิตย์ของเดือน"
+- [x] Vendor UI: การ์ดรอบที่กำลังจะเปิด + Countdown (ใช้ offset จากเวลา server)
 
 **Acceptance Criteria**
 - เวลา server ก่อน `open_at` 1 วินาที → `ROUND_NOT_OPEN`; ที่ `open_at` พอดี → OPEN
 - Countdown ผู้ค้าคลาดจากเวลา server ไม่เกิน 1 วินาทีแม้นาฬิกาเครื่องผิด
 
-**Agent Notes:** –
+**Agent Notes:**
+- ✅ AC ข้อ 1: unit `round-rules.spec.ts` (`roundPhase` ก่อน open_at 1 ms/1 วินาที = UPCOMING, open_at พอดี = OPEN, close_at พอดี = CLOSED; `assertRoundOpen` กับ mock DB) + integration `rounds.int-spec.ts` (`assertRoundOpen(dayId, { now })` กับ DB จริง: ก่อน open_at 1 วินาที → `ROUND_NOT_OPEN`, open_at พอดี → ผ่าน)
+- ✅ AC ข้อ 2: E2E `round-countdown.spec.ts` (จอ 360px) ตั้งนาฬิกาเบราว์เซอร์เร็วไป 3 ชม. (`page.clock.install`) → ค่าที่ Countdown แสดงคลาดจากเวลา server ≤ 1 วินาที (อ่าน 3 ครั้ง) แล้วเปลี่ยนเป็น "เปิดจองแล้ว" เมื่อถึง open_at
+- API (`apps/api/src/modules/round/`, สิทธิ์ `ROUNDS_MANAGE`): `RoundService` (CRUD, publish/cancel แบบ `UPDATE … WHERE status = เดิม`, `getPhase`, `assertRoundOpen(marketDayId, { marketId?, now?, db? })` — **4.1 เรียกใน transaction ของ hold ได้เลย** คืน day + round รวม `maxStallsPerVendor`), `MarketDayService` (เพิ่ม/ยกเลิก/คืนสถานะ/ลบวัน, override รายวัน); ผู้ค้า `GET /rounds/current`; audit: `round.*`, `market_day.*`, `stall_day_override.set/delete`
+- migration `20261031120000_market_day_partial_unique`: unique วันขายไม่นับวันที่ยกเลิก — ยกเลิกรอบแล้วสร้างวันเดิมในรอบใหม่ได้; P2002 → `MARKET_DATE_TAKEN`
+- error ใหม่: `MARKET_DATE_TAKEN` (`details.dates`), `ROUND_ALREADY_OPENED`; ผิดสถานะ → `INVALID_STATE_TRANSITION`; validation ธุรกิจ (close_at เกินวันแรก, วันที่ผ่านมาแล้ว, publish ไม่มีวัน) ส่งเป็น `VALIDATION_ERROR` รายฟิลด์ (`closeAt`, `openAt`, `dates`, `marketDays`) ให้หน้า admin แสดงได้ตรงจุด
+- เวลาตลาด: `common/zoned-date.ts` (`zonedDayStart`, `zonedDate`) ใช้ `markets.timezone` ผ่าน Intl (รองรับ DST)
+- shared `round.ts`: schema, `roundPhase`, `weekendDatesOfMonth`, `estimateClockOffset`, `formatIsoDateTh` — ใช้ทั้ง API/admin/web
+- หน้า admin: `/rounds` (รายการ + สร้าง), `/rounds/:id` (แก้/เผยแพร่/ยกเลิก/ลบ + ตารางวันขาย + ปฏิทินเลือกหลายวัน + "เลือกเสาร์-อาทิตย์ทั้งเดือน"), `/rounds/:id/days/:dayId` (ผัง StallMap คลิกล็อคเพื่อปิด/ตั้งราคาเฉพาะวัน); ช่องเวลาเป็นเวลาไทยเสมอ และแก้รอบส่งเฉพาะช่องที่เปลี่ยน (datetime-local ละเอียดแค่นาที ส่งค่าเดิมกลับจะกลายเป็น "แก้ open_at")
+- หน้าผู้ค้า: การ์ดรอบบนหน้าแรก (`components/RoundCard.tsx`) + `lib/server-clock.ts` (`useNow` timer เดียว 250 ms, `useCountdown`, `formatCountdown`) — **4.4 ใช้ `useCountdown` + `clockOffsetMs` จาก `useCurrentRound` นับเวลา hold ได้เลย**
+- E2E: global setup ยกเลิกรอบที่ค้างจากรอบก่อน (DB ของ E2E ไม่ถูกล้าง); `admin-rounds.spec.ts` ครบ flow สร้าง → ปฏิทิน → เผยแพร่ → ปิด A1/ราคา B1 → ยกเลิกรอบ; STAFF ไม่เห็นเมนู "รอบการจอง"
+- เจอระหว่างทดสอบ: label "ปิดจอง" เป็น substring ของ "เปิดจอง" (E2E ต้องใช้ `exact`); ดูภาพหน้าจอแล้วรอบที่ยกเลิกแสดง "ยังไม่มีวันขาย" ทำให้เข้าใจผิด → แสดง "—"
+- ทดสอบ: unit 134 (+12), integration 176 (+20), E2E 20 (+2)
+- **ต้องทำต่อใน Phase 4**: ยกเลิกรอบ/ยกเลิกวันขาย/ปิดล็อครายวันยังไม่แตะการจองที่มีอยู่ (ตอนนี้ยังไม่มีการจอง) — 4.1/4.5 ต้องตัดสินใจเรื่องการจองที่ active + แจ้งผู้ค้า; `/market-days/:id/stalls` ยังเปิดดูได้แม้รอบเป็น DRAFT (ไม่มีข้อมูลอ่อนไหว); `round:changed` realtime อยู่ 4.3; แจ้งเตือนก่อนเปิดรอบอยู่ Phase 7
 
 ---
 
@@ -692,3 +705,6 @@
 | 2026-10-31 | 2 | ✅ DONE | Member Registration & Approval ครบ (2.1–2.3) — ถัดไป: 3.1 Zones, Categories, Stalls |
 | 2026-10-31 | 3.1 | 🟨 IN PROGRESS | เริ่ม CRUD โซน/ประเภทสินค้า/ล็อค, bulk create, `GET /market-days/:id/stalls`, StallMap, หน้า admin |
 | 2026-10-31 | 3.1 | ✅ DONE | CRUD ประเภทสินค้า/โซน/ล็อค + bulk create + audit, `GET /market/layout` + `/market-days/:id/stalls`, `packages/stall-map` (SVG zoom/pan), หน้า admin ล็อค/โซน, หน้า `/map` ผู้ค้า; E2E ล็อค seed ถูกตำแหน่งทั้ง 2 แอป — unit 122 / integration 156 / E2E 18 ผ่าน — ถัดไป: 3.2 Booking Rounds & Market Days |
+| 2026-10-31 | 3.2 | 🟨 IN PROGRESS | เริ่มรอบการจอง + วันขาย (CRUD, publish/cancel, validation §9.3), `RoundService.getPhase`/`assertRoundOpen`, override รายวัน, `GET /rounds/current`, หน้า admin + countdown ผู้ค้า |
+| 2026-10-31 | 3.2 | ✅ DONE | รอบการจอง + วันขาย (CRUD, publish/cancel, validation §9.3, partial unique วันขาย), `getPhase`/`assertRoundOpen`, override ล็อครายวัน, `GET /rounds/current` + serverTime; หน้า admin รอบ/ปฏิทิน/ตั้งค่าล็อครายวัน, การ์ดรอบ + Countdown ผู้ค้า — unit 134 / integration 176 / E2E 20 ผ่าน |
+| 2026-10-31 | 3 | ✅ DONE | Market Setup ครบ (3.1–3.2) — ถัดไป: 4.1 Booking Core API + Concurrency |
