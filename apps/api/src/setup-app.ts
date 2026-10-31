@@ -5,6 +5,7 @@ import helmet from 'helmet';
 import { Logger } from 'nestjs-pino';
 import { requestContextMiddleware } from './common/request-context';
 import { AppConfigService } from './config/app-config.service';
+import { RedisIoAdapter } from './modules/realtime/redis-io.adapter';
 import { setupSwagger } from './setup-swagger';
 
 /** ตั้งค่าที่ใช้ร่วมกันระหว่าง main.ts และ integration test เพื่อให้ test ตรงกับของจริง */
@@ -20,6 +21,8 @@ export function setupApp(app: INestApplication): void {
 
   app.setGlobalPrefix(API_PREFIX.replace(/^\//, ''));
   app.enableCors({ origin: config.corsOrigins, credentials: true });
+  // Socket.IO ข้าม instance ผ่าน Redis + CORS เดียวกับ REST
+  app.useWebSocketAdapter(new RedisIoAdapter(app, config.get('REDIS_URL'), config.corsOrigins));
   app.enableShutdownHooks();
 
   if (!config.isProduction) setupSwagger(app);

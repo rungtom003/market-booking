@@ -34,6 +34,14 @@ function refreshToken(): Promise<string | null> {
   return refreshing;
 }
 
+/** ต่ออายุ access token ใน session (socket ใช้เมื่อ handshake ได้ UNAUTHORIZED) — ไม่ได้ = logout */
+export async function renewAccessToken(): Promise<string | null> {
+  const token = await refreshToken();
+  if (token) session.setToken(token);
+  else session.signOut();
+  return token;
+}
+
 /** เปิดแอป: refresh cookie → token → โปรไฟล์ (เมนูตามสิทธิ์) */
 export async function restoreSession(): Promise<void> {
   const token = await refreshToken();

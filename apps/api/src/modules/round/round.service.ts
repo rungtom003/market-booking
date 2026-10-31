@@ -18,6 +18,7 @@ import { AuditService } from '../audit/audit.service';
 import type { AdminPrincipal } from '../auth/principal';
 import { MarketService } from '../market/market.service';
 import { SettingsService } from '../settings/settings.service';
+import { RoundEvents } from './round-events';
 import { assertCloseBeforeFirstDay, toIsoDate, validationError } from './round-rules';
 
 const DAY_FIELDS = {
@@ -103,6 +104,7 @@ export class RoundService {
     private readonly audit: AuditService,
     private readonly markets: MarketService,
     private readonly settings: SettingsService,
+    private readonly roundEvents: RoundEvents,
   ) {}
 
   getPhase(
@@ -278,7 +280,7 @@ export class RoundService {
       await this.timeZone(before.marketId),
     );
 
-    return this.prisma.$transaction(async (tx) => {
+    const detail = await this.prisma.$transaction(async (tx) => {
       const row = await tx.bookingRound.update({
         where: { id },
         data: {
@@ -302,6 +304,8 @@ export class RoundService {
       );
       return toRoundDetail(row, now);
     });
+    this.notifyChanged(before.marketId, detail);
+    return detail;
   }
 
   /** DRAFT → PUBLISHED: ต้องมีวันขายอย่างน้อย 1 วัน และยังไม่เลยเวลาปิดจอง */
@@ -379,7 +383,7 @@ export class RoundService {
     action: string,
     now: Date,
   ): Promise<RoundDetail> {
-    return this.prisma.$transaction(async (tx) => {
+    const detail = await this.prisma.$transaction(async (tx) => {
       const { count } = await tx.bookingRound.updateMany({
         where: { id: round.id, status: round.status },
         data: { status: to },
@@ -407,6 +411,22 @@ export class RoundService {
         select: ROUND_FIELDS,
       });
       return toRoundDetail(row, now);
+    });
+    this.notifyChanged(round.marketId, detail);
+    return detail;
+  }
+
+  /** หลัง commit: รอบที่ผู้ค้าเห็นเปลี่ยน (DRAFT ไม่ส่ง) — ใช้ร่วมกับ MarketDayService */
+  notifyChanged(
+    marketId: string,
+    round: { id: string; status: RoundStatus; openAt: Date | string; closeAt: Date | string },
+  ): void {
+    this.roundEvents.emitChanged({
+      roundId: round.id,
+      marketId,
+      status: round.status,
+      openAt: new Date(round.openAt),
+      closeAt: new Date(round.closeAt),
     });
   }
 }

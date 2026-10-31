@@ -57,6 +57,25 @@ test.describe('Admin: อนุมัติสมาชิก', () => {
     await expect(vendor.getByText('บัญชีได้รับการอนุมัติแล้ว')).toBeVisible();
   });
 
+  test('badge รออนุมัติเพิ่มทันทีเมื่อมีผู้ค้าสมัครใหม่ (realtime ไม่ต้องรีเฟรช)', async ({
+    page,
+    browser,
+  }) => {
+    await adminLogin(page);
+    const badge = page
+      .getByRole('list')
+      .getByRole('link', { name: /ผู้ค้า/ })
+      .locator('.MuiBadge-badge');
+    await expect(badge).toHaveText(/^\d+$/);
+    const before = Number(await badge.textContent());
+
+    const vendor = await vendorPage(browser);
+    await registerVendor(vendor, randomPhone(), { firstName: 'สมัคร', lastName: 'สด' });
+
+    // refetch ปกติทุก 5 นาที — ภายในไม่กี่วินาทีได้มาจาก vendor:registered เท่านั้น
+    await expect(badge).toHaveText(String(before + 1), { timeout: 3_000 });
+  });
+
   test('ไม่อนุมัติพร้อมเหตุผล → ผู้ค้าเห็นเหตุผล', async ({ page, browser }) => {
     const phone = randomPhone();
     const vendor = await vendorPage(browser);

@@ -60,7 +60,7 @@
 | 4 | Realtime Booking ⭐ | 🟨 IN PROGRESS | 2026-10-31 | |
 | 4.1 | ↳ Booking Core API + Concurrency | ✅ DONE | 2026-10-31 | 2026-10-31 |
 | 4.2 | ↳ Expiry Worker (BullMQ) | ✅ DONE | 2026-10-31 | 2026-10-31 |
-| 4.3 | ↳ Realtime Gateway (Socket.IO) | ⬜ TODO | | |
+| 4.3 | ↳ Realtime Gateway (Socket.IO) | ✅ DONE | 2026-10-31 | 2026-10-31 |
 | 4.4 | ↳ Vendor Web: หน้าผังและจองล็อค | ⬜ TODO | | |
 | 4.5 | ↳ Admin Web: จัดการการจอง | ⬜ TODO | | |
 | 4.6 | ↳ Concurrency & Load Test | ⬜ TODO | | |
@@ -479,20 +479,30 @@
 - ทดสอบ: unit 165 (+6: processor ตัดสินใจ expire/เลื่อน/ข้าม/sweep, env), integration 199 (+5), E2E 20 (E2E รัน worker จริงด้วย default `true`)
 
 ### 4.3 Realtime Gateway (Socket.IO)
-**สถานะ:** ⬜ TODO · **Dependencies:** 4.1 · **เริ่ม:** – · **เสร็จ:** –
+**สถานะ:** ✅ DONE · **Dependencies:** 4.1 · **เริ่ม:** 2026-10-31 · **เสร็จ:** 2026-10-31
 
 **Tasks**
-- [ ] Namespace `/booking`, auth JWT ใน handshake, Redis adapter
-- [ ] Events และ rooms ตาม Overview §10 (ชื่อ event จาก `packages/shared`)
-- [ ] Subscribe `booking.changed` → emit `stall:updated` (room `md:`) และ `booking:changed` (room `vendor:`)
-- [ ] ส่ง `server:time` ตอน connect
-- [ ] จำกัดจำนวน room ที่ join ต่อ socket, ตรวจว่า marketDay มีจริง
+- [x] Namespace `/booking`, auth JWT ใน handshake, Redis adapter
+- [x] Events และ rooms ตาม Overview §10 (ชื่อ event จาก `packages/shared`)
+- [x] Subscribe `booking.changed` → emit `stall:updated` (room `md:`) และ `booking:changed` (room `vendor:`)
+- [x] ส่ง `server:time` ตอน connect
+- [x] จำกัดจำนวน room ที่ join ต่อ socket, ตรวจว่า marketDay มีจริง
 
 **Acceptance Criteria**
 - เปิด 2 browser: A hold ล็อค → B เห็นสีเปลี่ยนภายใน 1 วินาที
 - รัน API 2 instance หลัง Nginx → event ข้าม instance ได้
 
-**Agent Notes:** –
+**Agent Notes:**
+- ✅ AC ข้อ 1 (ระดับ socket): `realtime.int-spec.ts` ผู้ค้า A จองผ่าน REST → socket ของผู้ค้า B ที่ `md:join` วันเดียวกันได้ `stall:updated { state: 'HOLD', mine: false }` ภายใน 1 วินาที, A ได้ `mine: true` ครั้งเดียว + `booking:changed`, B ไม่ได้ `booking:changed` และ payload ไม่มี vendor id ของ A — ส่วน "เห็นสีเปลี่ยนบนผังใน browser" ทดสอบต่อใน 4.4 (หน้าผังจองยังไม่มี)
+- ✅ AC ข้อ 2: เปิด API 2 instance ใน test (Redis adapter เดียวกัน) → จองที่ instance 1, socket ที่ต่อ instance 2 ได้ทั้ง `stall:updated` (ห้อง md) และ `booking:changed` (ห้อง vendor) — **Nginx config อยู่ Phase 6**: client ใช้ websocket อย่างเดียวจึงไม่ต้อง sticky session แค่ proxy `/socket.io` แบบ upgrade
+- API `modules/realtime/`: `RealtimeGateway` (namespace `/booking`; middleware ตรวจ token + สถานะผู้ค้า/admin; join ห้องอัตโนมัติ; `server:time` ตอนต่อ; `md:join`/`md:leave` มี ack และจำกัด 3 ห้อง), `RedisIoAdapter` (Redis pub/sub + CORS ตาม env, ใช้ใน `setupApp`)
+- `stall:updated` อ่านสถานะจาก DB ตอนส่ง (การจองที่ยังมีผล/ปิด/ว่าง เหมือน snapshot) — event สลับลำดับก็ไม่ทำให้ client ได้ค่าผิด (มี test: ยกเลิกการจองของล็อคที่ปิดวันนั้น → `CLOSED`)
+- event ภายในรวมเป็น `common/event-channel.ts`; เพิ่ม `RoundEvents` (round module: update/publish/cancel/วันขายของรอบที่ไม่ใช่ DRAFT) และ `NotifyService.onVendorStatusChanged` (→ `vendor:registered` เมื่อสถานะเป็น PENDING); `TokenService` export จาก `AuthModule`
+- admin: `lib/realtime.ts` (`useAdminRealtime`) → badge รออนุมัติอัปเดตทันที (E2E ใหม่ใน `admin.spec.ts`); UNAUTHORIZED ตอนต่อ → `renewAccessToken()` แล้วต่อใหม่
+- **4.4 ต่อได้เลย**: ใช้ pattern เดียวกับ `apps/admin/src/lib/realtime.ts` (`io(SOCKET_NAMESPACE, { transports: ['websocket'], auth: cb => cb({ token }) })`), `md:join` หน้าผังวันขาย, map `state` → สี StallMap (`HOLD` → `HELD`/`MINE`, `BOOKED` → `BOOKED`/`MINE`, `CLOSED` → `UNAVAILABLE`), refetch snapshot ตอน `connect` (รวม reconnect) และตอนแท็บกลับมา active; `server:time` ใช้ปรับ offset ได้อีกทาง
+- dependency ใหม่: `@nestjs/websockets` + `@nestjs/platform-socket.io` 10.4.22, `socket.io` 4.8.1 (ปักตรงกับ Nest), `@socket.io/redis-adapter` 8.3, `socket.io-client` 4.8.1 (api dev, admin)
+- หมายเหตุ: ตอน E2E ปิดหน้าเว็บที่มี socket ค้าง Vite dev proxy log `Error: write ECONNABORTED` — เป็น log ของ dev proxy เท่านั้น ไม่กระทบผล
+- ทดสอบ: unit 165, integration 207 (+8 `realtime.int-spec.ts`), E2E 21 (+1 badge realtime)
 
 ### 4.4 Vendor Web: หน้าผังและจองล็อค
 **สถานะ:** ⬜ TODO · **Dependencies:** 4.2, 4.3 · **เริ่ม:** – · **เสร็จ:** –
@@ -733,3 +743,5 @@
 | 2026-10-31 | 4.1 | ✅ DONE | hold/confirm/cancel (+admin cancel), advisory lock + partial unique, `BookingStateService`, expire ที่หมดเวลาในการจอง, snapshot ผัง AVAILABLE/HOLD/BOOKED/CLOSED + mine, `BookingEvents`; AC concurrency 50→1 และโควตา 2→1 ผ่าน — unit 159 / integration 194 / E2E 20 ผ่าน — ถัดไป: 4.2 Expiry Worker |
 | 2026-10-31 | 4.2 | 🟨 IN PROGRESS | เริ่ม queue booking-expiry (BullMQ), processor idempotent, sweeper ทุก 1 นาที, ลบ job เมื่อ confirm/cancel |
 | 2026-10-31 | 4.2 | ✅ DONE | queue `booking-expiry` (bullmq 5) ตั้ง/ลบ job ตาม `booking.changed`, processor idempotent + เลื่อน job ที่มาก่อนเวลา, sweeper ทุก 1 นาที (job scheduler), `WORKERS_ENABLED`; AC hold 1 นาทีว่างเอง + confirm ชน expire ได้ผลเดียว — unit 165 / integration 199 / E2E 20 ผ่าน — ถัดไป: 4.3 Realtime Gateway |
+| 2026-10-31 | 4.3 | 🟨 IN PROGRESS | เริ่ม Socket.IO namespace /booking + Redis adapter, auth ใน handshake, rooms/events ตาม §10, stall:updated/booking:changed จาก booking.changed |
+| 2026-10-31 | 4.3 | ✅ DONE | Socket.IO `/booking` + Redis adapter, auth ใน handshake, ห้อง vendor/admin/market/md (จำกัด 3), stall:updated (สถานะจาก DB + mine แยกห้อง), booking:changed, round:changed, server:time, vendor:registered + badge admin realtime; AC 2 ผู้ค้า < 1 วินาที และข้าม 2 instance — unit 165 / integration 207 / E2E 21 ผ่าน — ถัดไป: 4.4 Vendor Web หน้าผังและจองล็อค |

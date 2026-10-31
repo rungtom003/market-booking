@@ -75,7 +75,7 @@ export class MarketDayService {
     const create = input.dates.filter((d) => !restore.has(d));
 
     try {
-      return await this.prisma.$transaction(async (tx) => {
+      const detail = await this.prisma.$transaction(async (tx) => {
         if (restore.size > 0) {
           await tx.marketDay.updateMany({
             where: { id: { in: [...restore.values()] } },
@@ -101,6 +101,8 @@ export class MarketDayService {
         );
         return this.detail(tx, roundId, now);
       });
+      this.rounds.notifyChanged(round.marketId, detail);
+      return detail;
     } catch (error) {
       // อีกรอบเพิ่มวันเดียวกันพร้อมกัน — partial unique `uq_market_day_date` ตัดสิน
       if (isUniqueViolation(error)) throw dateTaken(input.dates);
@@ -125,7 +127,7 @@ export class MarketDayService {
     if (!input.isCancelled) await this.assertDatesAllowed(round, [date], now);
 
     try {
-      return await this.prisma.$transaction(async (tx) => {
+      const detail = await this.prisma.$transaction(async (tx) => {
         await tx.marketDay.update({ where: { id: dayId }, data: input });
         await this.audit.log(
           {
@@ -140,6 +142,8 @@ export class MarketDayService {
         );
         return this.detail(tx, roundId, now);
       });
+      this.rounds.notifyChanged(round.marketId, detail);
+      return detail;
     } catch (error) {
       if (isUniqueViolation(error)) throw dateTaken([date]);
       throw error;
@@ -175,6 +179,7 @@ export class MarketDayService {
         tx,
       );
     });
+    this.rounds.notifyChanged(round.marketId, round);
   }
 
   // ───────────── override รายวัน ─────────────

@@ -35,6 +35,7 @@ import { VendorAuthService } from './vendor-auth.service';
     { provide: APP_GUARD, useClass: AccessGuard },
   ],
   // RegistrationTokenService: POST /vendors/register (Phase 2.1) ใช้ตรวจ token
-  exports: [AuthService, RefreshTokenService, RegistrationTokenService],
+  // TokenService: realtime gateway (Phase 4.3) ตรวจ access token ใน handshake
+  exports: [AuthService, RefreshTokenService, RegistrationTokenService, TokenService],
 })
 export class AuthModule {}

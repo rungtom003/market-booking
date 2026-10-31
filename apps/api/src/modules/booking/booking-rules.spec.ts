@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import {
   BOOKING_TRANSITIONS,
   BookingStatus,
@@ -117,7 +118,7 @@ describe('BookingEvents', () => {
     const off = events.onChanged((e) => {
       seen.push(e.bookingId);
     });
-    jest.spyOn(events['logger'], 'error').mockImplementation(() => undefined);
+    jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
 
     events.emitChanged([event, { ...event, bookingId: 'b2' }]);
     off();

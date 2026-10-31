@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { SettingsModule } from '../settings/settings.module';
 import { VendorModule } from '../vendor/vendor.module';
 import { MarketDayService } from './market-day.service';
+import { RoundEvents } from './round-events';
 import { MarketDayAdminController, RoundAdminController } from './round-admin.controller';
 import { RoundController } from './round.controller';
 import { RoundService } from './round.service';
@@ -10,7 +11,7 @@ import { RoundService } from './round.service';
 @Module({
   imports: [SettingsModule, VendorModule],
   controllers: [RoundAdminController, MarketDayAdminController, RoundController],
-  providers: [RoundService, MarketDayService],
-  exports: [RoundService],
+  providers: [RoundService, MarketDayService, RoundEvents],
+  exports: [RoundService, RoundEvents],
 })
 export class RoundModule {}

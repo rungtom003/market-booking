@@ -528,26 +528,30 @@ Vendor กด "ยืนยันการจอง" → POST /bookings/:id/conf
 
 ### 10.1 Socket.IO
 - Namespace: `/booking`
-- Auth: ส่ง JWT ใน `handshake.auth.token` (vendor หรือ admin)
+- Auth: ส่ง access token (JWT) ใน `handshake.auth.token` (vendor หรือ admin) — ผิด/หมดอายุ → `connect_error` message `UNAUTHORIZED` (client ต่ออายุ token แล้วต่อใหม่); ผู้ค้าต้อง APPROVED และไม่ถูกระงับ (`VENDOR_NOT_APPROVED` / `VENDOR_SUSPENDED`)
+- Client ใช้ `transports: ['websocket']` เท่านั้น และ server ใช้ Redis adapter (`@socket.io/redis-adapter`) — event ข้าม instance ได้ และไม่ต้องใช้ sticky session หลัง Nginx
 - Rooms:
   - `md:{marketDayId}` — ทุกคนที่ดูผังวันขายนั้น
   - `vendor:{vendorId}` — ข้อความส่วนตัวของผู้ค้า
   - `admin:{marketId}` — Admin ของตลาด
+  - `market:{marketId}` — ทุก socket ของตลาด (ใช้ส่ง `round:changed`)
+- ผู้ค้า join `vendor:` + `market:`, admin join `admin:` + `market:` อัตโนมัติตอนต่อ; `md:` ต้อง `md:join` เอง (วันขายของตลาดตัวเองเท่านั้น, ไม่เกิน 3 ห้องต่อ socket)
 
 ### 10.2 Events (ชื่อเก็บใน `packages/shared/src/socket-events.ts`)
 | ทิศทาง | Event | Payload |
 |---|---|---|
-| C → S | `md:join` | `{ marketDayId }` |
-| C → S | `md:leave` | `{ marketDayId }` |
+| C → S | `md:join` | `{ marketDayId }` → ack `{ ok: true }` หรือ `{ ok: false, code }` (`VALIDATION_ERROR` / `NOT_FOUND` / `BAD_REQUEST` = เกิน 3 ห้อง) |
+| C → S | `md:leave` | `{ marketDayId }` → ack |
 | S → C | `stall:updated` | `{ marketDayId, stallId, state: 'AVAILABLE'\|'HOLD'\|'BOOKED'\|'CLOSED', mine: boolean, updatedAt }` |
 | S → C | `round:changed` | `{ roundId, openAt, closeAt, status }` |
-| S → C | `booking:changed` | `{ bookingId, status, holdExpiresAt?, paymentDueAt? }` (เฉพาะห้อง vendor) |
+| S → C | `booking:changed` | `{ bookingId, marketDayId, stallId, status, holdExpiresAt, paymentDueAt }` (เฉพาะห้อง vendor ของเจ้าของ) |
 | S → C | `waitlist:offer` | `{ waitlistId, bookingId, expiresAt }` |
 | S → C | `server:time` | `{ now }` (ส่งตอน connect) |
-| S → C (admin) | `vendor:registered`, `payment:submitted` | สำหรับ badge แจ้งเตือน |
+| S → C (admin) | `vendor:registered` (`{ vendorId }` เมื่อมีผู้ค้ารออนุมัติ — ไม่มีข้อมูลส่วนตัว), `payment:submitted` (Phase 5) | สำหรับ badge แจ้งเตือน |
 
 ### 10.3 กติกา
-- `mine` คำนวณฝั่ง Client จาก bookingId ของตัวเอง หรือส่งแยกห้อง (ห้ามส่งข้อมูลส่วนตัวผู้ค้าคนอื่นใน event สาธารณะ)
+- `mine` ส่งแยกห้อง: ห้อง `md:` ยกเว้นเจ้าของได้ `mine: false`, ห้อง `vendor:` ของเจ้าของการจองที่ยังมีผลได้ `mine: true` (ห้ามส่งข้อมูลส่วนตัวผู้ค้าคนอื่นใน event สาธารณะ)
+- `stall:updated.state` อ่านจาก DB ตอนส่ง (เหมือน `GET /market-days/:id/stalls`) — event หลายตัวมาสลับลำดับ ค่าที่ client ได้ล่าสุดก็ยังถูก
 - Client ต้อง refetch snapshot เมื่อ `connect`/`reconnect` และเมื่อแท็บกลับมา active
 - Throttle การ emit ต่อห้องได้ถ้าโหลดสูง (รวม batch ทุก 100ms)
 
@@ -848,6 +852,10 @@ VITE_LINE_LIFF_ID=        (ฝั่ง web — ว่าง = ซ่อนป�
 | 2026-10-31 | ใช้ `bullmq` 5.x ตรง (ไม่ใช้ `@nestjs/bullmq`) | 6.x เลิกใช้ ioredis และยังใหม่; 5.81 ใช้ ioredis 5.11 ตัวเดียวกับ API; `@nestjs/bullmq` รุ่นใหม่ต้อง Nest 11 |
 | 2026-10-31 | worker รันใน API process (ปิดได้ด้วย `WORKERS_ENABLED=false`); job กวาดทุก 1 นาทีใช้ BullMQ job scheduler แทน cron | ระยะแรกไม่ต้องมี process เพิ่ม; job scheduler รันครั้งเดียวแม้มีหลาย instance |
 | 2026-10-31 | job หมดเวลา 1 ตัวต่อการจอง (`jobId = bookingId`): ทุก `booking.changed` ลบ job เดิมแล้วตั้งใหม่ตามเวลาหมดของสถานะล่าสุด; processor ที่มาก่อนเวลาเลื่อน job ไปเวลาจริง (`moveToDelayed`) | ตั้ง job ชนกันหรือหลุดก็แก้ตัวเองได้; การเปลี่ยนเป็น EXPIRED ยังเป็น UPDATE แบบมีเงื่อนไขเวลา+สถานะ (ชนกับ confirm ได้ผลเดียว) และ sweeper เก็บตก |
+| 2026-10-31 | Socket.IO: Redis adapter + client ใช้ websocket อย่างเดียว; `socket.io` ปักไว้ `4.8.1` ให้ตรงกับที่ `@nestjs/platform-socket.io` 10 ใช้ | event ข้าม instance ได้, ไม่ต้อง sticky session (long-polling ต้องใช้); socket.io สองเวอร์ชันทำให้ type ของ adapter ไม่ตรงกัน |
+| 2026-10-31 | เพิ่มห้อง `market:{marketId}` สำหรับ `round:changed` และส่งเฉพาะรอบที่ไม่ใช่ DRAFT (เผยแพร่/แก้/ยกเลิก/วันขายเปลี่ยน) | §10.1 ไม่มีห้องที่ครอบผู้ค้าทั้งตลาด; ผู้ค้าไม่เห็นรอบ DRAFT |
+| 2026-10-31 | event ภายในทุกชนิดใช้ `EventChannel` (common): `BookingEvents`, `RoundEvents`, `NotifyService.onVendorStatusChanged` — gateway แค่ subscribe | business logic ไม่รู้จัก socket; `NotifyService` เป็นจุดแจ้งเตือนอยู่แล้ว (Phase 7 ต่อ LINE/SMS ที่เดียวกัน) |
+| 2026-10-31 | badge รออนุมัติของ admin อัปเดตจาก `vendor:registered` (invalidate query) + โหลดใหม่ทุก 5 นาทีเผื่อ socket หลุด (เดิมทุก 60 วินาที) | ข้อมูลจริงยังมาจาก REST (§5 ข้อ 2) |
 
 ### Open Questions
 - [ ] ใช้กับตลาดเดียวหรือหลายตลาด (ตอนนี้ schema รองรับแล้ว แต่ UI ยังเป็นตลาดเดียว)

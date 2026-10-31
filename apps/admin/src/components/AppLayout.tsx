@@ -18,6 +18,7 @@ import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
 import { adminApi } from '../api/admin';
 import { ADMIN_ROLE_TH } from '../lib/format';
+import { useAdminRealtime } from '../lib/realtime';
 import { useAdmin } from '../lib/session';
 
 const DRAWER_WIDTH = 240;
@@ -29,12 +30,13 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const canReview = hasPermission(admin.role, Permission.VENDORS_REVIEW);
 
-  // badge จำนวนรออนุมัติ — โหลดใหม่ทุก 60 วินาที (Phase 4 จะเปลี่ยนเป็น realtime)
+  // badge จำนวนรออนุมัติ — อัปเดตทันทีเมื่อมี `vendor:registered`; โหลดใหม่ทุก 5 นาทีเผื่อ socket หลุด
+  useAdminRealtime(canReview);
   const counts = useQuery({
     queryKey: ['vendors', 'counts'],
     queryFn: adminApi.vendors.counts,
     enabled: canReview,
-    refetchInterval: 60_000,
+    refetchInterval: 300_000,
   });
 
   async function logout() {
