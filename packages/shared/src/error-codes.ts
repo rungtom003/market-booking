@@ -23,6 +23,12 @@ export const ErrorCode = {
   /** ไฟล์ที่อ้างถึงไม่มี / ไม่ใช่ของผู้ใช้นี้ / ชนิดหรือขนาดไม่ถูกต้อง */
   UPLOAD_INVALID: 'UPLOAD_INVALID',
 
+  // ตั้งค่าตลาด
+  /** รหัสล็อคซ้ำในตลาด — `details.codes` */
+  STALL_CODE_TAKEN: 'STALL_CODE_TAKEN',
+  /** ลบไม่ได้เพราะมีข้อมูลอื่นอ้างถึง (เช่น ล็อคที่มีประวัติการจอง) — `details` บอกจำนวนที่อ้างถึง */
+  RESOURCE_IN_USE: 'RESOURCE_IN_USE',
+
   // ธุรกิจ
   ROUND_NOT_OPEN: 'ROUND_NOT_OPEN',
   STALL_TAKEN: 'STALL_TAKEN',

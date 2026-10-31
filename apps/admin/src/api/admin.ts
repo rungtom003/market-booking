@@ -4,16 +4,28 @@ import type {
   AdminUserListQuery,
   AdminVendorDetail,
   AdminVendorListItem,
+  AdminStallListQuery,
   AdminVendorListQuery,
   ApiResponse,
   BulkApproveResult,
+  BulkCreateStallsInput,
+  BulkCreateStallsResult,
   CreateAdminUserInput,
+  CreateProductCategoryInput,
+  CreateStallInput,
+  CreateZoneInput,
   PaginatedResponse,
+  ProductCategory,
   Settings,
+  Stall,
   SuspendVendorInput,
   UpdateAdminUserInput,
+  UpdateProductCategoryInput,
   UpdateSettingsInput,
+  UpdateStallInput,
+  UpdateZoneInput,
   VendorStatusCounts,
+  Zone,
 } from '@market-booking/shared';
 import { apiClient, unwrap } from '../lib/api-client';
 import { session } from '../lib/session';
@@ -70,6 +82,38 @@ export const adminApi = {
     get: () => unwrap(apiClient.get<ApiResponse<Settings>>('/admin/settings')),
     update: (input: UpdateSettingsInput) =>
       unwrap(apiClient.put<ApiResponse<Settings>>('/admin/settings', input)),
+  },
+
+  categories: {
+    list: () => unwrap(apiClient.get<ApiResponse<ProductCategory[]>>('/admin/product-categories')),
+    create: (input: CreateProductCategoryInput) =>
+      unwrap(apiClient.post<ApiResponse<ProductCategory>>('/admin/product-categories', input)),
+    update: (id: string, input: UpdateProductCategoryInput) =>
+      unwrap(
+        apiClient.patch<ApiResponse<ProductCategory>>(`/admin/product-categories/${id}`, input),
+      ),
+    remove: (id: string) => apiClient.delete(`/admin/product-categories/${id}`),
+  },
+
+  zones: {
+    list: () => unwrap(apiClient.get<ApiResponse<Zone[]>>('/admin/zones')),
+    create: (input: CreateZoneInput) =>
+      unwrap(apiClient.post<ApiResponse<Zone>>('/admin/zones', input)),
+    update: (id: string, input: UpdateZoneInput) =>
+      unwrap(apiClient.patch<ApiResponse<Zone>>(`/admin/zones/${id}`, input)),
+    remove: (id: string) => apiClient.delete(`/admin/zones/${id}`),
+  },
+
+  stalls: {
+    list: (query: Partial<AdminStallListQuery> = {}) =>
+      unwrap(apiClient.get<ApiResponse<Stall[]>>('/admin/stalls', { params: params(query) })),
+    create: (input: CreateStallInput) =>
+      unwrap(apiClient.post<ApiResponse<Stall>>('/admin/stalls', input)),
+    bulkCreate: (input: BulkCreateStallsInput) =>
+      unwrap(apiClient.post<ApiResponse<BulkCreateStallsResult>>('/admin/stalls/bulk', input)),
+    update: (id: string, input: UpdateStallInput) =>
+      unwrap(apiClient.patch<ApiResponse<Stall>>(`/admin/stalls/${id}`, input)),
+    remove: (id: string) => apiClient.delete(`/admin/stalls/${id}`),
   },
 
   users: {

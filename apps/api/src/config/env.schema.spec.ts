@@ -23,8 +23,18 @@ describe('validateEnv', () => {
     expect(env.PORT).toBe(3000);
     expect(env.LOG_LEVEL).toBe('info');
     expect(env.RATE_LIMIT_PER_MINUTE).toBe(100);
+    expect(env.RATE_LIMIT_DISABLED).toBe(false);
     expect(env.MINIO_PORT).toBe(9000);
     expect(env.SMS_PROVIDER).toBe('mock');
+  });
+
+  it('parses RATE_LIMIT_DISABLED (E2E only)', () => {
+    expect(validateEnv({ ...validEnv, RATE_LIMIT_DISABLED: 'true' }).RATE_LIMIT_DISABLED).toBe(
+      true,
+    );
+    expect(() => validateEnv({ ...validEnv, RATE_LIMIT_DISABLED: 'yes' })).toThrow(
+      /RATE_LIMIT_DISABLED/,
+    );
   });
 
   it('treats empty strings as unset', () => {

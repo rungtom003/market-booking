@@ -2,6 +2,8 @@ import type { ReactNode } from 'react';
 import { Permission } from '@market-booking/shared';
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
 import DashboardIcon from '@mui/icons-material/Dashboard';
+import GridViewIcon from '@mui/icons-material/GridView';
+import LayersIcon from '@mui/icons-material/Layers';
 import SettingsIcon from '@mui/icons-material/Settings';
 import StorefrontIcon from '@mui/icons-material/Storefront';
 
@@ -21,6 +23,18 @@ export const NAV_ITEMS: NavItem[] = [
     label: 'ผู้ค้า',
     icon: <StorefrontIcon />,
     permission: Permission.VENDORS_REVIEW,
+  },
+  {
+    to: '/stalls',
+    label: 'ล็อคและผังตลาด',
+    icon: <GridViewIcon />,
+    permission: Permission.MARKET_LAYOUT_MANAGE,
+  },
+  {
+    to: '/zones',
+    label: 'โซนและประเภทสินค้า',
+    icon: <LayersIcon />,
+    permission: Permission.MARKET_LAYOUT_MANAGE,
   },
   {
     to: '/settings',

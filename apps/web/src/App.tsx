@@ -3,6 +3,7 @@ import { Layout } from './components/Layout';
 import { AuthBootstrap, RedirectIfAuthenticated, RequireAuth } from './features/auth/AuthProvider';
 import { HomePage } from './pages/HomePage';
 import { LoginPage } from './pages/LoginPage';
+import { MarketMapPage } from './pages/MarketMapPage';
 import { PrivacyPage } from './pages/PrivacyPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { RegisterPage } from './pages/RegisterPage';
@@ -42,6 +43,14 @@ export function App() {
             element={
               <RequireAuth>
                 <ProfilePage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/map"
+            element={
+              <RequireAuth>
+                <MarketMapPage />
               </RequireAuth>
             }
           />

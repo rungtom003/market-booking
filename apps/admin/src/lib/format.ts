@@ -9,6 +9,13 @@ export function formatDateTime(iso: string | null | undefined): string {
   });
 }
 
+const baht = new Intl.NumberFormat('th-TH', { maximumFractionDigits: 2 });
+
+/** 1500 → "1,500 บาท" */
+export function formatBaht(amount: number): string {
+  return `${baht.format(amount)} บาท`;
+}
+
 export function formatPhone(phone: string): string {
   return phone.replace(/^(\d{3})(\d{3})(\d{4})$/, '$1-$2-$3');
 }

@@ -87,9 +87,14 @@ function StatusCard({ vendor }: { vendor: VendorProfile }) {
       );
     case 'APPROVED':
       return (
-        <Alert tone="success" title="บัญชีได้รับการอนุมัติแล้ว">
-          ระบบจองล็อคจะเปิดให้ใช้งานเร็วๆ นี้
-        </Alert>
+        <div className="flex flex-col gap-3">
+          <Alert tone="success" title="บัญชีได้รับการอนุมัติแล้ว">
+            ระบบจองล็อคจะเปิดให้ใช้งานเร็วๆ นี้ ดูผังตลาดไว้ก่อนได้
+          </Alert>
+          <Link to="/map" className={linkButtonClass}>
+            ดูผังตลาด
+          </Link>
+        </div>
       );
   }
 }

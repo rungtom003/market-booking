@@ -32,7 +32,11 @@ export default tseslint.config(
     },
   },
   {
-    files: ['apps/web/**/*.{ts,tsx}', 'apps/admin/**/*.{ts,tsx}'],
+    files: [
+      'apps/web/**/*.{ts,tsx}',
+      'apps/admin/**/*.{ts,tsx}',
+      'packages/stall-map/**/*.{ts,tsx}',
+    ],
     languageOptions: {
       globals: globals.browser,
     },

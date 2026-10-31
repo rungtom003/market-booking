@@ -31,6 +31,13 @@ export const ERROR_MESSAGES_TH: Record<ErrorCode, string | ((details: Details) =
   OTP_EXPIRED: 'รหัส OTP หมดอายุหรือถูกใช้ไปแล้ว กรุณาขอรหัสใหม่',
   LINE_ALREADY_LINKED: 'บัญชี LINE นี้ผูกกับผู้ค้ารายอื่นแล้ว',
   PHONE_ALREADY_REGISTERED: 'เบอร์นี้สมัครสมาชิกไว้แล้ว กรุณาเข้าสู่ระบบด้วยรหัส OTP',
+  STALL_CODE_TAKEN: (d) => {
+    const codes = Array.isArray(d?.codes) ? (d.codes as string[]) : [];
+    if (codes.length === 0) return 'รหัสล็อคนี้มีอยู่แล้ว';
+    const shown = codes.slice(0, 5).join(', ');
+    return `รหัสล็อคซ้ำกับที่มีอยู่แล้ว: ${shown}${codes.length > 5 ? ` และอีก ${codes.length - 5} รายการ` : ''}`;
+  },
+  RESOURCE_IN_USE: 'ลบไม่ได้เพราะมีข้อมูลที่ใช้งานอยู่',
   UPLOAD_INVALID: 'ไฟล์รูปไม่ถูกต้อง (รองรับ JPG, PNG, WebP ไม่เกิน 5 MB) กรุณาอัปโหลดใหม่',
 
   ROUND_NOT_OPEN: 'ยังไม่อยู่ในช่วงเวลาเปิดจอง',

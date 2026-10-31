@@ -11,6 +11,15 @@ export const envSchema = z.object({
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   /** rate limit "API ทั่วไป" ต่อ IP (Overview §10.4) */
   RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(100),
+  /**
+   * ปิด rate limit ต่อ IP ทั้งหมด — ใช้กับ E2E เท่านั้น (ทุก request มาจาก IP เดียว) ห้ามใช้ใน production
+   * ข้อจำกัดต่อบัญชี/เบอร์ใน Redis (ล็อค login, OTP 5 ครั้ง/ชั่วโมง) ยังทำงานตามปกติ
+   */
+  RATE_LIMIT_DISABLED: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true')
+    .refine((v) => !(v && isProduction), 'RATE_LIMIT_DISABLED cannot be true in production'),
 
   DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }),
   REDIS_URL: z.url({ protocol: /^rediss?$/ }),

@@ -55,7 +55,7 @@ export function apiEnv(): Record<string, string> {
     JWT_REFRESH_SECRET: pick('JWT_REFRESH_SECRET', 'e2e-refresh-secret'),
     WEB_ORIGIN: WEB_URL,
     ADMIN_ORIGIN: ADMIN_URL,
-    // E2E ยิง request มากกว่าผู้ใช้จริงในเวลาสั้น
-    RATE_LIMIT_PER_MINUTE: '1000',
+    // E2E ยิงทุก request จาก IP เดียวในเวลาสั้น — ปิด rate limit ต่อ IP (ต่อบัญชี/เบอร์ยังทำงาน)
+    RATE_LIMIT_DISABLED: 'true',
   };
 }

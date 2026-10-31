@@ -54,8 +54,8 @@
 | 2.1 | ↳ Vendor API & File Upload | ✅ DONE | 2026-10-31 | 2026-10-31 |
 | 2.2 | ↳ Vendor Web: สมัครสมาชิก | ✅ DONE | 2026-10-31 | 2026-10-31 |
 | 2.3 | ↳ Admin Web: Shell + อนุมัติสมาชิก + Settings | ✅ DONE | 2026-10-31 | 2026-10-31 |
-| 3 | Market Setup | ⬜ TODO | | |
-| 3.1 | ↳ Zones, Categories, Stalls (API + Admin UI) | ⬜ TODO | | |
+| 3 | Market Setup | 🟨 IN PROGRESS | 2026-10-31 | |
+| 3.1 | ↳ Zones, Categories, Stalls (API + Admin UI) | ✅ DONE | 2026-10-31 | 2026-10-31 |
 | 3.2 | ↳ Booking Rounds & Market Days (API + Admin UI) | ⬜ TODO | | |
 | 4 | Realtime Booking ⭐ | ⬜ TODO | | |
 | 4.1 | ↳ Booking Core API + Concurrency | ⬜ TODO | | |
@@ -356,24 +356,33 @@
 ---
 
 ## Phase 3 — Market Setup
-**สถานะ:** ⬜ TODO · **Dependencies:** Phase 2
+**สถานะ:** 🟨 IN PROGRESS · **Dependencies:** Phase 2
 
 ### 3.1 Zones, Categories, Stalls
-**สถานะ:** ⬜ TODO · **Dependencies:** 2.3 · **เริ่ม:** – · **เสร็จ:** –
+**สถานะ:** ✅ DONE · **Dependencies:** 2.3 · **เริ่ม:** 2026-10-31 · **เสร็จ:** 2026-10-31
 
 **Tasks**
-- [ ] CRUD API `/admin/product-categories`, `/admin/zones`, `/admin/stalls` + audit log
-- [ ] สร้างล็อคทีละหลายรายการ (prefix + ช่วงเลข เช่น A1–A20, ราคา/ขนาดเดียวกัน)
-- [ ] ห้ามลบล็อคที่มี booking → ใช้ `is_active = false`
-- [ ] `GET /market-days/:id/stalls` เวอร์ชันแรก (ยังไม่รวมสถานะ booking) สำหรับวาดผัง
-- [ ] Admin UI: ตารางจัดการโซน/ประเภท/ล็อค, bulk create dialog
-- [ ] Component `StallMap` (SVG) ใน `packages/shared` หรือ copy ให้ทั้ง web/admin — วาดจาก pos/shape, สีตามสถานะ, zoom/pan บนมือถือ
-- [ ] Admin แก้ pos_x/pos_y ผ่านฟอร์มตัวเลขไปก่อน (Map Editor อยู่ Phase 9.1)
+- [x] CRUD API `/admin/product-categories`, `/admin/zones`, `/admin/stalls` + audit log
+- [x] สร้างล็อคทีละหลายรายการ (prefix + ช่วงเลข เช่น A1–A20, ราคา/ขนาดเดียวกัน)
+- [x] ห้ามลบล็อคที่มี booking → ใช้ `is_active = false`
+- [x] `GET /market-days/:id/stalls` เวอร์ชันแรก (ยังไม่รวมสถานะ booking) สำหรับวาดผัง
+- [x] Admin UI: ตารางจัดการโซน/ประเภท/ล็อค, bulk create dialog
+- [x] Component `StallMap` (SVG) ใน `packages/shared` หรือ copy ให้ทั้ง web/admin — วาดจาก pos/shape, สีตามสถานะ, zoom/pan บนมือถือ
+- [x] Admin แก้ pos_x/pos_y ผ่านฟอร์มตัวเลขไปก่อน (Map Editor อยู่ Phase 9.1)
 
 **Acceptance Criteria**
 - Seed 20 ล็อคแสดงบน `StallMap` ถูกตำแหน่งทั้ง web และ admin
 
-**Agent Notes:** –
+**Agent Notes:**
+- ✅ AC: E2E `expectSeedStallsOnMap` ตรวจ `<rect x y width>` ของล็อค seed ทั้ง 20 ตัว (A1–A10 y=20, B1–B10 y=140, x = 20 + i·70) ทั้งหน้าผู้ค้า `/map` (จอ 360px, `market-map.spec.ts`) และหน้า admin `/stalls` (`admin-market.spec.ts`)
+- API (`apps/api/src/modules/market-setup/`): CRUD `/admin/product-categories`, `/admin/zones`, `/admin/stalls` + `POST /admin/stalls/bulk` (สิทธิ์ `MARKET_LAYOUT_MANAGE`, audit ทุก action: `product_category.*`, `zone.*`, `stall.create/update/delete/bulk_create`); ผู้ค้า: `GET /market/layout` (เพิ่ม — Decision Log) และ `GET /market-days/:id/stalls` (ราคา/ปิดล็อคตาม `stall_day_overrides`, สงวนไว้/ปิดเฉพาะวัน/วันขายยกเลิก = UNAVAILABLE, ล็อค `is_active=false` ไม่ส่ง)
+- error ใหม่: `STALL_CODE_TAKEN` (`details.codes`), `RESOURCE_IN_USE` — ลบล็อคที่มี booking/waitlist ไม่ได้ (ให้ PATCH `isActive:false`), ลบโซนที่มีล็อคไม่ได้, ลบประเภทที่ผู้ค้าใช้ไม่ได้ (ลบได้แล้วเอาออกจาก `allowed_category_ids` ของทุกโซน)
+- bulk create: `bulkStallCodes()` ใน shared ใช้ทั้ง API และตัวอย่างใน dialog; วางเป็นตาราง `columns` คอลัมน์ ระยะ `gap`; ไม่ระบุ `originY` = วางต่อใต้ล็อคล่างสุด + 40px
+- `packages/stall-map`: `StallMap` (SVG, ซูม/เลื่อนผ่าน viewBox: ลาก, pinch, ล้อเมาส์, ปุ่ม +/−/ดูทั้งผัง; แตะ/Enter เลือกล็อค; `data-stall-code` ไว้ให้ E2E) + `StallMapLegend`; สถานะ `AVAILABLE|HELD|BOOKED|MINE|UNAVAILABLE|INACTIVE` เตรียมไว้ให้ Phase 4 แล้ว — 4.4 แค่ map สถานะจาก API
+- หน้า admin: `/stalls` (tab ผัง/ตาราง, กรองโซน, คลิกล็อคบนผังเพื่อแก้, dialog เพิ่ม/แก้/ลบ/สร้างหลายล็อค) และ `/zones` (โซน + สี + ประเภทที่ขายได้, ประเภทสินค้า); หน้าผู้ค้า: `/map` + ปุ่ม "ดูผังตลาด" บนหน้าแรกเมื่ออนุมัติแล้ว
+- E2E เจอ: rate limit login/OTP (10 ครั้ง/นาทีต่อ IP) เต็มเมื่อ test เพิ่ม → env `RATE_LIMIT_DISABLED=true` เฉพาะ E2E (schema ห้ามใน production); `NumberField` ต้อง forwardRef ไป `inputRef` ไม่งั้น react-hook-form อ่านค่าไม่ได้; ดูภาพหน้าจอแล้วผังผู้ค้ามีที่ว่างมาก → ผังสูงตามสัดส่วน
+- ทดสอบ: unit 122 (+ stall rules, env), integration 156 (+29 `market-setup.int-spec.ts`), E2E 18 (+6)
+- ยังไม่ทำ (ตามแผน): แก้ตำแหน่งด้วยการลากบนผัง (9.1), `stall_day_overrides` API (3.2), สถานะจองบนผัง (4.1/4.4)
 
 ### 3.2 Booking Rounds & Market Days
 **สถานะ:** ⬜ TODO · **Dependencies:** 3.1 · **เริ่ม:** – · **เสร็จ:** –
@@ -681,3 +690,5 @@
 | 2026-10-31 | 2.2 | ✅ DONE | เว็บผู้ค้า: login OTP (+LINE เมื่อตั้ง LIFF), สมัคร + อัปโหลดรูป (ย่อในเครื่อง), หน้าสถานะ, แก้โปรไฟล์, ข้อความไทย; E2E Playwright 360px 5 เคส + เข้า CI — ถัดไป: 2.3 Admin Web |
 | 2026-10-31 | 2.3 | ✅ DONE | หน้า admin: login, layout + เมนูตามสิทธิ์ + 403, รายการผู้ค้า (DataGrid, tab, ค้นหา, badge), drawer อนุมัติ/ไม่อนุมัติ/ระงับ, อนุมัติหลายรายการ, Settings จาก schema, จัดการผู้ดูแล; `GET /admin/me`; E2E admin 7 เคส |
 | 2026-10-31 | 2 | ✅ DONE | Member Registration & Approval ครบ (2.1–2.3) — ถัดไป: 3.1 Zones, Categories, Stalls |
+| 2026-10-31 | 3.1 | 🟨 IN PROGRESS | เริ่ม CRUD โซน/ประเภทสินค้า/ล็อค, bulk create, `GET /market-days/:id/stalls`, StallMap, หน้า admin |
+| 2026-10-31 | 3.1 | ✅ DONE | CRUD ประเภทสินค้า/โซน/ล็อค + bulk create + audit, `GET /market/layout` + `/market-days/:id/stalls`, `packages/stall-map` (SVG zoom/pan), หน้า admin ล็อค/โซน, หน้า `/map` ผู้ค้า; E2E ล็อค seed ถูกตำแหน่งทั้ง 2 แอป — unit 122 / integration 156 / E2E 18 ผ่าน — ถัดไป: 3.2 Booking Rounds & Market Days |

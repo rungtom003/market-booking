@@ -14,6 +14,7 @@ import { AuditModule } from './modules/audit/audit.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { HealthModule } from './modules/health/health.module';
 import { MarketModule } from './modules/market/market.module';
+import { MarketSetupModule } from './modules/market-setup/market-setup.module';
 import { NotifyModule } from './modules/notify/notify.module';
 import { SettingsModule } from './modules/settings/settings.module';
 import { StorageModule } from './modules/storage/storage.module';
@@ -34,6 +35,7 @@ import { REDIS, RedisModule } from './redis/redis.module';
         // ค่าเริ่มต้น "API ทั่วไป 100 ครั้ง/นาที ต่อ IP" (Overview §10.4) — endpoint เฉพาะตั้งเองด้วย @Throttle()
         throttlers: [{ name: 'default', ttl: 60_000, limit: config.get('RATE_LIMIT_PER_MINUTE') }],
         storage: new ThrottlerStorageRedisService(redis),
+        skipIf: () => config.get('RATE_LIMIT_DISABLED'),
       }),
     }),
     AuditModule,
@@ -45,6 +47,7 @@ import { REDIS, RedisModule } from './redis/redis.module';
     AdminUserModule,
     SettingsModule,
     VendorModule,
+    MarketSetupModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

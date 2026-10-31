@@ -111,6 +111,21 @@ export function makePng(width: number, height: number, rgb: [number, number, num
   ]);
 }
 
+/**
+ * ล็อค 20 ตัวจาก seed (A1–A10 แถวบน, B1–B10 แถวล่าง) ต้องอยู่ตรงตำแหน่งบน StallMap
+ * ตรวจจาก `<rect x y>` ของแต่ละล็อค (หน่วย px ของ canvas ตาม pos_x/pos_y)
+ */
+export async function expectSeedStallsOnMap(page: Page): Promise<void> {
+  for (const [row, prefix] of ['A', 'B'].entries()) {
+    for (let i = 0; i < 10; i++) {
+      const rect = page.locator(`[data-stall-code="${prefix}${i + 1}"] rect`);
+      await expect(rect).toHaveAttribute('x', String(20 + i * 70));
+      await expect(rect).toHaveAttribute('y', String(20 + row * 120));
+      await expect(rect).toHaveAttribute('width', '60');
+    }
+  }
+}
+
 /** สมัครผู้ค้าใหม่ผ่านหน้าเว็บผู้ค้าจนถึงหน้า "รอการอนุมัติ" */
 export async function registerVendor(
   page: Page,

@@ -1,0 +1,22 @@
+{
+  "name": "@market-booking/stall-map",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Component ผังตลาด (SVG) ที่ใช้ร่วมกันทั้ง web และ admin — Vite compile จาก source โดยตรง",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "peerDependencies": {
+    "react": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.31",
+    "react": "^18.3.1",
+    "typescript": "~5.9.3"
+  }
+}

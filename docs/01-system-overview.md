@@ -169,8 +169,8 @@ market-booking/
 │   │   │       ├── vendor/
 │   │   │       ├── admin-user/
 │   │   │       ├── settings/
-│   │   │       ├── market/      # markets, zones
-│   │   │       ├── stall/
+│   │   │       ├── market/      # ตลาดหลัก (MarketService)
+│   │   │       ├── market-setup/ # product categories, zones, stalls, ผังตลาด
 │   │   │       ├── round/       # booking_rounds, market_days
 │   │   │       ├── booking/
 │   │   │       ├── payment/
@@ -191,7 +191,8 @@ market-booking/
 │   └── admin/                   # Admin app
 │       └── src/{pages,features,components,hooks,lib,api}
 ├── packages/
-│   └── shared/                  # zod schemas, enums, types, socket event names
+│   ├── shared/                  # zod schemas, enums, types, socket event names
+│   └── stall-map/               # React component ผังตลาด (SVG) ใช้ทั้ง web/admin — Vite compile จาก source
 ├── docs/
 │   ├── 01-system-overview.md    # ไฟล์นี้
 │   └── 02-development-phases.md
@@ -586,8 +587,9 @@ Vendor กด "ยืนยันการจอง" → POST /bookings/:id/conf
 | GET | `/vendors/me/options` | ตัวเลือกของฟอร์มแก้โปรไฟล์ |
 | GET / PATCH | `/vendors/me` | แก้ไขข้อมูล (REJECTED → ส่งใหม่เป็น PENDING) |
 | POST | `/vendors/me/images` | presigned upload — ได้ `{ key, url, headers }` แล้ว PUT ไฟล์ตรงไป MinIO แล้วส่ง `key` ไปกับ `PATCH /vendors/me` |
+| GET | `/market/layout` | ผังตลาด (โซน + ล็อคที่เปิดใช้งาน) — ดูได้ก่อนเปิดรอบ (ผู้ค้า APPROVED) |
 | GET | `/rounds/current` | รอบที่กำลังจะเปิด/เปิดอยู่ |
-| GET | `/market-days/:id/stalls` | snapshot ผัง + สถานะ |
+| GET | `/market-days/:id/stalls` | snapshot ผัง + สถานะ (3.1: ราคา/ปิดล็อคตาม override, AVAILABLE/UNAVAILABLE; 4.1 เพิ่มสถานะจองจริง) |
 | POST | `/bookings/hold` | `{ stallId, marketDayId }` |
 | POST | `/bookings/:id/confirm` | |
 | POST | `/bookings/:id/cancel` | |
@@ -606,7 +608,8 @@ Vendor กด "ยืนยันการจอง" → POST /bookings/:id/conf
 | POST | `/admin/vendors/bulk-approve` (`{ ids }` หรือ `{ allPending: true }`) |
 | GET | `/admin/vendors/counts` (จำนวนต่อสถานะ — badge) |
 | GET / PUT | `/admin/settings` |
-| CRUD | `/admin/zones`, `/admin/stalls`, `/admin/product-categories` |
+| CRUD | `/admin/zones`, `/admin/stalls`, `/admin/product-categories` (GET คืนทั้งหมดไม่แบ่งหน้า, DELETE → 204) |
+| POST | `/admin/stalls/bulk` (prefix + ช่วงเลข เช่น A1–A20 ≤ 200 ล็อค, วางเป็นตาราง; รหัสซ้ำตัวเดียว = ไม่สร้างเลย) |
 | PUT | `/admin/stalls/layout` (บันทึกตำแหน่งจาก Map Editor ทั้งชุด) |
 | CRUD | `/admin/rounds`, `/admin/rounds/:id/market-days` |
 | POST | `/admin/rounds/:id/publish` · `/cancel` |
@@ -629,6 +632,8 @@ Code ของ Auth (เพิ่มใน Phase 1.3–1.4): `INVALID_CREDENTIAL
 
 Code ของผู้ค้า (เพิ่มใน Phase 2.1): `PHONE_ALREADY_REGISTERED` (สมัครซ้ำ → ให้ยืนยัน OTP เพื่อ login), `UPLOAD_INVALID` (`details.field`)
 
+Code ของการตั้งค่าตลาด (เพิ่มใน Phase 3.1): `STALL_CODE_TAKEN` (`details.codes`), `RESOURCE_IN_USE` (ลบไม่ได้เพราะมีข้อมูลอ้างถึง — `details` เป็นจำนวน เช่น `{ bookings, waitlists }`)
+
 `OTP_INVALID` มี `details.attemptsLeft`; ขอ OTP ถี่เกิน → `RATE_LIMITED` พร้อม `details.retryAfterSeconds`
 
 | HTTP | Code |
@@ -637,7 +642,7 @@ Code ของผู้ค้า (เพิ่มใน Phase 2.1): `PHONE_ALREA
 | 401 | `UNAUTHORIZED` (token หาย/ผิด/หมดอายุ → client ลอง refresh), `INVALID_CREDENTIALS` |
 | 403 | `FORBIDDEN`, `VENDOR_NOT_APPROVED`, `VENDOR_SUSPENDED` |
 | 404 | `NOT_FOUND` |
-| 409 | `CONFLICT`, `USERNAME_TAKEN`, `LINE_ALREADY_LINKED`, `PHONE_ALREADY_REGISTERED`, `ROUND_NOT_OPEN`, `STALL_TAKEN`, `STALL_UNAVAILABLE`, `QUOTA_EXCEEDED`, `HOLD_EXPIRED`, `INVALID_STATE_TRANSITION`, `CANCEL_WINDOW_PASSED` |
+| 409 | `CONFLICT`, `USERNAME_TAKEN`, `LINE_ALREADY_LINKED`, `PHONE_ALREADY_REGISTERED`, `STALL_CODE_TAKEN`, `RESOURCE_IN_USE`, `ROUND_NOT_OPEN`, `STALL_TAKEN`, `STALL_UNAVAILABLE`, `QUOTA_EXCEEDED`, `HOLD_EXPIRED`, `INVALID_STATE_TRANSITION`, `CANCEL_WINDOW_PASSED` |
 | 422 | `CATEGORY_NOT_ALLOWED` |
 | 429 | `RATE_LIMITED`, `ACCOUNT_LOCKED` |
 | 500 | `INTERNAL_ERROR` (ไม่ส่งข้อความจริงออกไป — ดูใน log ด้วย `x-request-id`) |
@@ -716,6 +721,7 @@ NODE_ENV=development
 PORT=3000
 LOG_LEVEL=info
 RATE_LIMIT_PER_MINUTE=100
+# RATE_LIMIT_DISABLED=false   (true เฉพาะ E2E — env schema ไม่ยอมใน production)
 DATABASE_URL=postgresql://market:market_dev@localhost:5433/market_booking
 TEST_DATABASE_URL=postgresql://market:market_dev@localhost:5433/market_booking_test
 REDIS_URL=redis://localhost:6379
@@ -808,6 +814,13 @@ VITE_LINE_LIFF_ID=        (ฝั่ง web — ว่าง = ซ่อนป�
 | 2026-10-31 | ฟอร์ม Settings สร้างจาก `settingFields` (ชนิด/ช่วงค่า) + ชื่อภาษาไทยใน admin (`META`), ส่งเฉพาะ key ที่แก้ | เพิ่ม setting ใหม่แก้ schema + ใส่ชื่อไทยที่เดียว; ไม่ทับค่าที่ admin อื่นเพิ่งแก้ |
 | 2026-10-31 | `@mui/x-data-grid` ปักไว้ `~9.16.0`; MUI 9 ไม่มี system props (`fontWeight=`, `justifyContent=`) แล้ว ใช้ `sx` | 9.17 ใหม่เกิน `minimumReleaseAge` ของ pnpm (ไม่ bypass) |
 | 2026-10-31 | E2E แยก project: ผู้ค้า (Pixel 5, 360px) / admin (Desktop Chrome 1280px) และเปิด admin :5184 เพิ่ม | แอปผู้ค้า mobile-first, admin desktop-first (§4) |
+
+| 2026-10-31 | เพิ่ม `GET /market/layout` (ผู้ค้า APPROVED) นอกจาก `/market-days/:id/stalls` | ผู้ค้าดูผังได้ก่อนมีวันขาย (3.2) และใช้ตรวจ AC "seed 20 ล็อคบนผัง" ฝั่ง web ได้ทันที |
+| 2026-10-31 | `StallMap` แยกเป็น `packages/stall-map` (source-only, Vite compile เอง) ใช้ style inline ไม่ผูก Tailwind/MUI | ใช้ร่วม web (Tailwind) กับ admin (MUI) โดยไม่ต้อง copy และไม่ต้องใส่ React ใน `packages/shared` ที่ API ใช้ |
+| 2026-10-31 | ผังตลาด: ว่าง = สีโซนอ่อน + ขอบสีโซน; สถานะอื่น (สงวน/ปิด/จองแล้ว/ของฉัน) ใช้สีกลางคงที่; ซูม/เลื่อนผ่าน `viewBox` (pinch, ลาก, ล้อเมาส์, ปุ่ม) | สีสถานะไม่ชนกับสีโซนที่ admin เลือกเอง; ผังสูงตามสัดส่วน (220px–70vh) |
+| 2026-10-31 | ลบล็อค/โซน/ประเภทที่มีข้อมูลอ้างถึงไม่ได้ (`RESOURCE_IN_USE`) — ล็อคที่เคยมีการจองให้ปิด `is_active` แทน; ลบประเภทแล้วเอาออกจาก `zones.allowed_category_ids` อัตโนมัติ | เก็บประวัติการจอง; array ไม่มี FK จึงล้างเองใน transaction |
+| 2026-10-31 | รหัสล็อคเก็บตัวพิมพ์ใหญ่ (trim + uppercase) และเรียงแบบตัวเลข (A2 ก่อน A10) | กัน `a1`/`A1` ซ้ำกันทั้งที่ unique index เป็น case-sensitive |
+| 2026-10-31 | env `RATE_LIMIT_DISABLED` (ปิด rate limit ต่อ IP) ใช้กับ E2E — schema ห้าม `true` ใน production | E2E ยิงทุก request จาก IP เดียว เกิน limit login/OTP 10 ครั้ง/นาที; limit ต่อบัญชี/เบอร์ใน Redis ยังทำงาน |
 
 ### Open Questions
 - [ ] ใช้กับตลาดเดียวหรือหลายตลาด (ตอนนี้ schema รองรับแล้ว แต่ UI ยังเป็นตลาดเดียว)
