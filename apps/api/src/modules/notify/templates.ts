@@ -32,6 +32,7 @@ export type NotificationTemplate =
       template: 'waitlist.offer';
       params: { stallCode: string; marketDate: string; expiresAt: string };
     }
+  | { template: 'announcement'; params: { title: string; body: string } }
   | { template: 'admin.vendor_registered'; params: { vendorName: string } }
   | {
       template: 'admin.payment_submitted';
@@ -156,6 +157,20 @@ export function renderTemplate(n: NotificationTemplate, ctx: RenderContext): Ren
         ],
         link: { label: 'ยืนยันการจอง', url: web('/bookings') },
         sms: `ได้สิทธิ์ล็อค ${n.params.stallCode} ยืนยันภายใน ${until} น. ${web('/bookings')}`,
+      };
+    }
+    case 'announcement': {
+      // LINE แสดงข้อความยาวได้ แต่การ์ดไม่ควรยาวเกินจอ — ตัดแล้วให้กดอ่านต่อในเว็บ
+      const body = n.params.body.length > 500 ? `${n.params.body.slice(0, 497)}…` : n.params.body;
+      return {
+        title: `ประกาศ: ${n.params.title}`,
+        lines: body
+          .split('\n')
+          .map((l) => l.trim())
+          .filter(Boolean)
+          .slice(0, 12),
+        link: { label: 'อ่านในเว็บ', url: web('/') },
+        sms: `ประกาศจากตลาด: ${n.params.title} ${web('/')}`,
       };
     }
     case 'admin.vendor_registered':

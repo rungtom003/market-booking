@@ -1,4 +1,7 @@
 import type {
+  AdminAnnouncement,
+  CreateAnnouncementInput,
+  UpdateAnnouncementInput,
   AddMarketDaysInput,
   AdminBooking,
   AdminBookingListQuery,
@@ -272,6 +275,15 @@ export const adminApi = {
       ),
     remove: (id: string) =>
       unwrap(apiClient.delete<ApiResponse<AdminWaitlistEntry>>(`/admin/waitlists/${id}`)),
+  },
+
+  announcements: {
+    list: () => unwrap(apiClient.get<ApiResponse<AdminAnnouncement[]>>('/admin/announcements')),
+    create: (input: CreateAnnouncementInput) =>
+      unwrap(apiClient.post<ApiResponse<AdminAnnouncement>>('/admin/announcements', input)),
+    update: (id: string, input: UpdateAnnouncementInput) =>
+      unwrap(apiClient.patch<ApiResponse<AdminAnnouncement>>(`/admin/announcements/${id}`, input)),
+    remove: (id: string) => apiClient.delete(`/admin/announcements/${id}`),
   },
 
   payments: {

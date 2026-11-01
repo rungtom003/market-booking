@@ -70,10 +70,10 @@
 | 6 | MVP Deployment 🚀 | 🟨 IN PROGRESS | 2026-11-01 | |
 | 7 | Notifications (LINE OA / SMS) | ✅ DONE | 2026-11-01 | 2026-11-01 |
 | 8 | Reports & Dashboard | ✅ DONE | 2026-11-01 | 2026-11-01 |
-| 9 | Advanced Booking | 🟨 IN PROGRESS | 2026-11-01 | |
+| 9 | Advanced Booking | ✅ DONE | 2026-11-01 | 2026-11-01 |
 | 9.1 | ↳ Map Editor (ลากวาง) | ✅ DONE | 2026-11-01 | 2026-11-01 |
 | 9.2 | ↳ Waitlist | ✅ DONE | 2026-11-01 | 2026-11-01 |
-| 9.3 | ↳ Announcements | ⬜ TODO | | |
+| 9.3 | ↳ Announcements | ✅ DONE | 2026-11-01 | 2026-11-01 |
 | 10 | Check-in & No-show | ⬜ TODO | | |
 | 11 | Hardening & Scale | ⬜ TODO | | |
 
@@ -719,7 +719,7 @@
 ---
 
 ## Phase 9 — Advanced Booking
-**สถานะ:** 🟨 IN PROGRESS · **Dependencies:** Phase 7
+**สถานะ:** ✅ DONE · **Dependencies:** Phase 7 · **เริ่ม:** 2026-11-01 · **เสร็จ:** 2026-11-01
 
 ### 9.1 Map Editor (ลากวาง)
 **สถานะ:** ✅ DONE · **Dependencies:** 7 · **เริ่ม:** 2026-11-01 · **เสร็จ:** 2026-11-01
@@ -762,12 +762,21 @@
 - ทดสอบ: unit 215 (+1 template), integration 268 (+7), E2E 32 (+1)
 
 ### 9.3 Announcements
-**สถานะ:** ⬜ TODO · **Dependencies:** 7 · **เริ่ม:** – · **เสร็จ:** –
+**สถานะ:** ✅ DONE · **Dependencies:** 7 · **เริ่ม:** 2026-11-01 · **เสร็จ:** 2026-11-01
 
 **Tasks**
-- [ ] CRUD ประกาศ (ช่วงเวลาแสดง, ปักหมุด), แสดงหน้าแรก vendor, option ส่ง LINE broadcast
+- [x] CRUD ประกาศ (ช่วงเวลาแสดง, ปักหมุด), แสดงหน้าแรก vendor, option ส่ง LINE broadcast
 
-**Agent Notes:** –
+**Agent Notes:**
+- ✅ E2E `admin-announcements.spec.ts`: admin สร้างประกาศปักหมุดหลายบรรทัด (สถานะ "กำลังแสดง") + ประกาศตั้งเวลาล่วงหน้าพร้อมส่ง LINE (หยุดแสดงก่อนเริ่มแสดง → แจ้งที่ช่อง; สำเร็จแล้วสถานะ "ตั้งเวลาไว้" + "รอส่ง LINE") → ผู้ค้าที่เพิ่งสมัคร (รออนุมัติ) เห็นเฉพาะประกาศที่ถึงเวลาที่หน้าแรกพร้อมป้าย "ปักหมุด" → admin ลบ → ผู้ค้าโหลดใหม่ไม่เห็น; จบ test ลบประกาศของ test (`deleteAnnouncements`)
+- Shared: `announcement.ts` — `createAnnouncementSchema`/`updateAnnouncementSchema` (เวลาต้องมี timezone, หยุดแสดงต้องหลังเริ่มแสดง), `announcementState()` (ตั้งเวลาไว้/กำลังแสดง/หมดเวลาแล้ว); สิทธิ์ใหม่ `ANNOUNCEMENTS_MANAGE` (SUPER_ADMIN, ADMIN)
+- API (`modules/announcement/`): `GET /announcements` (ผู้ค้าทุกสถานะ — เฉพาะตลาดตัวเองที่ `publish_at ≤ now < expire_at`, ปักหมุดก่อนแล้วใหม่สุดก่อน, สูงสุด 20), admin `GET/POST /admin/announcements` + `PATCH/DELETE /admin/announcements/:id` (audit `announcement.create|update|delete`; PATCH ตรวจคู่เวลาเทียบค่าเดิม)
+- LINE: migration เพิ่ม `broadcast_line`, `broadcasted_at`; `NotificationReminders.broadcastAnnouncements` (ทุก tick) จองประกาศที่ถึงเวลาด้วย `broadcasted_at` แบบมีเงื่อนไข → push ทีละคนผ่านคิว `notification` ถึงผู้ค้า APPROVED ที่เชื่อม LINE (`toVendors(..., { lineOnly: true })`, dedupe `announcement:<id>:<vendor>`) — ไม่ส่ง SMS แทน; ถ้ายังไม่ตั้ง LINE OA ประกาศรอไว้ไม่ถือว่าส่งแล้ว; template `announcement` (Flex: หัวข้อ + บรรทัดละไม่เกิน 12 บรรทัด, ตัดที่ 500 ตัวอักษร)
+- เว็บผู้ค้า: การ์ด "ประกาศจากตลาด" บนสุดของหน้าแรก (ปักหมุดสีเหลือง, คงการขึ้นบรรทัด, "อ่านต่อ" เมื่อยาว > 180 ตัวอักษร, โหลดใหม่ทุก 5 นาที); ไม่มีประกาศ = ไม่แสดงการ์ด
+- Admin: เมนู "ประกาศ" (`/announcements`) — รายการพร้อมสถานะ/ปักหมุด/สถานะ LINE, ฟอร์มสร้าง/แก้ (เวลาไทย, เว้นหยุดแสดง = แสดงจนกว่าจะลบ; แก้ไขส่งเฉพาะช่องที่เปลี่ยน), ยืนยันก่อนลบ; ส่ง LINE แล้วติ๊กใหม่ไม่ได้
+- ข้อจำกัด: ไม่มี realtime (ผู้ค้าเห็นภายใน 5 นาทีหรือเมื่อกลับมาที่แท็บ); LINE ที่ส่งแล้วลบ/แก้ย้อนหลังไม่ได้; ประกาศตั้งเวลาส่ง LINE ช้าสุด 1 รอบ tick ของ reminder
+- ทดสอบ: unit 218 (+3), integration 272 (+4 `announcements.int-spec.ts`), E2E 33 (+1)
+- Phase 9 ครบ (9.1–9.3) — Phase 6 ยังรอ deploy บน VPS จริง
 
 ---
 
@@ -856,3 +865,5 @@
 | 2026-11-01 | 9.1 | ✅ DONE | Map Editor (ลาก/ย่อ-ขยาย/หมุนหลายชิ้น, snap กริด, copy/paste, undo/redo, สัญลักษณ์ 6 แบบ, รูปแปลน) + `GET/PUT /admin/stalls/layout` (transaction + optimistic lock `layout_version`) + ผู้ค้าเห็นพื้นหลัง/สัญลักษณ์ — unit 214 / integration 261 / E2E 31 — ถัดไป: 9.2 Waitlist |
 | 2026-11-01 | 9.2 | 🟨 IN PROGRESS | เริ่ม Waitlist: เข้า/ออกคิว (ล็อค/โซน), ส่งสิทธิ์ HOLD อัตโนมัติเมื่อล็อคว่าง, ส่งต่อคิวเมื่อหมดเวลา, UI ผู้ค้า + admin |
 | 2026-11-01 | 9.2 | ✅ DONE | คิวรอ: ส่งสิทธิ์เป็น HOLD ในชื่อผู้ค้า (ฟัง booking.changed, ล็อค advisory, ตรวจโควตา/ประเภทสินค้า/สถานะ), ส่งต่อเมื่อหมดเวลา/สละสิทธิ์, `waitlist:offer` + LINE/SMS, UI ผู้ค้า (bottom sheet + การจองของฉัน) และ admin (แผงคิวรอ); AC สิทธิ์วนครบ 3 คิวแล้วล็อคว่าง — unit 215 / integration 268 / E2E 32 — ถัดไป: 9.3 Announcements |
+| 2026-11-01 | 9.3 | 🟨 IN PROGRESS | เริ่ม Announcements: CRUD + ช่วงเวลาแสดง/ปักหมุด, การ์ดหน้าแรกผู้ค้า, ตัวเลือกส่ง LINE ครั้งเดียวเมื่อถึงเวลา |
+| 2026-11-01 | 9.3 | ✅ DONE | ประกาศ: API ผู้ค้า + admin CRUD (audit, สิทธิ์ `ANNOUNCEMENTS_MANAGE`), ส่ง LINE ถึงผู้ค้าที่เชื่อม LINE ผ่านคิวแจ้งเตือน (ครั้งเดียว, รอเมื่อยังไม่ตั้ง LINE OA), การ์ดหน้าแรกผู้ค้า, หน้า admin — unit 218 / integration 272 / E2E 33 — Phase 9 ✅ ถัดไป: Phase 10 Check-in & No-show (Phase 6 ยังรอ deploy บน VPS จริง) |

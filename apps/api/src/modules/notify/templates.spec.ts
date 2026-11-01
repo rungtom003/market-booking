@@ -46,6 +46,10 @@ const samples = {
     template: 'waitlist.offer',
     params: { stallCode: 'B4', marketDate: '2026-11-21', expiresAt: '2026-11-20T05:30:00.000Z' },
   },
+  announcement: {
+    template: 'announcement',
+    params: { title: 'งดขายวันสงกรานต์', body: 'ตลาดปิด 13–15 เม.ย.\r\nเปิดตามปกติ 16 เม.ย.' },
+  },
   'admin.vendor_registered': {
     template: 'admin.vendor_registered',
     params: { vendorName: 'สมชาย ใจดี' },
@@ -88,6 +92,19 @@ describe('notification templates', () => {
     );
     const noReason = renderTemplate({ template: 'vendor.rejected', params: { reason: null } }, ctx);
     expect(noReason.lines.some((l) => l.startsWith('เหตุผล'))).toBe(false);
+  });
+
+  it('ประกาศ: แยกบรรทัด (รวม CRLF) ตัดบรรทัดว่าง และตัดข้อความที่ยาวเกิน', () => {
+    expect(renderTemplate(samples.announcement, ctx).lines).toEqual([
+      'ตลาดปิด 13–15 เม.ย.',
+      'เปิดตามปกติ 16 เม.ย.',
+    ]);
+    const long = renderTemplate(
+      { template: 'announcement', params: { title: 'ยาว', body: 'ก'.repeat(800) } },
+      ctx,
+    );
+    expect(long.lines[0]).toHaveLength(498);
+    expect(long.lines[0]!.endsWith('…')).toBe(true);
   });
 
   it('ข้อความของเจ้าหน้าที่ลิงก์ไปแอป admin', () => {

@@ -3,6 +3,7 @@ import type Redis from 'ioredis';
 import { PrismaService } from '../../prisma/prisma.service';
 import { REDIS } from '../../redis/redis.module';
 import { SettingsService } from '../settings/settings.service';
+import { LineMessagingProvider } from './line/line-messaging.provider';
 import { NotificationService } from './notification.service';
 import { NotificationQueue, TICK_JOB } from './notification.queue';
 
@@ -29,6 +30,7 @@ export class NotificationReminders implements OnModuleInit {
     private readonly settings: SettingsService,
     private readonly notifications: NotificationService,
     private readonly queue: NotificationQueue,
+    private readonly line: LineMessagingProvider,
     @Inject(REDIS) private readonly redis: Redis,
   ) {}
 
@@ -48,8 +50,9 @@ export class NotificationReminders implements OnModuleInit {
     };
     const rounds = await run('round reminders', () => this.remindRoundOpening(now));
     const payments = await run('payment reminders', () => this.remindPaymentDue(now));
+    const announcements = await run('announcements', () => this.broadcastAnnouncements(now));
     const recovered = await run('recover', () => this.notifications.recoverStale(now));
-    return `rounds ${rounds}, payments ${payments}, recovered ${recovered}`;
+    return `rounds ${rounds}, payments ${payments}, announcements ${announcements}, recovered ${recovered}`;
   }
 
   /** คืนจำนวนข้อความใหม่ */
@@ -89,6 +92,54 @@ export class NotificationReminders implements OnModuleInit {
         cursor = vendors.at(-1)!.id;
       }
       await this.redis.set(done, '1', 'EX', 8 * 24 * 60 * 60);
+    }
+    return sent;
+  }
+
+  /**
+   * ประกาศที่เลือก "ส่ง LINE" และถึงเวลาเผยแพร่แล้ว → ส่งถึงผู้ค้าที่อนุมัติแล้วและเชื่อม LINE ครั้งเดียว
+   * ยังไม่ตั้ง LINE OA = รอไว้ก่อน (ตั้งค่าแล้วส่งตามหลังได้) — คืนจำนวนข้อความใหม่
+   */
+  async broadcastAnnouncements(now: Date = new Date()): Promise<number> {
+    if (!this.line.enabled) return 0;
+    const due = await this.prisma.announcement.findMany({
+      where: {
+        broadcastLine: true,
+        broadcastedAt: null,
+        publishAt: { lte: now },
+        OR: [{ expireAt: null }, { expireAt: { gt: now } }],
+      },
+      select: { id: true, marketId: true, title: true, body: true },
+    });
+
+    let sent = 0;
+    for (const a of due) {
+      // จองสิทธิ์ส่งก่อน (หลาย instance/tick ซ้อน ส่งได้ครั้งเดียว) — ถ้าพังกลางทาง dedupeKey กันซ้ำตอนส่งใหม่
+      const claimed = await this.prisma.announcement.updateMany({
+        where: { id: a.id, broadcastedAt: null },
+        data: { broadcastedAt: now },
+      });
+      if (claimed.count === 0) continue;
+      let cursor: string | undefined;
+      for (;;) {
+        const vendors = await this.prisma.vendor.findMany({
+          where: { marketId: a.marketId, status: 'APPROVED', lineUserId: { not: null } },
+          select: { id: true, phone: true, lineUserId: true },
+          orderBy: { id: 'asc' },
+          take: VENDOR_BATCH,
+          ...(cursor && { cursor: { id: cursor }, skip: 1 }),
+        });
+        sent += await this.notifications.toVendors(
+          vendors,
+          (v) => ({
+            message: { template: 'announcement', params: { title: a.title, body: a.body } },
+            dedupeKey: `announcement:${a.id}:${v.id}`,
+          }),
+          { lineOnly: true },
+        );
+        if (vendors.length < VENDOR_BATCH) break;
+        cursor = vendors.at(-1)!.id;
+      }
     }
     return sent;
   }

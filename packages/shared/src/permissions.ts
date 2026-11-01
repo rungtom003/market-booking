@@ -12,6 +12,7 @@ export const Permission = {
   REPORTS_VIEW: 'REPORTS_VIEW',
   CHECKIN: 'CHECKIN',
   VENDOR_PHONE_VIEW: 'VENDOR_PHONE_VIEW',
+  ANNOUNCEMENTS_MANAGE: 'ANNOUNCEMENTS_MANAGE',
   AUDIT_LOG_VIEW: 'AUDIT_LOG_VIEW',
 } as const;
 export type Permission = (typeof Permission)[keyof typeof Permission];
@@ -31,6 +32,8 @@ export const PERMISSION_ROLES: Record<Permission, readonly AdminRole[]> = {
   CHECKIN: [SUPER_ADMIN, ADMIN, STAFF],
   /** เบอร์โทรเต็มในรายงาน/ไฟล์ export — ไม่มีสิทธิ์เห็นแบบปิดบางส่วน (PDPA §13) */
   VENDOR_PHONE_VIEW: [SUPER_ADMIN, ADMIN, STAFF],
+  /** สร้าง/แก้/ลบประกาศ + ส่ง LINE ถึงผู้ค้าทุกคน (Phase 9.3) */
+  ANNOUNCEMENTS_MANAGE: [SUPER_ADMIN, ADMIN],
   AUDIT_LOG_VIEW: [SUPER_ADMIN, ADMIN],
 };
 

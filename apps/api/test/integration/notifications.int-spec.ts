@@ -530,7 +530,9 @@ describe('Notifications: queue + LINE/SMS + reminders (integration)', () => {
     const reminders = app.get(NotificationReminders);
     jest.spyOn(reminders, 'remindRoundOpening').mockRejectedValueOnce(new Error('db hiccup'));
 
-    await expect(reminders.tick()).resolves.toMatch(/^rounds -1, payments \d+, recovered \d+$/);
+    await expect(reminders.tick()).resolves.toMatch(
+      /^rounds -1, payments \d+, announcements \d+, recovered \d+$/,
+    );
   });
 
   // ───────────── webhook ของ LINE OA ─────────────

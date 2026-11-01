@@ -16,3 +16,4 @@ export * from './vendor.js';
 export * from './vendor-auth.js';
 export * from './report.js';
 export * from './waitlist.js';
+export * from './announcement.js';

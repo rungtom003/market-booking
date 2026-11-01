@@ -66,6 +66,7 @@
 | อนุมัติ/ปฏิเสธ/ระงับ Vendor | ✅ | ✅ | ✅ | ❌ |
 | จัดการโซน/ล็อค/ผังตลาด | ✅ | ✅ | ❌ | ❌ |
 | จัดการรอบการจอง | ✅ | ✅ | ❌ | ❌ |
+| จัดการประกาศ (`ANNOUNCEMENTS_MANAGE` — รวมส่ง LINE ถึงผู้ค้า) | ✅ | ✅ | ❌ | ❌ |
 | ยกเลิกการจองแทนผู้ค้า (รวมดูผัง/ตารางการจอง, จองแทน, export รายชื่อ) | ✅ | ✅ | ✅ | ❌ |
 | ตรวจสลิป/ยืนยันการชำระเงิน | ✅ | ✅ | ❌ | ✅ |
 | ดูรายงาน | ✅ | ✅ | ✅ | ✅ |
@@ -384,7 +385,7 @@ CREATE INDEX ix_bookings_pay_due    ON bookings (payment_due_at)  WHERE status =
 
 **`system_settings`** — market_id, key, value (jsonb), updated_by — unique (market_id, key)
 
-**`announcements`** — market_id, title, body, publish_at, expire_at, is_pinned
+**`announcements`** — market_id, title, body, publish_at, expire_at null (null = แสดงจนกว่าจะลบ), is_pinned, broadcast_line (ส่ง LINE เมื่อถึง publish_at), broadcasted_at null (เวลาที่ระบบเริ่มส่ง LINE — กันส่งซ้ำ; Phase 9.3)
 
 **`audit_logs`**
 | Column | Type | หมายเหตุ |
@@ -626,7 +627,7 @@ Vendor กด "ยืนยันการจอง" → POST /bookings/:id/conf
 | POST | `/bookings/:id/payments` | `{ slipImageKey }` → การจอง `PENDING_VERIFY` + payment `PENDING` (เลยกำหนด → `PAYMENT_DUE_PASSED`) |
 | GET | `/bookings/:id/checkin-qr` | |
 | GET / POST / DELETE | `/waitlists` / `/waitlists` / `/waitlists/:id` | คิวของฉัน (พร้อม `ahead` = คิวก่อนหน้า), เข้าคิว `{ marketDayId, stallId | zoneId }`, ออกจากคิว (ได้สิทธิ์อยู่ = สละ HOLD) |
-| GET | `/announcements` | |
+| GET | `/announcements` | ประกาศที่กำลังแสดงของตลาดตัวเอง (`publish_at ≤ now < expire_at`) ปักหมุดก่อนแล้วใหม่สุดก่อน ≤ 20 รายการ — ผู้ค้าทุกสถานะ |
 
 ### Admin
 | Method | Path |
@@ -660,7 +661,8 @@ Vendor กด "ยืนยันการจอง" → POST /bookings/:id/conf
 | POST | `/admin/checkin/scan` |
 | GET | `/admin/reports/dashboard` (ผู้ค้ารออนุมัติ, สลิปรอตรวจ, อัตราการจอง + รายได้ของรอบปัจจุบัน) |
 | GET | `/admin/reports/revenue` (`groupBy=day\|round\|zone`), `/occupancy` (`groupBy=day\|zone`), `/vendors` (`sort=bookings\|revenue\|cancelled\|noshow`) — ทุกตัวรับ `from`, `to` (วันขาย), `roundId`, `format=json\|xlsx\|csv` (ไฟล์ลง audit `report.export`) |
-| CRUD | `/admin/users`, `/admin/announcements` |
+| CRUD | `/admin/users` |
+| GET / POST | `/admin/announcements` (ทุกรายการพร้อม `state` = SCHEDULED/ACTIVE/EXPIRED, `broadcastedAt`) · PATCH / DELETE `/admin/announcements/:id` — สิทธิ์ `ANNOUNCEMENTS_MANAGE`, audit `announcement.create|update|delete` |
 | GET | `/admin/audit-logs` (`actorType`, `actorId`, `action` — ลงท้าย `.` = ทั้งกลุ่ม, `entityType`, `entityId`, `from`/`to` เวลาตลาด, แบ่งหน้า) · `/admin/audit-logs/actions` |
 
 ### Error Codes หลัก
@@ -946,6 +948,8 @@ VITE_LINE_LIFF_ID=        (ฝั่ง web — ว่าง = ซ่อนป�
 | 2026-11-01 | คิวรอส่งสิทธิ์ด้วยการ "สร้าง HOLD ในชื่อผู้ค้า" แล้วใช้ปุ่มยืนยัน/worker หมดเวลาเดิม; ผูกคิวกับ HOLD ด้วย `waitlists.offer_booking_id` และเลื่อนคิวจาก `booking.changed` ทั้งหมด (ไม่มี timer/queue แยก) | ไม่มี state machine ซ้ำ — หมดเวลา/ยกเลิกทุกทางส่งต่อคิวเอง; ล็อคที่ได้สิทธิ์ถูกกันไว้จริงด้วย unique index เดิม |
 | 2026-11-01 | ส่งสิทธิ์ใน transaction ที่ล็อค advisory ต่อ (ล็อค, วันขาย) แล้วต่อ (ผู้ค้า, วันขาย) เพื่อตรวจโควตา; คนอื่นจองตัดหน้า (unique) = ไม่ให้สิทธิ์ | event ซ้ำ/หลาย instance ไม่ให้สิทธิ์ซ้อน; ลำดับล็อคเดียวกับ `hold` ฝั่งผู้ค้า (ผู้ค้าเท่านั้น) จึงไม่ deadlock |
 | 2026-11-01 | เข้าคิวได้เฉพาะล็อค/โซนที่เต็ม, คิวที่ไม่มีสิทธิ์ตอนให้สิทธิ์ข้ามแต่ยังรอต่อ, จำกัด 5 คิวต่อผู้ค้าต่อวัน | คิวมีไว้เมื่อจองเองไม่ได้; ผู้ค้าที่เกินโควตาวันนี้อาจมีสิทธิ์ภายหลัง (ยกเลิกล็อคอื่น) |
+| 2026-11-01 | ประกาศส่ง LINE ด้วย push ทีละคนผ่านคิว `notification` (ผู้ค้า APPROVED ที่เชื่อม LINE, dedupe ต่อประกาศ+ผู้ค้า) แทน broadcast API ของ LINE OA และไม่ส่ง SMS แทน | broadcast ของ OA ส่งถึงทุกคนที่เพิ่มเพื่อน (รวมคนที่ไม่ใช่ผู้ค้า/ตลาดอื่น) และไม่มี log ต่อคน; ใช้ retry/log เดิมของ Phase 7 ได้; ประกาศอาจยาว — ค่า SMS สูงและผู้ค้าเห็นในเว็บอยู่แล้ว |
+| 2026-11-01 | ส่ง LINE ของประกาศจาก reminder tick: จองด้วย `broadcasted_at` แบบมีเงื่อนไข (ส่งครั้งเดียวแม้มีหลาย instance), ยังไม่ตั้ง LINE OA = รอไว้ | ประกาศตั้งเวลาล่วงหน้าได้โดยไม่ต้องมี job แยก; แก้ประกาศหลังส่งแล้วไม่ส่งซ้ำ; ตั้ง LINE ทีหลังประกาศที่ยังแสดงอยู่ก็ยังส่งได้ |
 
 ### Open Questions
 - [ ] ใช้กับตลาดเดียวหรือหลายตลาด (ตอนนี้ schema รองรับแล้ว แต่ UI ยังเป็นตลาดเดียว)

@@ -1,6 +1,7 @@
 import { Link } from 'react-router';
 import type { VendorProfile } from '@market-booking/shared';
 import { useMyProfile } from '../api/vendor';
+import { Announcements } from '../components/Announcements';
 import { Layout } from '../components/Layout';
 import { RoundCard } from '../components/RoundCard';
 import { Alert, Button, Card, Spinner, linkButtonClass } from '../components/ui';
@@ -35,6 +36,7 @@ export function HomePage() {
       <p className="text-gray-600">
         สวัสดี <strong className="text-gray-900">{vendor.firstName}</strong>
       </p>
+      <Announcements />
       <StatusCard vendor={vendor} />
       <Card className="text-sm text-gray-700">
         <h2 className="mb-2 font-semibold text-gray-900">ข้อมูลที่ส่งไว้</h2>

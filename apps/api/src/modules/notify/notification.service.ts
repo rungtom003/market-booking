@@ -84,9 +84,14 @@ export class NotificationService implements OnModuleInit {
   async toVendors(
     vendors: readonly VendorTarget[],
     build: (vendor: VendorTarget) => VendorMessage,
+    options: { lineOnly?: boolean } = {},
   ): Promise<number> {
     try {
-      const data = vendors.map((vendor) => {
+      // lineOnly (เช่น ประกาศ): ผู้ค้าที่ไม่มี LINE ข้ามไป ไม่ส่ง SMS แทน (ประหยัดเครดิต)
+      const targets = options.lineOnly
+        ? vendors.filter((v) => this.route(v).channel === NotificationChannel.LINE)
+        : vendors;
+      const data = targets.map((vendor) => {
         const { message, dedupeKey } = build(vendor);
         return {
           ...this.route(vendor),

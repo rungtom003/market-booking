@@ -175,6 +175,15 @@ export async function adminRequest(request: APIRequestContext) {
     async cancelRound(id: string) {
       await request.post(`${API_URL}/admin/rounds/${id}/cancel`, { headers });
     },
+    /** ลบประกาศที่หัวข้อขึ้นต้นด้วย `prefix` (เก็บกวาดหลัง test) */
+    async deleteAnnouncements(prefix: string) {
+      const res = await request.get(`${API_URL}/admin/announcements`, { headers });
+      for (const a of (await res.json()).data as { id: string; title: string }[]) {
+        if (a.title.startsWith(prefix)) {
+          await request.delete(`${API_URL}/admin/announcements/${a.id}`, { headers });
+        }
+      }
+    },
   };
 }
 

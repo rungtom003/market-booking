@@ -430,15 +430,19 @@ model SystemSetting {
 }
 
 model Announcement {
-  id        String    @id @default(uuid(7)) @db.Uuid
-  marketId  String    @map("market_id") @db.Uuid
-  title     String    @db.VarChar(200)
-  body      String
-  publishAt DateTime  @map("publish_at") @db.Timestamptz(6)
-  expireAt  DateTime? @map("expire_at") @db.Timestamptz(6)
-  isPinned  Boolean   @default(false) @map("is_pinned")
-  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id            String    @id @default(uuid(7)) @db.Uuid
+  marketId      String    @map("market_id") @db.Uuid
+  title         String    @db.VarChar(200)
+  body          String
+  publishAt     DateTime  @map("publish_at") @db.Timestamptz(6)
+  expireAt      DateTime? @map("expire_at") @db.Timestamptz(6)
+  isPinned      Boolean   @default(false) @map("is_pinned")
+  /// ส่ง LINE ถึงผู้ค้าที่เชื่อม LINE ครั้งเดียวเมื่อถึง publish_at (Phase 9.3)
+  broadcastLine Boolean   @default(false) @map("broadcast_line")
+  /// เวลาที่เริ่มส่ง LINE แล้ว — null = ยังไม่ส่ง
+  broadcastedAt DateTime? @map("broadcasted_at") @db.Timestamptz(6)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   market Market @relation(fields: [marketId], references: [id])
 

@@ -3,6 +3,7 @@ import { Permission } from '@market-booking/shared';
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
 import AssessmentIcon from '@mui/icons-material/Assessment';
 import BookOnlineIcon from '@mui/icons-material/BookOnline';
+import CampaignIcon from '@mui/icons-material/Campaign';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import EventIcon from '@mui/icons-material/Event';
 import GridViewIcon from '@mui/icons-material/GridView';
@@ -46,6 +47,12 @@ export const NAV_ITEMS: NavItem[] = [
     label: 'รายงาน',
     icon: <AssessmentIcon />,
     permission: Permission.REPORTS_VIEW,
+  },
+  {
+    to: '/announcements',
+    label: 'ประกาศ',
+    icon: <CampaignIcon />,
+    permission: Permission.ANNOUNCEMENTS_MANAGE,
   },
   {
     to: '/rounds',

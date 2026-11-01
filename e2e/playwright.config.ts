@@ -28,7 +28,7 @@ export default defineConfig({
       // แอป admin — desktop-first
       name: 'admin-desktop',
       testMatch:
-        /admin(-market|-rounds|-bookings|-payments|-reports|-map-editor|-waitlist)?\.spec\.ts/,
+        /admin(-market|-rounds|-bookings|-payments|-reports|-map-editor|-waitlist|-announcements)?\.spec\.ts/,
       use: { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 800 } },
     },
   ],
