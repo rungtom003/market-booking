@@ -13,6 +13,9 @@ export function setupApp(app: INestApplication): void {
   const config = app.get(AppConfigService);
 
   app.useLogger(app.get(Logger));
+  // req.ip (rate limit, audit log) = IP จริงของผู้ใช้จาก X-Forwarded-For ที่ Nginx ต่อท้าย
+  const trustProxy = config.get('TRUST_PROXY');
+  if (trustProxy > 0) app.getHttpAdapter().getInstance().set('trust proxy', trustProxy);
   // ต้องมาก่อน middleware ของ Nest (รวม pino-http) — ดู request-context.ts
   app.use(requestContextMiddleware);
   app.use(helmet());

@@ -1,0 +1,16 @@
+# SPA ที่ build ด้วย Vite (root ตั้งใน server block)
+# add_header ใน location ทำให้ไม่สืบทอดจาก server — header ความปลอดภัยจึงอยู่ใน security.inc ที่ include ทุกที่
+
+# ไฟล์ใน /assets มี hash ในชื่อ — cache ได้ถาวร
+location /assets/ {
+  include /etc/nginx/conf.d/security.inc;
+  add_header Cache-Control "public, max-age=31536000, immutable" always;
+  try_files $uri =404;
+}
+
+# index.html และไฟล์อื่น — ตรวจกับ server ทุกครั้ง (deploy ใหม่เห็นทันที)
+location / {
+  include /etc/nginx/conf.d/security.inc;
+  add_header Cache-Control "no-cache" always;
+  try_files $uri $uri/ /index.html;
+}

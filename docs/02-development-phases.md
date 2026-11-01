@@ -67,7 +67,7 @@
 | 5 | Payment | ✅ DONE | 2026-10-31 | 2026-11-01 |
 | 5.1 | ↳ Payment API + PromptPay QR | ✅ DONE | 2026-10-31 | 2026-10-31 |
 | 5.2 | ↳ Vendor & Admin Payment UI | ✅ DONE | 2026-11-01 | 2026-11-01 |
-| 6 | MVP Deployment 🚀 | ⬜ TODO | | |
+| 6 | MVP Deployment 🚀 | 🟨 IN PROGRESS | 2026-11-01 | |
 | 7 | Notifications (LINE OA / SMS) | ⬜ TODO | | |
 | 8 | Reports & Dashboard | ⬜ TODO | | |
 | 9 | Advanced Booking | ⬜ TODO | | |
@@ -636,22 +636,32 @@
 ---
 
 ## Phase 6 — MVP Deployment 🚀
-**สถานะ:** ⬜ TODO · **Dependencies:** Phase 5 · **เริ่ม:** – · **เสร็จ:** –
+**สถานะ:** 🟨 IN PROGRESS · **Dependencies:** Phase 5 · **เริ่ม:** 2026-11-01 · **เสร็จ:** –
 
 **Tasks**
-- [ ] Dockerfile multi-stage สำหรับ api, web, admin (static ผ่าน Nginx)
-- [ ] `docker-compose.prod.yml` + Nginx (SSL Let's Encrypt, `/api`, `/socket.io` upgrade, gzip, cache static)
-- [ ] รัน `prisma migrate deploy` ตอน start, healthcheck ทุก service
-- [ ] Backup: pg_dump รายวัน เก็บ 14 วัน + script restore ที่ทดสอบแล้ว
-- [ ] Log rotation, uptime monitoring (เช่น Uptime Kuma)
-- [ ] ตั้งค่า LINE LIFF/Login สำหรับโดเมนจริง
-- [ ] `docs/runbook.md`: deploy, rollback, restore, เพิ่ม admin, เปลี่ยน secret
+- [x] Dockerfile multi-stage สำหรับ api, web, admin (static ผ่าน Nginx)
+- [x] `docker-compose.prod.yml` + Nginx (SSL Let's Encrypt, `/api`, `/socket.io` upgrade, gzip, cache static)
+- [x] รัน `prisma migrate deploy` ตอน start, healthcheck ทุก service
+- [x] Backup: pg_dump รายวัน เก็บ 14 วัน + script restore ที่ทดสอบแล้ว
+- [x] Log rotation, uptime monitoring (เช่น Uptime Kuma)
+- [ ] ตั้งค่า LINE LIFF/Login สำหรับโดเมนจริง — ขั้นตอนอยู่ใน runbook §4, รอเจ้าของระบบตั้งใน LINE Developers Console เมื่อมีโดเมน
+- [x] `docs/runbook.md`: deploy, rollback, restore, เพิ่ม admin, เปลี่ยน secret
 
 **Acceptance Criteria**
 - Deploy บน VPS ใหม่ได้ตาม runbook
 - ทดสอบ restore backup สำเร็จ
 
-**Agent Notes:** –
+**Agent Notes:**
+- 🟨 AC ข้อ 1: ทดสอบบน Docker ในเครื่อง (volume ใหม่, โดเมน `web.localhost`/`admin.localhost`, port 8080/8443, cert self-signed) ตามขั้นตอน runbook ผ่านทั้งหมด — **ยังไม่ได้ deploy บน VPS จริง** (ต้องมี VPS + โดเมน + DNS ของเจ้าของระบบ) และยังไม่ได้ออก cert Let's Encrypt จริง
+  - ตรวจแล้ว: migrate อัตโนมัติ, seed, redirect 80→443, SPA fallback, `Cache-Control` (assets immutable / index no-cache), gzip, HSTS/nosniff/frame, host อื่นถูกปฏิเสธที่ TLS, `/health/ready`, admin login (cookie `Secure; HttpOnly; SameSite=Strict`) + reload ยังอยู่ในระบบ, Socket.IO ผ่าน wss, presigned PUT/GET ผ่าน nginx (URL ที่แก้ path → 403), audit log เก็บ IP ผู้ใช้ไม่ใช่ IP ของ nginx, log rotation 10 MB × 5, postgres/redis/minio ไม่เปิด port, Uptime Kuma ผูก 127.0.0.1
+  - `deploy.sh` (build → backup ก่อน deploy → `up --wait`) และ `rollback.sh` ไป-กลับ 2 เวอร์ชัน รันจริงจาก clone ที่ commit แล้ว
+- ✅ AC ข้อ 2: สร้างรอบ "before-backup" → backup → สร้าง "after-backup" → `restore.sh` → เหลือเฉพาะ before (+ backup ก่อน restore ถูกสร้างอัตโนมัติ) → restore กลับจากไฟล์นั้นได้ after คืนมา; api healthy และ admin login ได้ทันทีหลังสคริปต์จบ; ตัวตั้งเวลา backup รายวันทำงานตรงเวลาและลบไฟล์อายุ 20 วัน เก็บไฟล์ 13 วัน
+- ไฟล์: `docker/docker-compose.prod.yml`, `docker/.env.example`, `docker/api.Dockerfile`, `docker/nginx/` (Dockerfile, nginx.conf, templates, `40-ssl-certificate.sh`), `docker/scripts/` (deploy, rollback, restore, init-ssl, backup, lib), `.dockerignore` (กัน `.env` เข้า image), `docs/runbook.md`
+- API: env `TRUST_PROXY` (production = 1), `GET /health/ready` (DB + Redis, 503 พร้อม details), ไม่ log `/health/ready`; สคริปต์ `apps/api/scripts/reset-admin-password.ts` (SUPER_ADMIN ลืมรหัส — รันใน `migrate` container)
+- CI: job `docker` — build image api + nginx, ตรวจ `compose config` ของ production และ `nginx -t`
+- ข้อจำกัด: SMS OTP ยังเป็น mock (ใช้ไม่ได้ใน production) ผู้ค้าต้องใช้ LINE Login จนถึง Phase 7; image api ~800 MB เพราะ `@prisma/client` ดึง `prisma` (peer) มาด้วย — ลดได้ภายหลัง; api 1 instance
+- **ที่เหลือ (เจ้าของระบบ):** เตรียม VPS + DNS → ทำตาม runbook §2–3 → `init-ssl.sh` → ตั้ง LINE Login/LIFF ตาม §4 → ติ๊ก AC ข้อ 1 และ task LINE แล้วปิด Phase 6
+- ทดสอบ: unit 174 (+2), integration 227 (+3), E2E 27
 
 ---
 
@@ -803,3 +813,5 @@
 | 2026-10-31 | 5.1 | ✅ DONE | PromptPay payload (เขียนเอง), อัปโหลด/ส่งสลิป → PENDING_VERIFY, admin อนุมัติ/ไม่ผ่าน/รับเงินสด, checkin token, SlipVerifier, `payment:submitted`; AC ส่งใหม่หลังไม่ผ่าน + รอตรวจไม่หมดอายุ — unit 172 / integration 224 / E2E 26 ผ่าน — ถัดไป: 5.2 Vendor & Admin Payment UI |
 | 2026-11-01 | 5.2 | 🟨 IN PROGRESS | เริ่มหน้าชำระเงินผู้ค้า (QR + บันทึกรูป + นับถอยหลัง + อัปโหลดสลิป) และคิวตรวจสลิปของ admin (คีย์ลัด, badge realtime) |
 | 2026-11-01 | 5.2 | ✅ DONE | หน้าชำระเงินผู้ค้า (QR พร้อมเพย์ + บันทึกรูป + นับถอยหลัง + สลิป + ประวัติ, อัปเดต realtime), คิวตรวจสลิป admin (คีย์ลัด A/R, เหตุผลด่วน, badge `payment:submitted`), รับเงินสดจากหน้าจัดการการจอง; AC E2E จอง → ชำระ → ไม่ผ่าน → ส่งใหม่ → อนุมัติ → BOOKED/จองสำเร็จ — unit 172 / integration 224 / E2E 27 ผ่าน — Phase 5 เสร็จ, ถัดไป: Phase 6 MVP Deployment |
+| 2026-11-01 | 6 | 🟨 IN PROGRESS | เริ่ม MVP Deployment: Dockerfile api/nginx, docker-compose.prod.yml, SSL, backup/restore, runbook |
+| 2026-11-01 | 6 | 🟨 IN PROGRESS | งานในโค้ดครบ: image api/api-tools/nginx, compose production (migrate อัตโนมัติ, healthcheck, log rotation, certbot, backup รายวัน 14 วัน, Uptime Kuma), deploy/rollback/restore/init-ssl scripts, `TRUST_PROXY`, `/health/ready`, runbook, CI job docker — ทดสอบ stack production ในเครื่องผ่าน (รวม restore + rollback) — unit 174 / integration 227 / E2E 27 — รอ: deploy บน VPS จริง + ตั้ง LINE Login สำหรับโดเมนจริง |

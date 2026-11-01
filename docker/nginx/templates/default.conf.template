@@ -1,0 +1,97 @@
+# ไฟล์นี้ผ่าน envsubst ตอน container start (nginx image: /etc/nginx/templates → conf.d)
+# แทนเฉพาะตัวแปรที่ตั้งใน environment: WEB_DOMAIN, ADMIN_DOMAIN, MINIO_BUCKET, HTTPS_PORT_SUFFIX
+
+# Docker DNS — upstream `resolve` ตาม IP ใหม่เมื่อ container api/minio ถูกสร้างใหม่ (ไม่ต้อง restart nginx)
+resolver 127.0.0.11 valid=10s ipv6=off;
+
+upstream api {
+  zone api 64k;
+  server api:3000 resolve;
+  # API ตั้ง keepAliveTimeout 65 s > keepalive ของ upstream นี้ (60 s ค่าเริ่มต้น)
+  keepalive 32;
+}
+
+upstream minio {
+  zone minio 64k;
+  server minio:9000 resolve;
+  keepalive 8;
+}
+
+# WebSocket: ส่ง Connection: upgrade เฉพาะ request ที่ขอ upgrade, ที่เหลือว่าง (ใช้ keepalive ได้)
+map $http_upgrade $connection_upgrade {
+  default upgrade;
+  '' '';
+}
+
+server {
+  listen 80 default_server;
+  server_name _;
+
+  # docker healthcheck
+  location = /healthz {
+    access_log off;
+    default_type text/plain;
+    return 200 "ok\n";
+  }
+
+  # Let's Encrypt HTTP-01 (certbot --webroot)
+  location /.well-known/acme-challenge/ {
+    root /var/www/certbot;
+  }
+
+  location / {
+    return 301 https://$host${HTTPS_PORT_SUFFIX}$request_uri;
+  }
+}
+
+# host อื่นที่ไม่ใช่ของระบบ — ปิด TLS handshake ไม่ส่ง cert ให้
+server {
+  listen 443 ssl default_server;
+  ssl_reject_handshake on;
+}
+
+# แอปผู้ค้า (+ ไฟล์อัปโหลดผ่าน presigned URL)
+server {
+  listen 443 ssl;
+  http2 on;
+  server_name ${WEB_DOMAIN};
+  ssl_certificate /etc/nginx/ssl/fullchain.pem;
+  ssl_certificate_key /etc/nginx/ssl/privkey.pem;
+
+  include /etc/nginx/conf.d/proxy.inc;
+
+  # MINIO_PUBLIC_URL = https://WEB_DOMAIN → presigned URL เป็น /<bucket>/<key> บนโดเมนเดียวกับเว็บ
+  # (อัปโหลดสลิป/รูปเป็น same-origin ไม่ต้องตั้ง CORS และไม่ต้องมี subdomain/cert แยก)
+  location /${MINIO_BUCKET}/ {
+    # ใช้ได้เฉพาะ presigned URL (bucket เป็น private) — กันเมธอดอื่นไว้อีกชั้น
+    limit_except GET HEAD PUT {
+      deny all;
+    }
+    proxy_pass http://minio;
+    proxy_http_version 1.1;
+    proxy_set_header Connection "";
+    # ลายเซ็นผูกกับ host (รวม port) ที่ browser ใช้ — ต้องส่งต่อแบบเดิม
+    proxy_set_header Host $http_host;
+    # รูปถูกย่อในเครื่องก่อนส่ง; API จำกัด 5 MB อยู่แล้ว
+    client_max_body_size 6m;
+    proxy_request_buffering off;
+    proxy_buffering off;
+  }
+
+  root /usr/share/nginx/web;
+  include /etc/nginx/conf.d/static.inc;
+}
+
+# แอป admin
+server {
+  listen 443 ssl;
+  http2 on;
+  server_name ${ADMIN_DOMAIN};
+  ssl_certificate /etc/nginx/ssl/fullchain.pem;
+  ssl_certificate_key /etc/nginx/ssl/privkey.pem;
+
+  include /etc/nginx/conf.d/proxy.inc;
+
+  root /usr/share/nginx/admin;
+  include /etc/nginx/conf.d/static.inc;
+}

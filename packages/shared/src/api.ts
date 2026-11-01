@@ -29,3 +29,10 @@ export interface HealthStatus {
   uptime: number;
   timestamp: string;
 }
+
+/** `GET /health/ready` — ตอบ 503 พร้อม details `{ database, redis }` เมื่อตัวใดไม่พร้อม */
+export interface ReadinessStatus {
+  status: 'ok';
+  database: 'ok';
+  redis: 'ok';
+}

@@ -198,11 +198,15 @@ market-booking/
 ├── docs/
 │   ├── 01-system-overview.md    # ไฟล์นี้
 │   ├── 02-development-phases.md
-│   └── load-test-results.md     # ผล load test (Phase 4.6)
+│   ├── load-test-results.md     # ผล load test (Phase 4.6)
+│   └── runbook.md               # deploy, rollback, backup/restore, admin, secret (Phase 6)
 ├── load-test/k6/                # สคริปต์ k6 — รันด้วย `pnpm test:load` (apps/api/scripts/load-test.ts)
-├── docker/
-│   ├── nginx/nginx.conf
-│   └── docker-compose.prod.yml
+├── docker/                      # production (Phase 6) — ขั้นตอนใน docs/runbook.md
+│   ├── docker-compose.prod.yml  # nginx, api, migrate, postgres, redis, minio, certbot, backup, uptime-kuma
+│   ├── .env.example             # ค่า production (copy เป็น docker/.env บน VPS)
+│   ├── api.Dockerfile           # target runtime (api) / build (api-tools: migrate, seed, สคริปต์)
+│   ├── nginx/                   # Dockerfile (build web+admin), nginx.conf, templates/*.template
+│   └── scripts/                 # deploy, rollback, restore, init-ssl, backup
 ├── docker-compose.yml           # dev: postgres, redis, minio
 ├── .env.example
 └── pnpm-workspace.yaml
@@ -747,6 +751,7 @@ NODE_ENV=development
 PORT=3000
 LOG_LEVEL=info
 RATE_LIMIT_PER_MINUTE=100
+# TRUST_PROXY=0             (จำนวน proxy หน้า API ที่เชื่อ X-Forwarded-For — production หลัง Nginx = 1)
 # RATE_LIMIT_DISABLED=false   (true เฉพาะ E2E — env schema ไม่ยอมใน production)
 DATABASE_URL=postgresql://market:market_dev@localhost:5433/market_booking
 TEST_DATABASE_URL=postgresql://market:market_dev@localhost:5433/market_booking_test
@@ -886,6 +891,14 @@ VITE_LINE_LIFF_ID=        (ฝั่ง web — ว่าง = ซ่อนป�
 | 2026-11-01 | วาด QR ฝั่งเว็บผู้ค้าด้วย `qrcode` (data URL) จาก payload ที่ API ส่งมา | lib มาตรฐานที่ใช้กันกว้าง ไม่มี dependency ของ React; ได้รูป PNG ที่ใช้เป็นลิงก์ "บันทึกรูป QR" ได้ทันที (ผู้ค้าเปิดแอปธนาคารแล้วสแกนจากรูปในเครื่อง) |
 | 2026-11-01 | ยืนยันการจองที่ต้องชำระเงิน → พาไปหน้าชำระเงิน `/bookings/:id/pay` ทันที (แทนข้อความแจ้งบนผัง) | ขั้นต่อไปที่ผู้ค้าต้องทำคือจ่ายเงินภายในเวลาจำกัด — ไม่ต้องหาเมนูเอง |
 | 2026-11-01 | คิวตรวจสลิปแสดงทีละใบ + คีย์ลัด `A`/`R`/`←`/`→`; รับเงินสดอยู่ใน dialog ล็อคของหน้าจัดการการจอง | FINANCE ตรวจสลิปจำนวนมากต่อเนื่องได้โดยไม่ต้องใช้เมาส์; เงินสดรับหน้างานซึ่งเจ้าหน้าที่ดูจากผังอยู่แล้ว |
+| 2026-11-01 | Production = Docker Compose บน VPS เครื่องเดียว: image `nginx` (static web + admin + reverse proxy), `api` (runtime: dist + production deps), `api-tools` (build stage: migrate/seed/สคริปต์) — service `migrate` รัน `prisma migrate deploy` ทุกครั้งที่ start และ api รอจนจบ (`service_completed_successfully`) | runtime image ไม่ต้องมี prisma CLI/dev deps; migrate ไม่ซ้อนกันเมื่อขยายหลาย api instance |
+| 2026-11-01 | ไฟล์ MinIO ผ่าน nginx ที่ path `/<bucket>/` บนโดเมนเว็บ (`MINIO_PUBLIC_URL=https://WEB_DOMAIN`, ส่ง `Host $http_host`, อนุญาตเฉพาะ GET/HEAD/PUT) แทน subdomain `files.` | อัปโหลดสลิป/รูปเป็น same-origin (ไม่ต้องตั้ง CORS ของ MinIO), ไม่ต้องมี DNS/cert เพิ่ม; ลายเซ็น presigned ผูกกับ host จึงต้องส่ง host เดิมไป |
+| 2026-11-01 | env `TRUST_PROXY` (Express `trust proxy` = จำนวน hop) — production = 1 | หลัง Nginx ทุก request มาจาก IP ของ proxy ทำให้ rate limit ต่อ IP นับรวมกันทั้งระบบ และ audit log เก็บ IP ผิด; ใช้ address ท้ายสุดที่ Nginx ต่อท้าย (ค่าที่ client ปลอมมาไม่ถูกใช้) |
+| 2026-11-01 | `GET /health` = liveness (docker healthcheck), `GET /health/ready` = PostgreSQL + Redis (uptime monitor, 503 พร้อมบอกตัวที่ล่ม) | DB ล่มชั่วคราวไม่ควรทำให้ container ถูกมองว่าเสีย แต่ monitor ภายนอกต้องรู้ |
+| 2026-11-01 | TLS: certbot (webroot) + cert self-signed ชั่วคราวตอนยังไม่มี cert, nginx reload ทุก 12 ชั่วโมง; upstream ใช้ `server … resolve` (nginx ≥ 1.27.3) | nginx start ได้ก่อนออก cert (ตอบ HTTP-01 ได้); ไม่ต้อง restart nginx เมื่อ api ถูกสร้างใหม่ (IP เปลี่ยน) |
+| 2026-11-01 | Backup: service `backup` (postgres:16-alpine) วน `pg_dump -Fc` ตาม `BACKUP_TIME` (UTC) เก็บ 14 วันใน `docker/backups` (bind mount) + push URL ไป uptime monitor; deploy และ restore ทำ backup ก่อนทุกครั้ง | ไม่ต้องตั้ง cron บน host; pg_dump เวอร์ชันตรงกับ server; รู้ได้เมื่อ backup หยุดทำงาน; restore ผิดไฟล์ย้อนกลับได้ |
+| 2026-11-01 | image ติด tag = git commit และจด `IMAGE_TAG` ใน `docker/.env` (deploy.sh / rollback.sh) — rollback = ใช้ image เก่า ไม่ย้อน migration | tag ลอย (`current`) ทำให้ compose ไม่สร้าง container ใหม่เมื่อ image เปลี่ยน (เจอตอนทดสอบ); migration ที่ออกแบบแบบเพิ่มอย่างเดียวให้โค้ดเก่ารันต่อได้ |
+| 2026-11-01 | ใช้ `pgsty/minio` ต่อใน production (ทบทวนแล้วตามที่ตั้งไว้ใน Phase 1.1) pin release เดิม | ยังเป็น fork ที่ดูแลอยู่และ S3 API เดิม; เปลี่ยนไป S3-compatible อื่นได้โดยแก้แค่ env |
 
 ### Open Questions
 - [ ] ใช้กับตลาดเดียวหรือหลายตลาด (ตอนนี้ schema รองรับแล้ว แต่ UI ยังเป็นตลาดเดียว)

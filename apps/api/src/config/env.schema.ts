@@ -21,6 +21,12 @@ export const envSchema = z.object({
     .transform((v) => v === 'true')
     .refine((v) => !(v && isProduction), 'RATE_LIMIT_DISABLED cannot be true in production'),
 
+  /**
+   * จำนวน reverse proxy หน้า API ที่เชื่อ `X-Forwarded-For` (Express `trust proxy`) — production หลัง Nginx = 1
+   * ไม่ตั้งเมื่ออยู่หลัง proxy: ทุก request ดูเหมือนมาจาก IP ของ proxy (rate limit ต่อ IP รวมกันทั้งระบบ)
+   */
+  TRUST_PROXY: z.coerce.number().int().min(0).max(5).default(0),
+
   DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }),
   /** connection pool ต่อ API instance — รวมทุก instance ต้องไม่เกิน max_connections ของ Postgres */
   DATABASE_POOL_SIZE: z.coerce.number().int().min(1).max(100).default(10),

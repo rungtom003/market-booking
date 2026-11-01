@@ -1,0 +1,21 @@
+# build context ของ docker/*.Dockerfile คือ root ของ repo — ส่งเฉพาะ source
+# ห้ามส่ง .env เข้า image (Vite อ่าน .env ที่ root ตอน build → secret หลุดไปใน bundle ได้)
+.env
+.env.*
+!.env.example
+docker/.env
+docker/backups
+
+.git
+.github
+.husky
+.claude
+**/node_modules
+**/dist
+**/coverage
+**/*.tsbuildinfo
+apps/api/src/generated
+e2e
+load-test
+docs
+*.log

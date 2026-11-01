@@ -19,7 +19,7 @@ import { PINO_REDACT_PATHS } from '../redact';
             actor: req.principal ? `${req.principal.actorType}:${req.principal.id}` : undefined,
           }),
           // health check ถูกเรียกถี่โดย uptime monitor — ไม่ต้อง log
-          autoLogging: { ignore: (req) => req.url?.endsWith('/health') ?? false },
+          autoLogging: { ignore: (req) => /\/health(\/ready)?$/.test(req.url ?? '') },
           // dev อ่านง่าย; production เป็น JSON บรรทัดเดียวสำหรับเก็บ log
           transport:
             config.get('NODE_ENV') === 'development'

@@ -1,4 +1,5 @@
-import { Body, Controller, Get, INestApplication, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, INestApplication, Post, Query, Req } from '@nestjs/common';
+import type { Request } from 'express';
 import { Test } from '@nestjs/testing';
 import { ErrorCode, paginationQuerySchema } from '@market-booking/shared';
 import Redis from 'ioredis';
@@ -35,6 +36,11 @@ class ProbeController {
   @Get('limited')
   limited() {
     return { ok: true };
+  }
+
+  @Get('ip')
+  ip(@Req() req: Request) {
+    return { ip: req.ip };
   }
 
   @Get('page')
@@ -95,6 +101,12 @@ describe('HTTP pipeline (integration)', () => {
         data: ['a', 'b'],
         meta: { page: 2, pageSize: 10, total: 42, totalPages: 5 },
       });
+    });
+
+    it('readiness checks PostgreSQL and Redis', async () => {
+      const res = await http().get('/api/v1/health/ready').expect(200);
+
+      expect(res.body).toEqual({ data: { status: 'ok', database: 'ok', redis: 'ok' } });
     });
 
     it('is only served under /api/v1', async () => {
@@ -173,6 +185,24 @@ describe('HTTP pipeline (integration)', () => {
 
     it('does not rate limit the health check', async () => {
       for (let i = 0; i < 8; i++) await http().get('/api/v1/health').expect(200);
+    });
+
+    // TRUST_PROXY=1 (test/setup-env.ts เหมือน production หลัง Nginx)
+    it('counts per client IP from X-Forwarded-For, not per proxy', async () => {
+      const from = (ip: string) => http().get('/api/v1/probe/limited').set('X-Forwarded-For', ip);
+      for (let i = 0; i < 3; i++) await from('203.0.113.7').expect(200);
+      await from('203.0.113.7').expect(429);
+
+      await from('203.0.113.8').expect(200);
+    });
+
+    it('trusts only the last hop (a spoofed left-most address is ignored)', async () => {
+      const res = await http()
+        .get('/api/v1/probe/ip')
+        .set('X-Forwarded-For', '1.2.3.4, 203.0.113.9')
+        .expect(200);
+
+      expect(res.body.data.ip).toBe('203.0.113.9');
     });
   });
 

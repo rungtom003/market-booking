@@ -124,3 +124,33 @@ jobs:
             e2e/playwright-report
             e2e/test-results
           retention-days: 7
+
+  # image production build ได้ และ compose ของ production ถูกต้อง (ไม่ push — deploy build บน VPS เอง)
+  docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Compose config (production)
+        run: |
+          cp docker/.env.example docker/.env
+          IMAGE_TAG=ci POSTGRES_PASSWORD=ci JWT_ACCESS_SECRET=ci JWT_REFRESH_SECRET=ci MINIO_SECRET_KEY=ci \
+            docker compose -f docker/docker-compose.prod.yml config --quiet
+
+      - name: Build api image
+        run: docker build -f docker/api.Dockerfile --target runtime -t market-booking/api:ci .
+
+      - name: Build nginx image (web + admin)
+        run: docker build -f docker/nginx/Dockerfile -t market-booking/nginx:ci .
+
+      - name: API image loads its modules
+        run: >
+          docker run --rm market-booking/api:ci node -e
+          "require('@market-booking/shared'); require('./dist/generated/prisma/client')"
+
+      - name: Nginx config is valid
+        run: |
+          docker run --rm -e WEB_DOMAIN=web.test -e ADMIN_DOMAIN=admin.test -e MINIO_BUCKET=market-booking \
+            -e HTTPS_PORT_SUFFIX= --add-host api:127.0.0.1 --add-host minio:127.0.0.1 \
+            market-booking/nginx:ci sh -c '/docker-entrypoint.sh nginx -t'

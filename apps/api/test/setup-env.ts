@@ -15,6 +15,8 @@ const defaults: Record<string, string> = {
   ADMIN_ORIGIN: 'http://localhost:5174',
   // ไม่รัน BullMQ worker/job ประจำใน test — test ของ worker เรียก start() เอง
   WORKERS_ENABLED: 'false',
+  // เหมือน production หลัง Nginx 1 ชั้น — ทดสอบ rate limit ต่อ IP จาก X-Forwarded-For
+  TRUST_PROXY: '1',
 };
 
 for (const [key, value] of Object.entries(defaults)) {
