@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { BOOKING_STATUS_TH, formatIsoDateTh } from '@market-booking/shared';
+import { BOOKING_STATUS_TH, Permission, formatIsoDateTh } from '@market-booking/shared';
 import type {
   AdminBooking,
   AdminBookingStatusFilter,
   AdminMarketDayStalls,
+  AdminPayment,
   AdminVendorListItem,
   BookingStatus,
 } from '@market-booking/shared';
@@ -32,6 +33,7 @@ import { adminApi } from '../api/admin';
 import { errorMessage } from '../lib/errors';
 import { formatBaht, formatDateTime, formatPhone } from '../lib/format';
 import { useAdminMarketDaySocket } from '../lib/realtime';
+import { useCan } from '../lib/session';
 
 type Notice = { severity: 'success' | 'error'; text: string } | null;
 type DayStall = AdminMarketDayStalls['stalls'][number];
@@ -236,6 +238,10 @@ export function BookingsPage() {
             setSelected(null);
             done(`จองล็อค ${b.stall.code} ให้ ${b.vendor.name} แล้ว`);
           }}
+          onPaidCash={(p) => {
+            setSelected(null);
+            done(`รับเงินสด ${formatBaht(p.amount)} — ล็อค ${p.booking.stallCode} จองสำเร็จ`);
+          }}
         />
       )}
       {cancelling && (
@@ -377,6 +383,7 @@ function StallDialog({
   onClose,
   onCancel,
   onBooked,
+  onPaidCash,
 }: {
   stall: DayStall;
   zoneName: string;
@@ -385,7 +392,16 @@ function StallDialog({
   onClose: () => void;
   onCancel: (booking: NonNullable<DayStall['booking']>) => void;
   onBooked: (booking: AdminBooking) => void;
+  onPaidCash: (payment: AdminPayment) => void;
 }) {
+  // รับเงินสดหน้างาน — เฉพาะผู้มีสิทธิ์ตรวจการชำระ (ADMIN/SUPER_ADMIN ในหน้านี้)
+  const canCash = useCan(Permission.PAYMENTS_VERIFY);
+  const [cashError, setCashError] = useState<string | null>(null);
+  const cash = useMutation({
+    mutationFn: (bookingId: string) => adminApi.payments.cash({ bookingId }),
+    onSuccess: onPaidCash,
+    onError: (e) => setCashError(errorMessage(e)),
+  });
   const b = stall.booking;
   return (
     <Dialog open onClose={onClose} fullWidth maxWidth="xs">
@@ -461,8 +477,18 @@ function StallDialog({
               )}
             </Box>
           </DialogContent>
+          {cashError && (
+            <Alert severity="error" sx={{ mx: 3 }}>
+              {cashError}
+            </Alert>
+          )}
           <DialogActions>
             <Button onClick={onClose}>ปิด</Button>
+            {canCash && b.status !== 'CONFIRMED' && (
+              <Button variant="outlined" loading={cash.isPending} onClick={() => cash.mutate(b.id)}>
+                รับเงินสด {formatBaht(b.amount)}
+              </Button>
+            )}
             <Button color="error" variant="contained" onClick={() => onCancel(b)}>
               ยกเลิกการจอง
             </Button>

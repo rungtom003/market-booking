@@ -154,21 +154,19 @@ function ProfileForm({ profile, options }: { profile: VendorProfile; options: Ve
         </Select>
         <ImageUpload
           label="รูปบัตรประชาชน"
-          kind="ID_CARD"
           required={options.requireIdCardImage}
           currentUrl={profile.idCardImageUrl}
           error={errors.idCardImageKey?.message}
-          requestUpload={vendorApi.profileUpload}
+          requestUpload={(file) => vendorApi.profileUpload({ ...file, kind: 'ID_CARD' })}
           onBusyChange={trackUpload}
           onUploaded={setImage('idCardImageKey')}
         />
         <ImageUpload
           label="รูปร้าน/สินค้า"
-          kind="SHOP"
           required={options.requireShopImage}
           currentUrl={profile.shopImageUrl}
           error={errors.shopImageKey?.message}
-          requestUpload={vendorApi.profileUpload}
+          requestUpload={(file) => vendorApi.profileUpload({ ...file, kind: 'SHOP' })}
           onBusyChange={trackUpload}
           onUploaded={setImage('shopImageKey')}
         />

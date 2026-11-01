@@ -185,19 +185,17 @@ function RegisterForm({
           </Select>
           <ImageUpload
             label="รูปบัตรประชาชน"
-            kind="ID_CARD"
             required={options.data.requireIdCardImage}
             error={errors.idCardImageKey?.message}
-            requestUpload={requestUpload}
+            requestUpload={(file) => requestUpload({ ...file, kind: 'ID_CARD' })}
             onBusyChange={trackUpload}
             onUploaded={(key) => form.setValue('idCardImageKey', key, { shouldValidate: true })}
           />
           <ImageUpload
             label="รูปร้าน/สินค้า"
-            kind="SHOP"
             required={options.data.requireShopImage}
             error={errors.shopImageKey?.message}
-            requestUpload={requestUpload}
+            requestUpload={(file) => requestUpload({ ...file, kind: 'SHOP' })}
             onBusyChange={trackUpload}
             onUploaded={(key) => form.setValue('shopImageKey', key, { shouldValidate: true })}
           />

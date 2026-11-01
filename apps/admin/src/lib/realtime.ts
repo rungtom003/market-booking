@@ -37,21 +37,37 @@ session.subscribe(() => {
   socket = null;
 });
 
-/** badge ผู้ค้ารออนุมัติ — โหลดใหม่เมื่อมี `vendor:registered` และทุกครั้งที่ต่อ (อาจพลาด event ระหว่างหลุด) */
-export function useAdminRealtime(enabled: boolean): void {
+/**
+ * badge ของเมนู — ผู้ค้ารออนุมัติ (`vendor:registered`) และสลิปรอตรวจ (`payment:submitted`)
+ * โหลดใหม่เมื่อได้ event และทุกครั้งที่ต่อ (อาจพลาด event ระหว่างหลุด); เปิดเฉพาะส่วนที่มีสิทธิ์
+ */
+export function useAdminRealtime({
+  vendors,
+  payments,
+}: {
+  vendors: boolean;
+  payments: boolean;
+}): void {
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!vendors && !payments) return;
     const s = adminSocket();
     const refreshVendors = () => void queryClient.invalidateQueries({ queryKey: ['vendors'] });
-    s.on(SocketEvent.VENDOR_REGISTERED, refreshVendors);
-    s.on('connect', refreshVendors);
+    const refreshPayments = () => void queryClient.invalidateQueries({ queryKey: ['payments'] });
+    const resync = () => {
+      if (vendors) refreshVendors();
+      if (payments) refreshPayments();
+    };
+    if (vendors) s.on(SocketEvent.VENDOR_REGISTERED, refreshVendors);
+    if (payments) s.on(SocketEvent.PAYMENT_SUBMITTED, refreshPayments);
+    s.on('connect', resync);
     return () => {
       s.off(SocketEvent.VENDOR_REGISTERED, refreshVendors);
-      s.off('connect', refreshVendors);
+      s.off(SocketEvent.PAYMENT_SUBMITTED, refreshPayments);
+      s.off('connect', resync);
     };
-  }, [enabled, queryClient]);
+  }, [vendors, payments, queryClient]);
 }
 
 /**

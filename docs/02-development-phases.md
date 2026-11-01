@@ -64,9 +64,9 @@
 | 4.4 | ↳ Vendor Web: หน้าผังและจองล็อค | ✅ DONE | 2026-10-31 | 2026-10-31 |
 | 4.5 | ↳ Admin Web: จัดการการจอง | ✅ DONE | 2026-10-31 | 2026-10-31 |
 | 4.6 | ↳ Concurrency & Load Test | ✅ DONE | 2026-10-31 | 2026-10-31 |
-| 5 | Payment | 🟨 IN PROGRESS | 2026-10-31 | |
+| 5 | Payment | ✅ DONE | 2026-10-31 | 2026-11-01 |
 | 5.1 | ↳ Payment API + PromptPay QR | ✅ DONE | 2026-10-31 | 2026-10-31 |
-| 5.2 | ↳ Vendor & Admin Payment UI | ⬜ TODO | | |
+| 5.2 | ↳ Vendor & Admin Payment UI | ✅ DONE | 2026-11-01 | 2026-11-01 |
 | 6 | MVP Deployment 🚀 | ⬜ TODO | | |
 | 7 | Notifications (LINE OA / SMS) | ⬜ TODO | | |
 | 8 | Reports & Dashboard | ⬜ TODO | | |
@@ -583,7 +583,7 @@
 ---
 
 ## Phase 5 — Payment
-**สถานะ:** 🟨 IN PROGRESS · **Dependencies:** Phase 4
+**สถานะ:** ✅ DONE · **Dependencies:** Phase 4
 
 ### 5.1 Payment API + PromptPay QR
 **สถานะ:** ✅ DONE · **Dependencies:** 4.6 · **เริ่ม:** 2026-10-31 · **เสร็จ:** 2026-10-31
@@ -612,17 +612,26 @@
 - ทดสอบ: unit 172 (+6 PromptPay/schema), integration 224 (+9 `payments.int-spec.ts`), E2E 26
 
 ### 5.2 Vendor & Admin Payment UI
-**สถานะ:** ⬜ TODO · **Dependencies:** 5.1 · **เริ่ม:** – · **เสร็จ:** –
+**สถานะ:** ✅ DONE · **Dependencies:** 5.1 · **เริ่ม:** 2026-11-01 · **เสร็จ:** 2026-11-01
 
 **Tasks**
-- [ ] Vendor: หน้าชำระเงิน (QR + ปุ่มบันทึกรูป QR + เวลาที่เหลือ + อัปโหลดสลิป), สถานะการชำระใน "การจองของฉัน"
-- [ ] Admin: คิวตรวจสลิป (รูปสลิปขนาดใหญ่คู่ยอดที่ต้องจ่าย, ปุ่มอนุมัติ/ปฏิเสธ, คีย์ลัด)
-- [ ] Badge realtime เมื่อมีสลิปใหม่ (`payment:submitted`)
+- [x] Vendor: หน้าชำระเงิน (QR + ปุ่มบันทึกรูป QR + เวลาที่เหลือ + อัปโหลดสลิป), สถานะการชำระใน "การจองของฉัน"
+- [x] Admin: คิวตรวจสลิป (รูปสลิปขนาดใหญ่คู่ยอดที่ต้องจ่าย, ปุ่มอนุมัติ/ปฏิเสธ, คีย์ลัด)
+- [x] Badge realtime เมื่อมีสลิปใหม่ (`payment:submitted`)
 
 **Acceptance Criteria**
 - E2E: จอง → ชำระ → admin อนุมัติ → ล็อคเป็น BOOKED และผู้ค้าเห็นสถานะ CONFIRMED
 
-**Agent Notes:** –
+**Agent Notes:**
+- ✅ AC: `e2e/tests/admin-payments.spec.ts` — ผู้ค้าจอง B6 → ยืนยันแล้วไปหน้าชำระเงินเอง (QR ยอด 120 บาท, ปุ่มบันทึกรูป QR, นับถอยหลัง) → ส่งสลิป → admin เห็น badge 1 → คิวตรวจ กด `R` + เหตุผลด่วน → ผู้ค้าเห็น "ไม่ผ่าน" พร้อมเหตุผลทันที → ส่งใหม่ → คิวของ admin ขึ้นเอง → กด `A` → ผู้ค้าเห็น "ชำระเงินเรียบร้อย" (ไม่รีเฟรช), ประวัติ 2 รายการ, "การจองของฉัน" เป็นจองสำเร็จ, ผู้ค้าอื่นเห็น B6 `BOOKED`
+- Vendor (`apps/web`): `PaymentPage` (`/bookings/:id/pay`) แสดงตามสถานะ — รอชำระ: QR (lib `qrcode` วาดจาก `promptpay.payload` เป็น data URL; ปุ่ม "บันทึกรูป QR" เป็นลิงก์ download `promptpay-<ล็อค>.png`), นับถอยหลังด้วยเวลา server (`role="timer"`), แจ้งเหตุผลสลิปที่ไม่ผ่านล่าสุด, ฟอร์มอัปโหลดสลิป; รอตรวจ/จองสำเร็จ/หมดเวลา/ยกเลิก แสดงข้อความแทน; `promptpay: null` → ให้ชำระเงินสดกับเจ้าหน้าที่; ประวัติการชำระทุกครั้ง
+- ยืนยันการจองบนผังที่ต้องชำระเงิน → ไปหน้าชำระเงินทันที; "การจองของฉัน" มีปุ่ม "ชำระเงิน" (รอชำระ) / ลิงก์ดูการชำระเงิน (รอตรวจ)
+- realtime ฝั่งผู้ค้า: `useMyBookingUpdates()` — `booking:changed` → โหลดการจองของฉัน + ข้อมูลชำระเงินของการจองนั้นใหม่, ต่อใหม่ → โหลดทั้งหมด (อนุมัติ/ไม่ผ่าน/admin ยกเลิก เห็นทันที)
+- `ImageUpload` ใช้ร่วมกันแล้ว: รับ `requestUpload(file)` แทน `kind` (หน้าสมัคร/โปรไฟล์ส่ง `kind` เอง, หน้าชำระเงินขอ `slip-upload`) — ย่อรูปเป็น JPEG ในเครื่องก่อนส่งเหมือนเดิม
+- Admin (`apps/admin`): เมนู "ตรวจสลิป" (`PAYMENTS_VERIFY`) + badge จำนวนสลิปรอตรวจ (`payment:submitted` / ต่อใหม่ → invalidate `['payments']`); `PaymentsPage` แท็บ "รอตรวจ" แสดงทีละใบ — รูปสลิปใหญ่ซ้าย, ยอดที่ต้องได้รับ/ผู้ค้า/ล็อค/วันขายขวา, คีย์ลัด `A` อนุมัติ, `R` ไม่ผ่าน, `←/→` เลื่อนใบ (ไม่ทำงานขณะพิมพ์หรือเปิด dialog); dialog ไม่ผ่านมีเหตุผลด่วน 4 แบบ; แท็บ "ประวัติ" เป็น DataGrid กรองสถานะ
+- รับเงินสด: ปุ่ม "รับเงินสด" ใน dialog ล็อคของหน้า "จัดการการจอง" (การจองที่ยังไม่ CONFIRMED, สิทธิ์ `PAYMENTS_VERIFY`) — เจ้าหน้าที่หน้างานหาจากผังได้เลย
+- E2E: `global-setup` ยกเลิกการจองที่ค้าง + ปิดสลิป PENDING จากรอบก่อน (DB ไม่ถูกล้าง, badge ต้องเริ่มที่ 0); `vendor-booking`/`admin-bookings` ปรับตาม flow ไปหน้าชำระเงินหลังยืนยัน
+- ทดสอบ: unit 172, integration 224, E2E 27 (+1)
 
 ---
 
@@ -792,3 +801,5 @@
 | 2026-10-31 | 4 | ✅ DONE | Realtime Booking ครบ (4.1–4.6) — ถัดไป: 5.1 Payment API + PromptPay QR |
 | 2026-10-31 | 5.1 | 🟨 IN PROGRESS | เริ่ม payment API: PromptPay payload, อัปโหลดสลิป → PENDING_VERIFY, admin อนุมัติ/ปฏิเสธ/รับเงินสด, SlipVerifier interface |
 | 2026-10-31 | 5.1 | ✅ DONE | PromptPay payload (เขียนเอง), อัปโหลด/ส่งสลิป → PENDING_VERIFY, admin อนุมัติ/ไม่ผ่าน/รับเงินสด, checkin token, SlipVerifier, `payment:submitted`; AC ส่งใหม่หลังไม่ผ่าน + รอตรวจไม่หมดอายุ — unit 172 / integration 224 / E2E 26 ผ่าน — ถัดไป: 5.2 Vendor & Admin Payment UI |
+| 2026-11-01 | 5.2 | 🟨 IN PROGRESS | เริ่มหน้าชำระเงินผู้ค้า (QR + บันทึกรูป + นับถอยหลัง + อัปโหลดสลิป) และคิวตรวจสลิปของ admin (คีย์ลัด, badge realtime) |
+| 2026-11-01 | 5.2 | ✅ DONE | หน้าชำระเงินผู้ค้า (QR พร้อมเพย์ + บันทึกรูป + นับถอยหลัง + สลิป + ประวัติ, อัปเดต realtime), คิวตรวจสลิป admin (คีย์ลัด A/R, เหตุผลด่วน, badge `payment:submitted`), รับเงินสดจากหน้าจัดการการจอง; AC E2E จอง → ชำระ → ไม่ผ่าน → ส่งใหม่ → อนุมัติ → BOOKED/จองสำเร็จ — unit 172 / integration 224 / E2E 27 ผ่าน — Phase 5 เสร็จ, ถัดไป: Phase 6 MVP Deployment |

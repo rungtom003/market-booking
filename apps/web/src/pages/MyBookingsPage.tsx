@@ -6,9 +6,10 @@ import type { Booking } from '@market-booking/shared';
 import { MY_BOOKINGS_KEY, bookingApi, useMyBookings } from '../api/booking';
 import { useCurrentRound } from '../api/market';
 import { Layout } from '../components/Layout';
-import { Alert, Button, Card, Spinner } from '../components/ui';
+import { Alert, Button, Card, Spinner, linkButtonClass } from '../components/ui';
 import { errorMessage } from '../lib/errors';
 import { BOOKING_STATUS_STYLE, formatBaht, formatThaiDateTime } from '../lib/format';
+import { useMyBookingUpdates } from '../lib/realtime';
 import { formatCountdown, useClockOffset, useCountdown } from '../lib/server-clock';
 
 type Notice = { tone: 'success' | 'error' | 'info'; text: string } | null;
@@ -18,6 +19,8 @@ export function MyBookingsPage() {
   const bookings = useMyBookings();
   // วัด offset เวลา server ให้ countdown ของ hold (หน้านี้ไม่มี serverTime ของตัวเอง)
   useCurrentRound();
+  // เจ้าหน้าที่ตรวจสลิป/ยกเลิก → สถานะในหน้านี้อัปเดตเอง
+  useMyBookingUpdates();
   const [notice, setNotice] = useState<Notice>(null);
 
   return (
@@ -98,8 +101,19 @@ function BookingCard({
       </p>
       {b.status === 'HOLD' && b.holdExpiresAt && <HoldCountdown until={b.holdExpiresAt} />}
       {b.status === 'PENDING_PAYMENT' && b.paymentDueAt && (
+        <p className="text-blue-800">ชำระเงินภายใน {formatThaiDateTime(b.paymentDueAt)}</p>
+      )}
+      {b.status === 'PENDING_PAYMENT' && (
+        <Link to={`/bookings/${b.id}/pay`} className={linkButtonClass}>
+          ชำระเงิน
+        </Link>
+      )}
+      {b.status === 'PENDING_VERIFY' && (
         <p className="text-blue-800">
-          ชำระเงินภายใน {formatThaiDateTime(b.paymentDueAt)} (ช่องทางชำระเงินจะเปิดให้ใช้เร็วๆ นี้)
+          ส่งสลิปแล้ว รอเจ้าหน้าที่ตรวจ ·{' '}
+          <Link to={`/bookings/${b.id}/pay`} className="font-semibold underline">
+            ดูการชำระเงิน
+          </Link>
         </p>
       )}
       {b.status === 'CANCELLED' && (

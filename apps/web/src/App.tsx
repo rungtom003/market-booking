@@ -6,6 +6,7 @@ import { HomePage } from './pages/HomePage';
 import { LoginPage } from './pages/LoginPage';
 import { MarketMapPage } from './pages/MarketMapPage';
 import { MyBookingsPage } from './pages/MyBookingsPage';
+import { PaymentPage } from './pages/PaymentPage';
 import { PrivacyPage } from './pages/PrivacyPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { RegisterPage } from './pages/RegisterPage';
@@ -69,6 +70,14 @@ export function App() {
             element={
               <RequireAuth>
                 <MyBookingsPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/bookings/:bookingId/pay"
+            element={
+              <RequireAuth>
+                <PaymentPage />
               </RequireAuth>
             }
           />

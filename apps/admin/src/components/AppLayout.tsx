@@ -29,13 +29,21 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   const [mobileOpen, setMobileOpen] = useState(false);
   const canReview = hasPermission(admin.role, Permission.VENDORS_REVIEW);
+  const canVerify = hasPermission(admin.role, Permission.PAYMENTS_VERIFY);
 
-  // badge จำนวนรออนุมัติ — อัปเดตทันทีเมื่อมี `vendor:registered`; โหลดใหม่ทุก 5 นาทีเผื่อ socket หลุด
-  useAdminRealtime(canReview);
+  // badge ผู้ค้ารออนุมัติ/สลิปรอตรวจ — อัปเดตทันทีจาก socket; โหลดใหม่ทุก 5 นาทีเผื่อ socket หลุด
+  useAdminRealtime({ vendors: canReview, payments: canVerify });
   const counts = useQuery({
     queryKey: ['vendors', 'counts'],
     queryFn: adminApi.vendors.counts,
     enabled: canReview,
+    refetchInterval: 300_000,
+  });
+  const pendingPayments = useQuery({
+    queryKey: ['payments', 'pending-count'],
+    queryFn: async () =>
+      (await adminApi.payments.list({ status: 'PENDING', pageSize: 1 })).meta?.total ?? 0,
+    enabled: canVerify,
     refetchInterval: 300_000,
   });
 
@@ -61,6 +69,10 @@ export function AppLayout({ children }: { children: ReactNode }) {
           <ListItemIcon>
             {item.to === '/vendors' ? (
               <Badge badgeContent={counts.data?.PENDING} color="warning" max={999}>
+                {item.icon}
+              </Badge>
+            ) : item.to === '/payments' ? (
+              <Badge badgeContent={pendingPayments.data} color="warning" max={999}>
                 {item.icon}
               </Badge>
             ) : (

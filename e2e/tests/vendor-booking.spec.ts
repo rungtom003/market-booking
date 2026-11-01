@@ -90,7 +90,9 @@ test.describe('ผู้ค้าจองล็อค (จอ 360px)', () => {
 
     // ผู้ชนะยืนยัน → ผังของอีกคนเปลี่ยนเป็น "จองแล้ว" เอง (socket)
     await holdPanel(winner).getByRole('button', { name: 'ยืนยันการจอง' }).click();
-    await expect(winner.getByText(/^จองล็อค B3 แล้ว — กรุณาชำระ 120 บาท ภายใน/)).toBeVisible();
+    // ต้องชำระเงิน → ไปหน้าชำระเงินทันที
+    await expect(winner).toHaveURL(/\/bookings\/[0-9a-f-]+\/pay$/);
+    await expect(winner.getByRole('img', { name: 'QR พร้อมเพย์ ยอด 120 บาท' })).toBeVisible();
     await expect(stall(loser, 'B3')).toHaveAttribute('data-status', 'BOOKED', { timeout: 2_000 });
   });
 

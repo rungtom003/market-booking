@@ -91,6 +91,11 @@ export async function adminRequest(request: APIRequestContext) {
       expect(published.ok()).toBeTruthy();
       return { roundId: id, dayIds };
     },
+    /** แก้ค่าตั้งค่าระบบบางตัว (PUT /admin/settings แบบ partial) */
+    async updateSettings(input: Record<string, unknown>) {
+      const res = await request.put(`${API_URL}/admin/settings`, { headers, data: input });
+      expect(res.ok(), await res.text()).toBeTruthy();
+    },
     async cancelRound(id: string) {
       await request.post(`${API_URL}/admin/rounds/${id}/cancel`, { headers });
     },

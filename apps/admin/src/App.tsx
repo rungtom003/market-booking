@@ -8,6 +8,7 @@ import { BookingsPage } from './pages/BookingsPage';
 import { HomePage } from './pages/HomePage';
 import { LoginPage } from './pages/LoginPage';
 import { MarketDayPage } from './pages/MarketDayPage';
+import { PaymentsPage } from './pages/PaymentsPage';
 import { RoundDetailPage } from './pages/RoundDetailPage';
 import { RoundsPage } from './pages/RoundsPage';
 import { SettingsPage } from './pages/SettingsPage';
@@ -42,6 +43,14 @@ export function App() {
             element={
               <Protected permission={Permission.BOOKINGS_CANCEL}>
                 <BookingsPage />
+              </Protected>
+            }
+          />
+          <Route
+            path="/payments"
+            element={
+              <Protected permission={Permission.PAYMENTS_VERIFY}>
+                <PaymentsPage />
               </Protected>
             }
           />

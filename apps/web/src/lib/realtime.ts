@@ -1,10 +1,11 @@
 import { useEffect, useSyncExternalStore } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { ErrorCode, SOCKET_NAMESPACE, SocketEvent } from '@market-booking/shared';
-import type { StallUpdatedPayload } from '@market-booking/shared';
+import type { BookingChangedPayload, StallUpdatedPayload } from '@market-booking/shared';
 import { type Socket, io } from 'socket.io-client';
 import { MY_BOOKINGS_KEY } from '../api/booking';
 import { type MarketDayStallsData, marketDayKey } from '../api/market';
+import { paymentKey } from '../api/payment';
 import { refreshAccessToken } from './api-client';
 import { session } from './session';
 
@@ -97,7 +98,10 @@ export function useMarketDaySocket(marketDayId: string): void {
       );
       if (unknownMine) refetch();
     };
-    const onBooking = () => void queryClient.invalidateQueries({ queryKey: MY_BOOKINGS_KEY });
+    const onBooking = (p: BookingChangedPayload) => {
+      void queryClient.invalidateQueries({ queryKey: MY_BOOKINGS_KEY });
+      void queryClient.invalidateQueries({ queryKey: paymentKey(p.bookingId) });
+    };
     const onVisible = () => {
       if (document.visibilityState === 'visible') refetch();
     };
@@ -118,4 +122,30 @@ export function useMarketDaySocket(marketDayId: string): void {
       window.removeEventListener('online', refetch);
     };
   }, [marketDayId, queryClient]);
+}
+
+/**
+ * การจองของฉันเปลี่ยน (เช่น เจ้าหน้าที่อนุมัติ/ไม่ผ่านสลิป, หมดเวลาชำระ) → โหลดการจองและการชำระใหม่
+ * ใช้ในหน้าที่ไม่ได้ดูผัง (หน้าชำระเงิน, การจองของฉัน); ต่อใหม่หลังหลุด = โหลดใหม่ทั้งหมด
+ */
+export function useMyBookingUpdates(): void {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    const s = vendorSocket();
+    const onBooking = (p: BookingChangedPayload) => {
+      void queryClient.invalidateQueries({ queryKey: MY_BOOKINGS_KEY });
+      void queryClient.invalidateQueries({ queryKey: paymentKey(p.bookingId) });
+    };
+    const resync = () => {
+      void queryClient.invalidateQueries({ queryKey: MY_BOOKINGS_KEY });
+      void queryClient.invalidateQueries({ queryKey: ['payment'] });
+    };
+    s.on(SocketEvent.BOOKING_CHANGED, onBooking);
+    s.on('connect', resync);
+    return () => {
+      s.off(SocketEvent.BOOKING_CHANGED, onBooking);
+      s.off('connect', resync);
+    };
+  }, [queryClient]);
 }

@@ -1,5 +1,5 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router';
+import { Link, useNavigate, useParams } from 'react-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { formatIsoDateTh } from '@market-booking/shared';
 import type { Booking, MarketDayStall, MapZone } from '@market-booking/shared';
@@ -319,15 +319,19 @@ function HoldBar({
   const expired = remaining === 0;
   const code = booking.stall.code;
 
+  const navigate = useNavigate();
   const confirm = useMutation({
     mutationFn: () => bookingApi.confirm(booking.id),
-    onSuccess: (b) =>
+    onSuccess: (b) => {
       onDone(
         b.status === 'CONFIRMED'
           ? `จองล็อค ${code} สำเร็จ`
           : `จองล็อค ${code} แล้ว — กรุณาชำระ ${formatBaht(b.amount)} ภายใน ${formatThaiDateTime(b.paymentDueAt ?? '')}`,
         'success',
-      ),
+      );
+      // ต้องชำระเงิน → ไปหน้าชำระทันที (QR + อัปโหลดสลิป)
+      if (b.status === 'PENDING_PAYMENT') void navigate(`/bookings/${b.id}/pay`);
+    },
     onError: (error) => onDone(errorMessage(error), 'error'),
   });
   const cancel = useMutation({

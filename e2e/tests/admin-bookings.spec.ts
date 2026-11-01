@@ -61,7 +61,10 @@ test.describe('Admin: จัดการการจอง', () => {
     await stall(owner, 'B2').click();
     await owner.getByRole('button', { name: 'จองล็อคนี้' }).click();
     await owner.getByRole('button', { name: 'ยืนยันการจอง' }).click();
-    await expect(owner.getByText(/^จองล็อค B2 แล้ว/)).toBeVisible();
+    // ยืนยันแล้วไปหน้าชำระเงิน — กลับมาดูผังต่อ
+    await expect(owner).toHaveURL(/\/bookings\/[0-9a-f-]+\/pay$/);
+    await owner.goto(`/days/${dayId}`);
+    await expect(stall(owner, 'B2')).toHaveAttribute('data-status', 'MINE');
     await viewer.goto(`/days/${dayId}`);
     await expect(stall(viewer, 'B2')).toHaveAttribute('data-status', 'BOOKED');
 

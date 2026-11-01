@@ -1,18 +1,23 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import type { UploadRequestInput, UploadTicket, VendorImageKind } from '@market-booking/shared';
+import type { UploadTicket } from '@market-booking/shared';
 import { uploadToStorage } from '../api/vendor';
 import { errorMessage } from '../lib/errors';
 import { ImageNotSupportedError, compressImage } from '../lib/image';
 
+/** ไฟล์ที่จะอัปโหลด (ย่อเป็น JPEG ในเครื่องแล้ว) — ผู้เรียกเติมข้อมูลอื่นเอง (เช่น ชนิดรูป) */
+export interface UploadFileInfo {
+  contentType: 'image/jpeg';
+  size: number;
+}
+
 interface ImageUploadProps {
   label: string;
-  kind: VendorImageKind;
   required?: boolean;
   /** รูปปัจจุบัน (presigned URL) ตอนแก้โปรไฟล์ */
   currentUrl?: string | null;
   error?: string;
-  /** ขอ URL อัปโหลดจาก API (ตอนสมัครใช้ registrationToken, ตอนแก้โปรไฟล์ใช้ access token) */
-  requestUpload: (input: UploadRequestInput) => Promise<UploadTicket>;
+  /** ขอ URL อัปโหลดจาก API (รูปผู้ค้า: สมัคร/แก้โปรไฟล์, สลิป: การจอง) */
+  requestUpload: (file: UploadFileInfo) => Promise<UploadTicket>;
   /** ได้ key เมื่ออัปโหลดเสร็จ — ส่งไปกับฟอร์ม */
   onUploaded: (key: string) => void;
   onBusyChange?: (busy: boolean) => void;
@@ -21,7 +26,6 @@ interface ImageUploadProps {
 /** เลือกรูป → ย่อ/บีบอัดในเครื่อง → แสดงตัวอย่าง → อัปโหลดตรงไป storage */
 export function ImageUpload({
   label,
-  kind,
   required,
   currentUrl,
   error,
@@ -46,7 +50,7 @@ export function ImageUpload({
     try {
       const blob = await compressImage(file);
       setPreview(URL.createObjectURL(blob));
-      const ticket = await requestUpload({ kind, contentType: 'image/jpeg', size: blob.size });
+      const ticket = await requestUpload({ contentType: 'image/jpeg', size: blob.size });
       await uploadToStorage(ticket, blob);
       onUploaded(ticket.key);
       setStatus('done');

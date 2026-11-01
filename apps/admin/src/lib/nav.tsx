@@ -6,6 +6,7 @@ import DashboardIcon from '@mui/icons-material/Dashboard';
 import EventIcon from '@mui/icons-material/Event';
 import GridViewIcon from '@mui/icons-material/GridView';
 import LayersIcon from '@mui/icons-material/Layers';
+import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import SettingsIcon from '@mui/icons-material/Settings';
 import StorefrontIcon from '@mui/icons-material/Storefront';
 
@@ -31,6 +32,12 @@ export const NAV_ITEMS: NavItem[] = [
     label: 'จัดการการจอง',
     icon: <BookOnlineIcon />,
     permission: Permission.BOOKINGS_CANCEL,
+  },
+  {
+    to: '/payments',
+    label: 'ตรวจสลิป',
+    icon: <ReceiptLongIcon />,
+    permission: Permission.PAYMENTS_VERIFY,
   },
   {
     to: '/rounds',

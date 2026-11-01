@@ -5,6 +5,8 @@ import type {
   AdminCreateBookingInput,
   AdminMarketDayOption,
   AdminMarketDayStalls,
+  AdminPayment,
+  AdminPaymentListQuery,
   Booking,
   AdminLoginResponse,
   AdminUser,
@@ -24,6 +26,7 @@ import type {
   CreateZoneInput,
   PaginatedResponse,
   ProductCategory,
+  RecordCashPaymentInput,
   Round,
   RoundDetail,
   SetStallDayOverrideInput,
@@ -193,6 +196,21 @@ export const adminApi = {
       const name = /filename="([^"]+)"/.exec(String(res.headers['content-disposition']))?.[1];
       return { blob: res.data, filename: name ?? 'bookings.xlsx' };
     },
+  },
+
+  payments: {
+    list: async (query: Partial<AdminPaymentListQuery>) =>
+      (
+        await apiClient.get<PaginatedResponse<AdminPayment>>('/admin/payments', {
+          params: params(query),
+        })
+      ).data,
+    approve: (id: string) =>
+      unwrap(apiClient.post<ApiResponse<AdminPayment>>(`/admin/payments/${id}/approve`)),
+    reject: (id: string, reason: string) =>
+      unwrap(apiClient.post<ApiResponse<AdminPayment>>(`/admin/payments/${id}/reject`, { reason })),
+    cash: (input: RecordCashPaymentInput) =>
+      unwrap(apiClient.post<ApiResponse<AdminPayment>>('/admin/payments/cash', input)),
   },
 
   users: {
