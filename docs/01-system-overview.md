@@ -70,6 +70,7 @@
 | ตรวจสลิป/ยืนยันการชำระเงิน | ✅ | ✅ | ❌ | ✅ |
 | ดูรายงาน | ✅ | ✅ | ✅ | ✅ |
 | Check-in ผู้ค้าหน้างาน | ✅ | ✅ | ✅ | ❌ |
+| เห็นเบอร์โทรผู้ค้าเต็มในรายงาน/ไฟล์ export (`VENDOR_PHONE_VIEW` — ไม่มีสิทธิ์เห็น 081-xxx-5678) | ✅ | ✅ | ✅ | ❌ |
 | ดู Audit Log | ✅ | ✅ | ❌ | ❌ |
 
 ---
@@ -199,6 +200,7 @@ market-booking/
 │   ├── 01-system-overview.md    # ไฟล์นี้
 │   ├── 02-development-phases.md
 │   ├── load-test-results.md     # ผล load test (Phase 4.6)
+│   ├── report-benchmark.md      # ผล benchmark รายงานบนข้อมูล 1 ปี (Phase 8, `pnpm bench:reports`)
 │   └── runbook.md               # deploy, rollback, backup/restore, admin, secret (Phase 6)
 ├── load-test/k6/                # สคริปต์ k6 — รันด้วย `pnpm test:load` (apps/api/scripts/load-test.ts)
 ├── docker/                      # production (Phase 6) — ขั้นตอนใน docs/runbook.md
@@ -643,9 +645,10 @@ Vendor กด "ยืนยันการจอง" → POST /bookings/:id/conf
 | POST | `/admin/payments/:id/approve` (→ `CONFIRMED` + `checkin_token`) · `/reject` (`{ reason }` → `PENDING_PAYMENT` + กำหนดชำระใหม่) |
 | POST | `/admin/payments/cash` (`{ bookingId, amount? }` รับเงินสด — การจอง HOLD/รอชำระ/รอตรวจ → `CONFIRMED`) |
 | POST | `/admin/checkin/scan` |
-| GET | `/admin/reports/revenue`, `/occupancy`, `/noshow` (+ `?format=xlsx`) |
+| GET | `/admin/reports/dashboard` (ผู้ค้ารออนุมัติ, สลิปรอตรวจ, อัตราการจอง + รายได้ของรอบปัจจุบัน) |
+| GET | `/admin/reports/revenue` (`groupBy=day\|round\|zone`), `/occupancy` (`groupBy=day\|zone`), `/vendors` (`sort=bookings\|revenue\|cancelled\|noshow`) — ทุกตัวรับ `from`, `to` (วันขาย), `roundId`, `format=json\|xlsx\|csv` (ไฟล์ลง audit `report.export`) |
 | CRUD | `/admin/users`, `/admin/announcements` |
-| GET | `/admin/audit-logs` |
+| GET | `/admin/audit-logs` (`actorType`, `actorId`, `action` — ลงท้าย `.` = ทั้งกลุ่ม, `entityType`, `entityId`, `from`/`to` เวลาตลาด, แบ่งหน้า) · `/admin/audit-logs/actions` |
 
 ### Error Codes หลัก
 `ROUND_NOT_OPEN`, `STALL_TAKEN`, `STALL_UNAVAILABLE`, `QUOTA_EXCEEDED`, `CATEGORY_NOT_ALLOWED`, `VENDOR_NOT_APPROVED`, `VENDOR_SUSPENDED`, `HOLD_EXPIRED`, `INVALID_STATE_TRANSITION`, `CANCEL_WINDOW_PASSED`, `OTP_INVALID`, `RATE_LIMITED`
@@ -913,6 +916,12 @@ VITE_LINE_LIFF_ID=        (ฝั่ง web — ว่าง = ซ่อนป�
 | 2026-11-01 | ไม่แจ้งเตือน: ผู้ค้ายกเลิกเอง, หมดเวลา hold/ชำระ, ปลดระงับ, สมัครแบบอนุมัติอัตโนมัติ (ผู้ค้าเห็นบนหน้าจอขณะทำเอง) | ประหยัดโควตา LINE/เครดิต SMS — แจ้งเฉพาะสิ่งที่ผู้ค้าไม่ได้ทำเอง/ต้องลงมือ |
 | 2026-11-01 | `PENDING_PAYMENT → CONFIRMED` (admin รับเงินสดก่อนผู้ค้าส่งสลิป) เพิ่มใน `BOOKING_TRANSITIONS` | bug จาก 5.1: รับเงินสดของการจองที่ยังไม่ส่งสลิปได้ 500 (test เดิมครอบแค่ PENDING_VERIFY/HOLD) — เจอตอนเขียน test ของ Phase 7 |
 | 2026-11-01 | MockSmsProvider เก็บข้อความเป็น list `mock-sms:outbox:<เบอร์>` (ใหม่สุดก่อน, 20 ข้อความ) แทน key เดียว | SMS แจ้งเตือนจาก queue มาหลัง OTP ได้ — E2E ต้องหา OTP ล่าสุดจากหลายข้อความ |
+| 2026-11-01 | รายงาน aggregate ใน PostgreSQL ด้วย `$queryRaw` (CTE + `GROUP BY` + `FILTER`) ไม่ทำใน Node และไม่มีตารางสรุปล่วงหน้า | benchmark 1 ปี (~32k การจอง, ~195k audit log) ทุกรายงาน ≤ 35 ms ≪ 2 วินาที — ยังไม่คุ้มที่จะทำ materialized view/ตารางสรุป |
+| 2026-11-01 | นิยามรายงาน: **รายได้** = ยอดชำระ `APPROVED` (สลิป + เงินสด) ตามวันขายของการจอง ไม่หักคืนเงิน; **ล็อคที่ใช้ได้** = ล็อค `is_active` (ค่าปัจจุบัน) ลบที่ปิดเฉพาะวัน × วันขายที่ไม่ยกเลิก; **ยกเลิก/ไม่ชำระ** = `CANCELLED` + `EXPIRED` ที่เคยมีกำหนดชำระ (hold ที่ทิ้งไม่นับ); **ไม่มาขาย** = `noshow_count` สะสม | ใช้ข้อมูลที่มีจริงในระบบ; ไม่มีประวัติการเปิด/ปิดล็อคย้อนหลัง — ระบุไว้บนหน้ารายงาน |
+| 2026-11-01 | สิทธิ์ใหม่ `VENDOR_PHONE_VIEW` (SUPER_ADMIN/ADMIN/STAFF): FINANCE เห็นเบอร์ `081-xxx-5678` ทั้งบนหน้าและไฟล์ export | §13 "mask เลขโทรศัพท์ในรายงานที่ export ตามสิทธิ์" — การเงินไม่จำเป็นต้องติดต่อผู้ค้า |
+| 2026-11-01 | ไฟล์รายงาน: xlsx (exceljs, หัวตรึง + แถวรวม) และ CSV UTF-8 + BOM, ค่าที่ขึ้นต้น `= + - @` ใส่ `'` นำหน้า | Excel เปิด CSV ภาษาไทยไม่เพี้ยน; กัน CSV/formula injection จากชื่อผู้ค้า/ร้านที่ผู้ใช้กรอกเอง |
+| 2026-11-01 | index `audit_logs(action, created_at)` | benchmark: กรอง action ที่เกิดไม่บ่อยตลอดปีเดิม Parallel Seq Scan ทั้งตาราง (โตตามจำนวน log) → Bitmap Index Scan 0.04 ms; รายงานอื่นใช้ index เดิม (`bookings(market_day_id,status)`, `payments(booking_id)`) ได้เมื่อช่วงวันที่แคบ |
+| 2026-11-01 | Audit log ไม่มี `market_id` — หน้าค้นแสดงทุกตลาด (เฉพาะ SUPER_ADMIN/ADMIN) | MVP ตลาดเดียว; เพิ่มคอลัมน์ได้เมื่อเปิดหลายตลาด (Open Question) |
 
 ### Open Questions
 - [ ] ใช้กับตลาดเดียวหรือหลายตลาด (ตอนนี้ schema รองรับแล้ว แต่ UI ยังเป็นตลาดเดียว)

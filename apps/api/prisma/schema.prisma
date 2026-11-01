@@ -428,6 +428,8 @@ model AuditLog {
   @@index([entityType, entityId])
   @@index([actorType, actorId])
   @@index([createdAt])
+  /// หน้า Audit Log กรองตาม action (+ ช่วงเวลา) และรายการ action ของ filter (Phase 8 benchmark)
+  @@index([action, createdAt])
   @@map("audit_logs")
 }
 

@@ -14,3 +14,4 @@ export * from './settings.js';
 export * from './socket-events.js';
 export * from './vendor.js';
 export * from './vendor-auth.js';
+export * from './report.js';

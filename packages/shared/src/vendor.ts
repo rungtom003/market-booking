@@ -172,3 +172,11 @@ export interface BulkApproveResult {
   /** id ที่ข้าม: ไม่พบ หรือไม่ได้อยู่สถานะ PENDING แล้ว */
   skipped: { id: string; reason: 'NOT_FOUND' | 'NOT_PENDING' }[];
 }
+
+/** ชื่อสถานะผู้ค้าภาษาไทย — หน้า admin และไฟล์ export */
+export const VENDOR_STATUS_TH: Record<VendorStatus, string> = {
+  PENDING: 'รออนุมัติ',
+  APPROVED: 'อนุมัติแล้ว',
+  REJECTED: 'ไม่อนุมัติ',
+  SUSPENDED: 'ระงับ',
+};

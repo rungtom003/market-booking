@@ -12,6 +12,7 @@ const EXPECTED: Record<Permission, [boolean, boolean, boolean, boolean]> = {
   PAYMENTS_VERIFY: [true, true, false, true],
   REPORTS_VIEW: [true, true, true, true],
   CHECKIN: [true, true, true, false],
+  VENDOR_PHONE_VIEW: [true, true, true, false],
   AUDIT_LOG_VIEW: [true, true, false, false],
 };
 

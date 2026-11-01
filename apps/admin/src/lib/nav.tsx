@@ -1,11 +1,13 @@
 import type { ReactNode } from 'react';
 import { Permission } from '@market-booking/shared';
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
+import AssessmentIcon from '@mui/icons-material/Assessment';
 import BookOnlineIcon from '@mui/icons-material/BookOnline';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import EventIcon from '@mui/icons-material/Event';
 import GridViewIcon from '@mui/icons-material/GridView';
 import LayersIcon from '@mui/icons-material/Layers';
+import ManageHistoryIcon from '@mui/icons-material/ManageHistory';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import SettingsIcon from '@mui/icons-material/Settings';
 import StorefrontIcon from '@mui/icons-material/Storefront';
@@ -40,6 +42,12 @@ export const NAV_ITEMS: NavItem[] = [
     permission: Permission.PAYMENTS_VERIFY,
   },
   {
+    to: '/reports',
+    label: 'รายงาน',
+    icon: <AssessmentIcon />,
+    permission: Permission.REPORTS_VIEW,
+  },
+  {
     to: '/rounds',
     label: 'รอบการจอง',
     icon: <EventIcon />,
@@ -68,5 +76,11 @@ export const NAV_ITEMS: NavItem[] = [
     label: 'ผู้ดูแลระบบ',
     icon: <AdminPanelSettingsIcon />,
     permission: Permission.ADMIN_USERS_MANAGE,
+  },
+  {
+    to: '/audit-logs',
+    label: 'ประวัติการใช้งาน',
+    icon: <ManageHistoryIcon />,
+    permission: Permission.AUDIT_LOG_VIEW,
   },
 ];

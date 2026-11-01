@@ -69,7 +69,7 @@
 | 5.2 | ↳ Vendor & Admin Payment UI | ✅ DONE | 2026-11-01 | 2026-11-01 |
 | 6 | MVP Deployment 🚀 | 🟨 IN PROGRESS | 2026-11-01 | |
 | 7 | Notifications (LINE OA / SMS) | ✅ DONE | 2026-11-01 | 2026-11-01 |
-| 8 | Reports & Dashboard | ⬜ TODO | | |
+| 8 | Reports & Dashboard | ✅ DONE | 2026-11-01 | 2026-11-01 |
 | 9 | Advanced Booking | ⬜ TODO | | |
 | 9.1 | ↳ Map Editor (ลากวาง) | ⬜ TODO | | |
 | 9.2 | ↳ Waitlist | ⬜ TODO | | |
@@ -694,19 +694,27 @@
 ---
 
 ## Phase 8 — Reports & Dashboard
-**สถานะ:** ⬜ TODO · **Dependencies:** Phase 6 · **เริ่ม:** – · **เสร็จ:** –
+**สถานะ:** ✅ DONE · **Dependencies:** Phase 6 · **เริ่ม:** 2026-11-01 · **เสร็จ:** 2026-11-01
 
 **Tasks**
-- [ ] Dashboard: ผู้ค้ารออนุมัติ, สลิปรอตรวจ, อัตราการจองรอบปัจจุบัน, รายได้รอบนี้
-- [ ] รายงานรายได้ (ตามวัน/รอบ/โซน), Occupancy (ตามวัน/โซน), ผู้ค้า Top / No-show
-- [ ] Export xlsx/csv (mask เบอร์โทรตามสิทธิ์)
-- [ ] หน้า Audit Log (filter actor/action/วันที่)
-- [ ] ตรวจ query plan รายงานหลัก เพิ่ม index ที่จำเป็น
+- [x] Dashboard: ผู้ค้ารออนุมัติ, สลิปรอตรวจ, อัตราการจองรอบปัจจุบัน, รายได้รอบนี้
+- [x] รายงานรายได้ (ตามวัน/รอบ/โซน), Occupancy (ตามวัน/โซน), ผู้ค้า Top / No-show
+- [x] Export xlsx/csv (mask เบอร์โทรตามสิทธิ์)
+- [x] หน้า Audit Log (filter actor/action/วันที่)
+- [x] ตรวจ query plan รายงานหลัก เพิ่ม index ที่จำเป็น
 
 **Acceptance Criteria**
 - รายงานบนข้อมูล 1 ปี (จำลอง) ตอบ < 2 วินาที
 
-**Agent Notes:** –
+**Agent Notes:**
+- ✅ AC: `pnpm bench:reports` (`apps/api/scripts/report-benchmark.ts`) — DB แยก `*_bench`, ข้อมูลจำลอง 1 ปี (104 วันขาย, 300 ล็อค, 1,500 ผู้ค้า, ~32k การจอง, ~28k การชำระ, ~195k audit log) เรียก `ReportService`/`AuditLogService` ตัวจริงช่วง 1 ปี: ทุกรายงาน ≤ 35 ms (ช้าสุดจาก 3 รอบหลัง warm-up) + EXPLAIN ANALYZE ของ SQL ที่ส่งจริง → `docs/report-benchmark.md`
+- Query plan: รายงานช่วง 1 ปีอ่านเกือบทั้งตาราง (Seq Scan เหมาะสม); เพิ่ม index `audit_logs(action, created_at)` (migration `20261101120000_audit_log_action_index`) — กรอง action ที่เกิดไม่บ่อยเปลี่ยนจาก Parallel Seq Scan เป็น Bitmap Index Scan (0.04 ms)
+- API (`modules/report/`): `ReportService` (SQL aggregate: revenue/occupancy/vendors/dashboard), `ReportExportService` + `report-file.ts` (xlsx/csv + แถวรวม, ลง audit `report.export`), `AuditLogService` (กรอง actor/action/entity/วันที่ตามเวลาตลาด + ชื่อผู้กระทำ); `GET /admin/reports/{dashboard,revenue,occupancy,vendors}` (`REPORTS_VIEW`), `GET /admin/audit-logs` + `/actions` (`AUDIT_LOG_VIEW`)
+- ปิดเบอร์ตามสิทธิ์: permission ใหม่ `VENDOR_PHONE_VIEW` (FINANCE ไม่มี) → `081-xxx-5678` ทั้ง JSON และไฟล์; `maskPhone` ใน shared
+- Admin: หน้าแรกเป็น Dashboard (การ์ดงานรอ + อัตราการจอง/รายได้ของรอบปัจจุบัน, โหลดใหม่ทุก 30 วินาที); หน้า "รายงาน" (`/reports`: ช่วงวันขาย + รอบใน URL, แท็บรายได้/การใช้ล็อค/ผู้ค้า, แยกตาม, ปุ่ม Excel/CSV); หน้า "ประวัติการใช้งาน" (`/audit-logs`: DataGrid แบ่งหน้าฝั่ง server, กรองผู้กระทำ/การกระทำ (รายกลุ่ม)/วันที่/id, คลิกดูข้อมูลก่อน/หลัง)
+- ข้อจำกัด: ตัวเลือก "รอบ" ในหน้ารายงานแสดงเฉพาะผู้มีสิทธิ์จัดการรอบ (API รายการรอบต้องใช้ `ROUNDS_MANAGE`) — STAFF/FINANCE กรองด้วยวันที่; ไม่มาขายเป็นยอดสะสม (check-in มาใน Phase 10); audit log ไม่แยกตลาด
+- `VENDOR_STATUS_TH` ย้ายไป shared (ไฟล์ export ใช้)
+- ทดสอบ: unit 214 (+4), integration 254 (+12 `reports.int-spec.ts` — ข้อมูลตายตัวคำนวณคำตอบได้ทุกช่อง), E2E 28 (+1 `admin-reports.spec.ts`: dashboard → รายงาน 3 แท็บ → ดาวน์โหลด Excel → เห็นใน audit log)
 
 ---
 
@@ -827,3 +835,5 @@
 | 2026-11-01 | 6 | 🟨 IN PROGRESS | งานในโค้ดครบ: image api/api-tools/nginx, compose production (migrate อัตโนมัติ, healthcheck, log rotation, certbot, backup รายวัน 14 วัน, Uptime Kuma), deploy/rollback/restore/init-ssl scripts, `TRUST_PROXY`, `/health/ready`, runbook, CI job docker — ทดสอบ stack production ในเครื่องผ่าน (รวม restore + rollback) — unit 174 / integration 227 / E2E 27 — รอ: deploy บน VPS จริง + ตั้ง LINE Login สำหรับโดเมนจริง |
 | 2026-11-01 | 7 | 🟨 IN PROGRESS | เริ่ม Notifications: queue + notification_logs, LINE OA (push/Flex), SMS จริง — ผู้ใช้เลือก ThaiBulkSMS |
 | 2026-11-01 | 7 | ✅ DONE | queue `notification` (retry 8 ครั้ง ~1 ชม., dedupe, recover), LINE Flex + SMS แทนเมื่อ LINE ส่งไม่ได้, ThaiBulkSMS adapter, 10 template, แจ้งกลุ่ม LINE เจ้าหน้าที่ + webhook ตอบ group ID, เตือนก่อนรอบเปิด/ก่อนหมดเวลาชำระ; แก้ bug รับเงินสดตอนรอชำระ — unit 210 / integration 242 / E2E 27 — ถัดไป: Phase 8 Reports & Dashboard (Phase 6 ยังรอ deploy บน VPS จริง) |
+| 2026-11-01 | 8 | 🟨 IN PROGRESS | เริ่ม Reports & Dashboard: dashboard, รายงานรายได้/การใช้ล็อค/ผู้ค้า + export, หน้า audit log, benchmark ข้อมูล 1 ปี |
+| 2026-11-01 | 8 | ✅ DONE | Dashboard, รายงาน 3 แบบ (SQL aggregate) + export xlsx/csv (ปิดเบอร์ตามสิทธิ์ `VENDOR_PHONE_VIEW`), หน้า audit log, benchmark 1 ปีทุกรายงาน ≤ 35 ms + index `audit_logs(action, created_at)` — unit 214 / integration 254 / E2E 28 — ถัดไป: Phase 9.1 Map Editor (Phase 6 ยังรอ deploy บน VPS จริง) |

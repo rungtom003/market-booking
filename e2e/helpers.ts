@@ -97,6 +97,41 @@ export async function adminRequest(request: APIRequestContext) {
       const res = await request.put(`${API_URL}/admin/settings`, { headers, data: input });
       expect(res.ok(), await res.text()).toBeTruthy();
     },
+    vendorId: findVendorId,
+    /** จองแทนผู้ค้า (ค่าเริ่มต้นรอชำระ) แล้ว (ถ้าระบุ) รับเงินสด → คืน id การจอง */
+    async bookForVendor(input: {
+      marketDayId: string;
+      stallCode: string;
+      vendorId: string;
+      cash?: number;
+    }) {
+      const day = await request.get(`${API_URL}/admin/market-days/${input.marketDayId}/stalls`, {
+        headers,
+      });
+      const stall = ((await day.json()).data.stalls as { id: string; code: string }[]).find(
+        (s) => s.code === input.stallCode,
+      );
+      if (!stall) throw new Error(`Stall ${input.stallCode} not found`);
+      const created = await request.post(`${API_URL}/admin/bookings`, {
+        headers,
+        data: {
+          vendorId: input.vendorId,
+          stallId: stall.id,
+          marketDayId: input.marketDayId,
+          status: 'PENDING_PAYMENT',
+        },
+      });
+      expect(created.ok(), await created.text()).toBeTruthy();
+      const bookingId = (await created.json()).data.id as string;
+      if (input.cash !== undefined) {
+        const paid = await request.post(`${API_URL}/admin/payments/cash`, {
+          headers,
+          data: { bookingId, amount: input.cash },
+        });
+        expect(paid.ok(), await paid.text()).toBeTruthy();
+      }
+      return bookingId;
+    },
     async cancelRound(id: string) {
       await request.post(`${API_URL}/admin/rounds/${id}/cancel`, { headers });
     },

@@ -20,12 +20,8 @@ export function formatPhone(phone: string): string {
   return phone.replace(/^(\d{3})(\d{3})(\d{4})$/, '$1-$2-$3');
 }
 
-export const VENDOR_STATUS_TH: Record<VendorStatus, string> = {
-  PENDING: 'รออนุมัติ',
-  APPROVED: 'อนุมัติแล้ว',
-  REJECTED: 'ไม่อนุมัติ',
-  SUSPENDED: 'ระงับ',
-};
+/** ย้ายไป shared (ไฟล์ export ของ API ใช้ด้วย) */
+export { VENDOR_STATUS_TH } from '@market-booking/shared';
 
 export const VENDOR_STATUS_COLOR = {
   PENDING: 'warning',

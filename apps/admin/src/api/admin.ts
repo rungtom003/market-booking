@@ -16,6 +16,8 @@ import type {
   AdminStallListQuery,
   AdminVendorListQuery,
   ApiResponse,
+  AuditLogEntry,
+  AuditLogQuery,
   BulkApproveResult,
   BulkCreateStallsInput,
   BulkCreateStallsResult,
@@ -24,9 +26,14 @@ import type {
   CreateRoundInput,
   CreateStallInput,
   CreateZoneInput,
+  Dashboard,
+  OccupancyReport,
+  OccupancyReportQuery,
   PaginatedResponse,
   ProductCategory,
   RecordCashPaymentInput,
+  RevenueReport,
+  RevenueReportQuery,
   Round,
   RoundDetail,
   SetStallDayOverrideInput,
@@ -41,6 +48,8 @@ import type {
   UpdateSettingsInput,
   UpdateStallInput,
   UpdateZoneInput,
+  VendorReport,
+  VendorReportQuery,
   VendorStatusCounts,
   Zone,
 } from '@market-booking/shared';
@@ -196,6 +205,47 @@ export const adminApi = {
       const name = /filename="([^"]+)"/.exec(String(res.headers['content-disposition']))?.[1];
       return { blob: res.data, filename: name ?? 'bookings.xlsx' };
     },
+  },
+
+  reports: {
+    dashboard: () => unwrap(apiClient.get<ApiResponse<Dashboard>>('/admin/reports/dashboard')),
+    revenue: (q: Omit<RevenueReportQuery, 'format'>) =>
+      unwrap(
+        apiClient.get<ApiResponse<RevenueReport>>('/admin/reports/revenue', { params: params(q) }),
+      ),
+    occupancy: (q: Omit<OccupancyReportQuery, 'format'>) =>
+      unwrap(
+        apiClient.get<ApiResponse<OccupancyReport>>('/admin/reports/occupancy', {
+          params: params(q),
+        }),
+      ),
+    vendors: (q: Omit<VendorReportQuery, 'format'>) =>
+      unwrap(
+        apiClient.get<ApiResponse<VendorReport>>('/admin/reports/vendors', { params: params(q) }),
+      ),
+    /** ดาวน์โหลด xlsx/csv ของรายงาน — คืน blob + ชื่อไฟล์จาก Content-Disposition */
+    download: async (
+      report: 'revenue' | 'occupancy' | 'vendors',
+      q: object,
+      format: 'xlsx' | 'csv',
+    ) => {
+      const res = await apiClient.get<Blob>(`/admin/reports/${report}`, {
+        params: params({ ...q, format }),
+        responseType: 'blob',
+      });
+      const name = /filename="([^"]+)"/.exec(String(res.headers['content-disposition']))?.[1];
+      return { blob: res.data, filename: name ?? `${report}.${format}` };
+    },
+  },
+
+  auditLogs: {
+    list: async (q: Partial<AuditLogQuery>) =>
+      (
+        await apiClient.get<PaginatedResponse<AuditLogEntry>>('/admin/audit-logs', {
+          params: params(q),
+        })
+      ).data,
+    actions: () => unwrap(apiClient.get<ApiResponse<string[]>>('/admin/audit-logs/actions')),
   },
 
   payments: {

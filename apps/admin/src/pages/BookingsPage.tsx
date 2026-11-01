@@ -31,6 +31,7 @@ import Typography from '@mui/material/Typography';
 import { DataGrid, type GridColDef, type GridPaginationModel } from '@mui/x-data-grid';
 import { adminApi } from '../api/admin';
 import { errorMessage } from '../lib/errors';
+import { saveBlob } from '../lib/download';
 import { formatBaht, formatDateTime, formatPhone } from '../lib/format';
 import { useAdminMarketDaySocket } from '../lib/realtime';
 import { useCan } from '../lib/session';
@@ -114,12 +115,7 @@ export function BookingsPage() {
   const download = useMutation({
     mutationFn: () => adminApi.bookings.exportDay(dayId),
     onSuccess: ({ blob, filename }) => {
-      const href = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = href;
-      a.download = filename;
-      a.click();
-      URL.revokeObjectURL(href);
+      saveBlob(blob, filename);
     },
     onError: (e) => setNotice({ severity: 'error', text: errorMessage(e) }),
   });

@@ -4,11 +4,13 @@ import Button from '@mui/material/Button';
 import Typography from '@mui/material/Typography';
 import { AuthBootstrap, Protected } from './components/guards';
 import { AdminUsersPage } from './pages/AdminUsersPage';
+import { AuditLogPage } from './pages/AuditLogPage';
 import { BookingsPage } from './pages/BookingsPage';
 import { HomePage } from './pages/HomePage';
 import { LoginPage } from './pages/LoginPage';
 import { MarketDayPage } from './pages/MarketDayPage';
 import { PaymentsPage } from './pages/PaymentsPage';
+import { ReportsPage } from './pages/ReportsPage';
 import { RoundDetailPage } from './pages/RoundDetailPage';
 import { RoundsPage } from './pages/RoundsPage';
 import { SettingsPage } from './pages/SettingsPage';
@@ -51,6 +53,22 @@ export function App() {
             element={
               <Protected permission={Permission.PAYMENTS_VERIFY}>
                 <PaymentsPage />
+              </Protected>
+            }
+          />
+          <Route
+            path="/reports"
+            element={
+              <Protected permission={Permission.REPORTS_VIEW}>
+                <ReportsPage />
+              </Protected>
+            }
+          />
+          <Route
+            path="/audit-logs"
+            element={
+              <Protected permission={Permission.AUDIT_LOG_VIEW}>
+                <AuditLogPage />
               </Protected>
             }
           />
