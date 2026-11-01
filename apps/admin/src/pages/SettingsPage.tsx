@@ -65,6 +65,15 @@ const META: Record<SettingKey, FieldMeta> = {
     unit: 'นาที',
     help: '0 = ไม่แจ้ง',
   },
+  notify_before_payment_due_minutes: {
+    label: 'เตือนผู้ค้าก่อนหมดเวลาชำระ',
+    unit: 'นาที',
+    help: '0 = ไม่เตือน',
+  },
+  line_admin_group_id: {
+    label: 'LINE กลุ่มเจ้าหน้าที่ (group ID)',
+    help: 'เชิญบอทของ LINE OA เข้ากลุ่ม แล้วบอทจะตอบ group ID — เว้นว่าง = ไม่แจ้งกลุ่ม',
+  },
 };
 
 const GROUPS: { title: string; keys: SettingKey[] }[] = [
@@ -84,6 +93,8 @@ const GROUPS: { title: string; keys: SettingKey[] }[] = [
       'noshow_threshold',
       'noshow_suspend_days',
       'notify_before_round_open_minutes',
+      'notify_before_payment_due_minutes',
+      'line_admin_group_id',
     ],
   },
 ];
@@ -201,7 +212,7 @@ function SettingsForm({ initial }: { initial: Settings }) {
         />
       );
     }
-    // promptpay_id (string | null): ช่องว่าง = null
+    // promptpay_id, line_admin_group_id (string | null): ช่องว่าง = null
     return (
       <TextField
         key={key}

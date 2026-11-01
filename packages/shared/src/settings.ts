@@ -15,6 +15,12 @@ export const promptPayIdSchema = z
     z.string().regex(/^(\d{10}|\d{13}|\d{15})$/, 'PromptPay ต้องเป็นตัวเลข 10, 13 หรือ 15 หลัก'),
   );
 
+/** group ID ของ LINE (ได้จากบอทเมื่อถูกเชิญเข้ากลุ่ม) — `C` + hex 32 ตัว */
+export const lineGroupIdSchema = z
+  .string()
+  .trim()
+  .regex(/^C[0-9a-f]{32}$/, 'LINE group ID ต้องขึ้นต้นด้วย C ตามด้วยตัวอักษร 0-9 a-f 32 ตัว');
+
 /**
  * schema ของทุก setting (Overview §12) — API ใช้ validate ตอนแก้/อ่านจาก DB,
  * หน้า admin ใช้สร้างฟอร์มและ validate ฝั่ง client
@@ -39,6 +45,10 @@ export const settingFields = {
   noshow_suspend_days: int(1, 365),
   /** 0 = ไม่แจ้งเตือนก่อนรอบเปิด */
   notify_before_round_open_minutes: int(0, 7 * 24 * 60),
+  /** แจ้งผู้ค้าที่ยังไม่ชำระก่อนหมดเวลากี่นาที (0 = ไม่แจ้ง) */
+  notify_before_payment_due_minutes: int(0, 24 * 60),
+  /** LINE group ของเจ้าหน้าที่ (บอทของ LINE OA ต้องอยู่ในกลุ่ม) — null = ไม่แจ้งกลุ่ม */
+  line_admin_group_id: lineGroupIdSchema.nullable(),
 };
 
 export const settingsSchema = z.object(settingFields);
@@ -60,6 +70,8 @@ export const SETTING_DEFAULTS: Settings = {
   noshow_threshold: 3,
   noshow_suspend_days: 30,
   notify_before_round_open_minutes: 60,
+  notify_before_payment_due_minutes: 60,
+  line_admin_group_id: null,
 };
 
 export const SETTING_KEYS = Object.keys(settingFields) as SettingKey[];

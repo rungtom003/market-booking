@@ -406,6 +406,19 @@ describe('Payments: PromptPay slip + review + cash (integration)', () => {
       .expect(400);
   });
 
+  it('รับเงินสดก่อนผู้ค้าส่งสลิป (รอชำระ) → CONFIRMED', async () => {
+    const vendor = await makeVendor();
+    const booking = await pendingPayment(vendor);
+
+    const res = await http()
+      .post('/api/v1/admin/payments/cash')
+      .set(asAdmin(finance))
+      .send({ bookingId: booking.id })
+      .expect(201);
+    expect(res.body.data).toMatchObject({ method: 'CASH', booking: { status: 'CONFIRMED' } });
+    expect((await bookingRow(booking.id)).checkinToken).toEqual(expect.any(String));
+  });
+
   it('รับเงินสด: สลิปที่รอตรวจถูกปิด, การจอง CONFIRMED + checkin token; HOLD ก็รับได้; ยืนยันแล้วรับซ้ำไม่ได้', async () => {
     const vendor = await makeVendor();
     const booking = await pendingPayment(vendor);

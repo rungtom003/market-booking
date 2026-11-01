@@ -18,6 +18,7 @@ import { BookingEvents } from '../booking/booking-events';
 import { newCheckinToken, toEvent } from '../booking/booking-mapper';
 import { BookingStateService } from '../booking/booking-state.service';
 import { MarketService } from '../market/market.service';
+import { NotifyService } from '../notify/notify.service';
 import { SettingsService } from '../settings/settings.service';
 import { StorageService } from '../storage/storage.service';
 
@@ -68,6 +69,7 @@ export class PaymentReviewService {
     private readonly storage: StorageService,
     private readonly state: BookingStateService,
     private readonly events: BookingEvents,
+    private readonly notify: NotifyService,
   ) {}
 
   /** รายการชำระเงินของตลาด — รอตรวจ: เก่าสุดก่อน (คิว), สถานะอื่น: ใหม่สุดก่อน */
@@ -149,7 +151,11 @@ export class PaymentReviewService {
       );
       return booking;
     });
-    if (updated) this.events.emitChanged([toEvent(updated)]);
+    if (updated) {
+      this.events.emitChanged([toEvent(updated)]);
+      // การจองกลับมารอชำระ — แจ้งผู้ค้าให้ส่งสลิปใหม่ (ถูกยกเลิกไปแล้วไม่ต้องแจ้ง)
+      await this.notify.paymentRejected(paymentId);
+    }
     return this.get(paymentId);
   }
 

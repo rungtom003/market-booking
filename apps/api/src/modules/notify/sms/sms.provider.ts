@@ -8,8 +8,8 @@ export interface SmsMessage {
 }
 
 /**
- * Adapter ของผู้ให้บริการ SMS (Overview §4) — ผู้ให้บริการจริงยังไม่เลือก (Open Question)
- * implementation ต้องโยน AppException(SERVICE_UNAVAILABLE) เมื่อส่งไม่ได้ และห้าม log ข้อความ (มี OTP)
+ * Adapter ของผู้ให้บริการ SMS (Overview §4) — เลือกด้วย env `SMS_PROVIDER` (`mock` | `thaibulksms`)
+ * ส่งไม่ได้ → โยน `DeliveryError` (SERVICE_UNAVAILABLE + retryable) และห้าม log ข้อความ (มี OTP)
  */
 export interface SmsProvider {
   send(message: SmsMessage): Promise<void>;

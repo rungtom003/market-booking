@@ -68,7 +68,7 @@
 | 5.1 | ↳ Payment API + PromptPay QR | ✅ DONE | 2026-10-31 | 2026-10-31 |
 | 5.2 | ↳ Vendor & Admin Payment UI | ✅ DONE | 2026-11-01 | 2026-11-01 |
 | 6 | MVP Deployment 🚀 | 🟨 IN PROGRESS | 2026-11-01 | |
-| 7 | Notifications (LINE OA / SMS) | ⬜ TODO | | |
+| 7 | Notifications (LINE OA / SMS) | ✅ DONE | 2026-11-01 | 2026-11-01 |
 | 8 | Reports & Dashboard | ⬜ TODO | | |
 | 9 | Advanced Booking | ⬜ TODO | | |
 | 9.1 | ↳ Map Editor (ลากวาง) | ⬜ TODO | | |
@@ -666,20 +666,30 @@
 ---
 
 ## Phase 7 — Notifications (LINE OA / SMS)
-**สถานะ:** ⬜ TODO · **Dependencies:** Phase 6 · **เริ่ม:** – · **เสร็จ:** –
+**สถานะ:** ✅ DONE · **Dependencies:** Phase 6 · **เริ่ม:** 2026-11-01 · **เสร็จ:** 2026-11-01
 
 **Tasks**
-- [ ] Queue `notification` + retry/backoff + `notification_logs`
-- [ ] `LineMessagingProvider` (push message / Flex), `SmsProvider` จริง (ตามผู้ให้บริการที่เลือก)
-- [ ] เลือกช่องทาง: มี `line_user_id` → LINE, ไม่มี → SMS
-- [ ] Templates: ผลอนุมัติ/ปฏิเสธ/ระงับ, รอบจะเปิดใน X นาที, จองสำเร็จ, ใกล้หมดเวลาชำระ, สลิปถูกปฏิเสธ, การจองถูกยกเลิก
-- [ ] แจ้ง Admin เมื่อมีสมาชิกใหม่ (MANUAL) / สลิปใหม่ (LINE group ถ้าตั้งค่า)
-- [ ] Scheduled job: แจ้งก่อนรอบเปิดตาม `notify_before_round_open_minutes`
+- [x] Queue `notification` + retry/backoff + `notification_logs`
+- [x] `LineMessagingProvider` (push message / Flex), `SmsProvider` จริง (ตามผู้ให้บริการที่เลือก)
+- [x] เลือกช่องทาง: มี `line_user_id` → LINE, ไม่มี → SMS
+- [x] Templates: ผลอนุมัติ/ปฏิเสธ/ระงับ, รอบจะเปิดใน X นาที, จองสำเร็จ, ใกล้หมดเวลาชำระ, สลิปถูกปฏิเสธ, การจองถูกยกเลิก
+- [x] แจ้ง Admin เมื่อมีสมาชิกใหม่ (MANUAL) / สลิปใหม่ (LINE group ถ้าตั้งค่า)
+- [x] Scheduled job: แจ้งก่อนรอบเปิดตาม `notify_before_round_open_minutes`
 
 **Acceptance Criteria**
 - Provider ล่มไม่กระทบ flow หลัก (retry ภายหลัง), มี log ทุกข้อความ
 
-**Agent Notes:** –
+**Agent Notes:**
+- ✅ AC: `notifications.int-spec.ts` — SMS ล่ม (DeliveryError ชั่วคราว) ตอนไม่อนุมัติผู้ค้า → API ตอบ 200 ตามปกติ, log เป็น `RETRYING` (attempts 1 + error) → รอบถัดไป `SENT`; Redis ล่มตอนใส่ job → API 200, log ค้าง `PENDING` → `recoverStale` ใส่ job ใหม่; error ถาวร/ลองครบ → `FAILED`; worker BullMQ จริงส่งจนเป็น `SENT`; E2E ทั้งชุดรันพร้อม worker (ข้อความ 26 รายการ `SENT` ใน DB ของ E2E)
+- ผู้ให้บริการ SMS: **ThaiBulkSMS** (ผู้ใช้เลือก) — `ThaiBulkSmsProvider` (`SMS_PROVIDER=thaibulksms` + `SMS_API_KEY`, `SMS_API_SECRET`, `SMS_SENDER`, `SMS_CREDIT_TYPE`); สเปก API อ่านจาก developer.thaibulksms.com (หน้าเว็บ render ด้วย JS — อ่านผ่าน Chrome) — **ยังไม่ได้ทดสอบกับบัญชีจริง** (ต้องมี key + ชื่อผู้ส่งที่อนุมัติแล้ว)
+- โครงสร้าง (`modules/notify/`): `NotificationQueue` (BullMQ: job `send` ต่อข้อความ + `tick` ทุกนาที), `NotificationService` (`toVendor`/`toVendors`/`toAdminGroup` ไม่ throw; `deliver`, `recoverStale`, SMS แทน LINE), `NotificationReminders` (ก่อนรอบเปิด, ก่อนหมดเวลาชำระ), `templates.ts` (10 template: หัวข้อ/บรรทัด/ลิงก์ + ข้อความ SMS สั้น), `line/` (push/reply + Flex, webhook ตอบ group ID), `sms/` (mock, ThaiBulkSMS), `delivery-error.ts` (retryable หรือไม่)
+- จุดที่ส่ง: `NotifyService` เดิมเป็นทางเข้าเดียว — สถานะผู้ค้า (อนุมัติจาก PENDING/REJECTED, ไม่อนุมัติ, ระงับ; สมัครใหม่ MANUAL → กลุ่ม), สลิปใหม่ → กลุ่ม, `paymentRejected` (เรียกจาก `PaymentReviewService.reject` เมื่อการจองกลับมารอชำระ), ฟัง `booking.changed`: `CONFIRMED` → จองสำเร็จ, `CANCELLED` ที่มี `cancelledByAdminId` → ยกเลิกโดยเจ้าหน้าที่
+- settings ใหม่: `notify_before_payment_due_minutes`, `line_admin_group_id` (หน้า "ตั้งค่าระบบ" แสดงเอง); migration `20261101090000_notification_queue` (attempts, dedupe_key unique, vendor_id)
+- แก้ bug 5.1: รับเงินสดของการจองที่ยังไม่ส่งสลิป (`PENDING_PAYMENT`) ได้ 500 — เพิ่ม `PENDING_PAYMENT → CONFIRMED` (+ test ใน payments.int-spec)
+- E2E: `readOtp` อ่าน list `mock-sms:outbox:<เบอร์>` หา OTP ล่าสุด (มี SMS แจ้งเตือนปน)
+- runbook §4 (LINE Login, LINE OA + webhook, กลุ่มเจ้าหน้าที่, ThaiBulkSMS), §8 (query ดู notification_logs), §10–12 อัปเดตแล้ว
+- ยังไม่ทำ: หน้า admin ดูประวัติการแจ้งเตือน (ใช้ SQL ใน runbook ไปก่อน — เหมาะกับ Phase 8), ผู้ค้าปิดรับแจ้งเตือนเอง
+- ทดสอบ: unit 210 (+21: ThaiBulkSMS, LINE, templates, env, settings), integration 242 (+15: notifications 14, cash 1), E2E 27
 
 ---
 
@@ -815,3 +825,5 @@
 | 2026-11-01 | 5.2 | ✅ DONE | หน้าชำระเงินผู้ค้า (QR พร้อมเพย์ + บันทึกรูป + นับถอยหลัง + สลิป + ประวัติ, อัปเดต realtime), คิวตรวจสลิป admin (คีย์ลัด A/R, เหตุผลด่วน, badge `payment:submitted`), รับเงินสดจากหน้าจัดการการจอง; AC E2E จอง → ชำระ → ไม่ผ่าน → ส่งใหม่ → อนุมัติ → BOOKED/จองสำเร็จ — unit 172 / integration 224 / E2E 27 ผ่าน — Phase 5 เสร็จ, ถัดไป: Phase 6 MVP Deployment |
 | 2026-11-01 | 6 | 🟨 IN PROGRESS | เริ่ม MVP Deployment: Dockerfile api/nginx, docker-compose.prod.yml, SSL, backup/restore, runbook |
 | 2026-11-01 | 6 | 🟨 IN PROGRESS | งานในโค้ดครบ: image api/api-tools/nginx, compose production (migrate อัตโนมัติ, healthcheck, log rotation, certbot, backup รายวัน 14 วัน, Uptime Kuma), deploy/rollback/restore/init-ssl scripts, `TRUST_PROXY`, `/health/ready`, runbook, CI job docker — ทดสอบ stack production ในเครื่องผ่าน (รวม restore + rollback) — unit 174 / integration 227 / E2E 27 — รอ: deploy บน VPS จริง + ตั้ง LINE Login สำหรับโดเมนจริง |
+| 2026-11-01 | 7 | 🟨 IN PROGRESS | เริ่ม Notifications: queue + notification_logs, LINE OA (push/Flex), SMS จริง — ผู้ใช้เลือก ThaiBulkSMS |
+| 2026-11-01 | 7 | ✅ DONE | queue `notification` (retry 8 ครั้ง ~1 ชม., dedupe, recover), LINE Flex + SMS แทนเมื่อ LINE ส่งไม่ได้, ThaiBulkSMS adapter, 10 template, แจ้งกลุ่ม LINE เจ้าหน้าที่ + webhook ตอบ group ID, เตือนก่อนรอบเปิด/ก่อนหมดเวลาชำระ; แก้ bug รับเงินสดตอนรอชำระ — unit 210 / integration 242 / E2E 27 — ถัดไป: Phase 8 Reports & Dashboard (Phase 6 ยังรอ deploy บน VPS จริง) |

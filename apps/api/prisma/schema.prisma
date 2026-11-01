@@ -179,11 +179,12 @@ model Vendor {
   createdAt         DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt         DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  market          Market           @relation(fields: [marketId], references: [id])
-  productCategory ProductCategory? @relation(fields: [productCategoryId], references: [id])
-  reviewedBy      AdminUser?       @relation("VendorReviewedBy", fields: [reviewedById], references: [id])
+  market          Market            @relation(fields: [marketId], references: [id])
+  productCategory ProductCategory?  @relation(fields: [productCategoryId], references: [id])
+  reviewedBy      AdminUser?        @relation("VendorReviewedBy", fields: [reviewedById], references: [id])
   bookings        Booking[]
   waitlists       Waitlist[]
+  notifications   NotificationLog[]
 
   @@unique([marketId, phone])
   /// หน้า "รออนุมัติ" เรียงตามเวลาสมัคร (§9.2)
@@ -430,18 +431,30 @@ model AuditLog {
   @@map("audit_logs")
 }
 
+/// ทุกข้อความที่ส่งออก (LINE/SMS) — 1 แถวต่อข้อความต่อช่องทาง, queue `notification` อ่านแถวนี้ไปส่ง
 model NotificationLog {
   id        String    @id @default(uuid(7)) @db.Uuid
+  /// LINE | SMS
   channel   String    @db.VarChar(20)
+  /// LINE user/group id หรือเบอร์โทร
   recipient String    @db.VarChar(100)
   template  String    @db.VarChar(100)
+  /// ค่าที่ใช้เติม template (ไม่มีข้อมูลลับ — OTP ไม่ผ่านตารางนี้)
   payload   Json
+  /// PENDING → SENT | FAILED (RETRYING ระหว่างรอส่งใหม่)
   status    String    @db.VarChar(20)
   error     String?
+  attempts  Int       @default(0)
+  /// กันส่งซ้ำ เช่น `booking.confirmed:<bookingId>` — null = ไม่กัน
+  dedupeKey String?   @unique @map("dedupe_key") @db.VarChar(200)
+  vendorId  String?   @map("vendor_id") @db.Uuid
   sentAt    DateTime? @map("sent_at") @db.Timestamptz(6)
   createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
 
+  vendor Vendor? @relation(fields: [vendorId], references: [id])
+
   @@index([status, createdAt])
+  @@index([vendorId, createdAt])
   @@map("notification_logs")
 }

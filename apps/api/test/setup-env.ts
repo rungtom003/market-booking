@@ -17,6 +17,8 @@ const defaults: Record<string, string> = {
   WORKERS_ENABLED: 'false',
   // เหมือน production หลัง Nginx 1 ชั้น — ทดสอบ rate limit ต่อ IP จาก X-Forwarded-For
   TRUST_PROXY: '1',
+  // webhook ของ LINE OA (notifications.int-spec) — ค่าทิ้งได้
+  LINE_MESSAGING_CHANNEL_SECRET: 'test-line-channel-secret',
 };
 
 for (const [key, value] of Object.entries(defaults)) {

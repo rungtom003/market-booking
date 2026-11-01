@@ -1,6 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
-import type { VendorStatus } from '@market-booking/shared';
+import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { BookingStatus, VendorStatus } from '@market-booking/shared';
 import { EventChannel } from '../../common/event-channel';
+import { PrismaService } from '../../prisma/prisma.service';
+import { type BookingChangedEvent, BookingEvents } from '../booking/booking-events';
+import { NotificationService } from './notification.service';
 
 export interface VendorStatusChangedEvent {
   vendorId: string;
@@ -19,13 +22,24 @@ export interface PaymentSubmittedEvent {
   marketId: string;
 }
 
+const BOOKING_INFO = {
+  vendorId: true,
+  cancelReason: true,
+  cancelledByAdminId: true,
+  stall: { select: { code: true } },
+  marketDay: { select: { marketDate: true } },
+} as const;
+
+const isoDate = (d: Date) => d.toISOString().slice(0, 10);
+
 /**
- * จุดเดียวที่ business logic เรียกเมื่อต้องแจ้งเตือน — Phase 7 จะใส่ queue + LINE/SMS template
- * ตอนนี้ยังไม่ส่ง LINE/SMS (ห้าม throw: การแจ้งเตือนล้มต้องไม่ทำให้ flow หลักล้ม)
- * ช่องทางในระบบ (realtime 4.3) subscribe ด้วย `onVendorStatusChanged`
+ * จุดเดียวที่ business logic เรียกเมื่อต้องแจ้งเตือน — ส่งต่อ 2 ทาง:
+ * - ในระบบ (realtime 4.3) ผ่าน `onVendorStatusChanged` / `onPaymentSubmitted`
+ * - LINE/SMS (Phase 7) ผ่าน queue ของ NotificationService
+ * ห้าม throw: การแจ้งเตือนล้มต้องไม่ทำให้ flow หลักล้ม (NotificationService ไม่ throw อยู่แล้ว)
  */
 @Injectable()
-export class NotifyService {
+export class NotifyService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(NotifyService.name);
   private readonly vendorStatus = new EventChannel<VendorStatusChangedEvent>(
     'vendor.status_changed',
@@ -37,6 +51,22 @@ export class NotifyService {
     this.logger,
   );
 
+  private unsubscribe?: () => void;
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifications: NotificationService,
+    private readonly bookingEvents: BookingEvents,
+  ) {}
+
+  onModuleInit(): void {
+    this.unsubscribe = this.bookingEvents.onChanged((e) => this.onBookingChanged(e));
+  }
+
+  onModuleDestroy(): void {
+    this.unsubscribe?.();
+  }
+
   onVendorStatusChanged(listener: (event: VendorStatusChangedEvent) => void): () => void {
     return this.vendorStatus.on(listener);
   }
@@ -45,15 +75,126 @@ export class NotifyService {
     return this.paymentSubmittedChannel.on(listener);
   }
 
-  /** Phase 7: แจ้ง FINANCE ทาง LINE กลุ่ม admin */
+  /** สลิปใหม่ → badge ของ admin + กลุ่ม LINE เจ้าหน้าที่ */
   async paymentSubmitted(event: PaymentSubmittedEvent): Promise<void> {
     this.paymentSubmittedChannel.emit([event]);
+    const payment = await this.prisma.payment
+      .findUnique({
+        where: { id: event.paymentId },
+        select: {
+          amount: true,
+          booking: {
+            select: { ...BOOKING_INFO, vendor: { select: { firstName: true, lastName: true } } },
+          },
+        },
+      })
+      .catch(() => null);
+    if (!payment) return;
+    const { booking } = payment;
+    await this.notifications.toAdminGroup(
+      event.marketId,
+      {
+        template: 'admin.payment_submitted',
+        params: {
+          vendorName: `${booking.vendor.firstName} ${booking.vendor.lastName}`,
+          stallCode: booking.stall.code,
+          marketDate: isoDate(booking.marketDay.marketDate),
+          amount: Number(payment.amount),
+        },
+      },
+      `admin.payment_submitted:${event.paymentId}`,
+    );
+  }
+
+  /** สลิปไม่ผ่าน (เจ้าหน้าที่หรือ SlipVerifier) → แจ้งผู้ค้าพร้อมเหตุผลและกำหนดส่งใหม่ */
+  async paymentRejected(paymentId: string): Promise<void> {
+    const payment = await this.prisma.payment
+      .findUnique({
+        where: { id: paymentId },
+        select: {
+          rejectReason: true,
+          booking: { select: { id: true, paymentDueAt: true, ...BOOKING_INFO } },
+        },
+      })
+      .catch(() => null);
+    if (!payment) return;
+    const { booking } = payment;
+    await this.notifications.toVendor(
+      booking.vendorId,
+      {
+        template: 'payment.rejected',
+        params: {
+          bookingId: booking.id,
+          stallCode: booking.stall.code,
+          reason: payment.rejectReason,
+          dueAt: booking.paymentDueAt?.toISOString() ?? null,
+        },
+      },
+      `payment.rejected:${paymentId}`,
+    );
   }
 
   async vendorStatusChanged(event: VendorStatusChangedEvent): Promise<void> {
-    this.logger.debug(
-      `vendorStatusChanged ${event.vendorId}: ${event.from ?? 'NEW'} → ${event.to} (not sent yet — Phase 7)`,
-    );
     this.vendorStatus.emit([event]);
+    const { vendorId, from, to } = event;
+
+    if (
+      to === VendorStatus.APPROVED &&
+      (from === VendorStatus.PENDING || from === VendorStatus.REJECTED)
+    ) {
+      await this.notifications.toVendor(vendorId, { template: 'vendor.approved', params: {} });
+    } else if (to === VendorStatus.REJECTED) {
+      await this.notifications.toVendor(vendorId, {
+        template: 'vendor.rejected',
+        params: { reason: event.reason ?? null },
+      });
+    } else if (to === VendorStatus.SUSPENDED) {
+      await this.notifications.toVendor(vendorId, {
+        template: 'vendor.suspended',
+        params: {
+          reason: event.reason ?? null,
+          until: event.suspendedUntil?.toISOString() ?? null,
+        },
+      });
+    } else if (from === null && to === VendorStatus.PENDING) {
+      // สมัครใหม่แบบต้องตรวจ (registration_mode = MANUAL)
+      const vendor = await this.prisma.vendor
+        .findUnique({ where: { id: vendorId }, select: { firstName: true, lastName: true } })
+        .catch(() => null);
+      if (!vendor) return;
+      await this.notifications.toAdminGroup(event.marketId, {
+        template: 'admin.vendor_registered',
+        params: { vendorName: `${vendor.firstName} ${vendor.lastName}` },
+      });
+    }
+  }
+
+  /** จองสำเร็จ / เจ้าหน้าที่ยกเลิก — สถานะอื่นผู้ค้าเห็นบนหน้าจอขณะทำเอง */
+  private async onBookingChanged(event: BookingChangedEvent): Promise<void> {
+    if (event.status !== BookingStatus.CONFIRMED && event.status !== BookingStatus.CANCELLED) {
+      return;
+    }
+    const booking = await this.prisma.booking
+      .findUnique({ where: { id: event.bookingId }, select: BOOKING_INFO })
+      .catch(() => null);
+    if (!booking) return;
+    const base = {
+      stallCode: booking.stall.code,
+      marketDate: isoDate(booking.marketDay.marketDate),
+    };
+
+    if (event.status === BookingStatus.CONFIRMED) {
+      await this.notifications.toVendor(
+        booking.vendorId,
+        { template: 'booking.confirmed', params: base },
+        `booking.confirmed:${event.bookingId}`,
+      );
+    } else if (booking.cancelledByAdminId) {
+      await this.notifications.toVendor(
+        booking.vendorId,
+        { template: 'booking.cancelled', params: { ...base, reason: booking.cancelReason } },
+        `booking.cancelled:${event.bookingId}`,
+      );
+    }
   }
 }

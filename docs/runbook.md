@@ -7,7 +7,7 @@
 1. [ภาพรวม](#1-ภาพรวม)
 2. [เตรียม VPS](#2-เตรียม-vps)
 3. [Deploy ครั้งแรก](#3-deploy-ครั้งแรก)
-4. [ตั้งค่า LINE Login (LIFF)](#4-ตั้งค่า-line-login-liff)
+4. [ตั้งค่า LINE และ SMS](#4-ตั้งค่า-line-และ-sms)
 5. [Deploy เวอร์ชันใหม่](#5-deploy-เวอร์ชันใหม่)
 6. [Rollback](#6-rollback)
 7. [Backup และ Restore](#7-backup-และ-restore)
@@ -114,7 +114,18 @@ curl -sI http://$WEB_DOMAIN | head -1                     # 301 → https
 
 ---
 
-## 4. ตั้งค่า LINE Login (LIFF)
+## 4. ตั้งค่า LINE และ SMS
+
+| ช่องทาง | ใช้ทำอะไร | ไม่ตั้งค่า |
+|---|---|---|
+| LINE Login (LIFF) — §4.1 | ผู้ค้าเข้าสู่ระบบด้วย LINE | ซ่อนปุ่ม LINE |
+| LINE OA (Messaging API) — §4.2–4.3 | แจ้งเตือนผู้ค้าที่ login ด้วย LINE + กลุ่ม LINE เจ้าหน้าที่ | ผู้ค้าได้ SMS แทน, ไม่แจ้งกลุ่ม |
+| SMS (ThaiBulkSMS) — §4.4 | OTP เข้าสู่ระบบ + แจ้งเตือนผู้ค้าที่ไม่มี LINE (หรือ LINE ส่งไม่ถึง) | ขอ OTP ไม่ได้ (ต้องใช้ LINE) |
+
+ข้อความที่ระบบส่ง: ผลอนุมัติ/ไม่อนุมัติ/ระงับ, รอบจองใกล้เปิด, จองสำเร็จ, ใกล้หมดเวลาชำระ, สลิปไม่ผ่าน, การจองถูกยกเลิกโดยเจ้าหน้าที่ — และถึงกลุ่มเจ้าหน้าที่: ผู้ค้าสมัครใหม่ (โหมดตรวจก่อน), สลิปใหม่
+ทุกข้อความผ่านคิวและบันทึกในตาราง `notification_logs` (ส่งไม่ผ่านลองใหม่เองนานสุด ~1 ชั่วโมง) — ดู §8
+
+### 4.1 LINE Login (LIFF)
 
 ผู้ค้าเข้าสู่ระบบด้วย LINE ได้เมื่อตั้งค่าครบ (ไม่ตั้ง = ซ่อนปุ่ม LINE)
 
@@ -134,6 +145,47 @@ curl -sI http://$WEB_DOMAIN | head -1                     # 301 → https
 6. เมื่อทดสอบเสร็จ เปลี่ยนสถานะ channel จาก **Developing** เป็น **Published** (ไม่งั้นใช้ได้เฉพาะบัญชี tester)
 
 > เปลี่ยนโดเมนภายหลัง: แก้ Callback URL + Endpoint URL ใน Console ให้ตรงโดเมนใหม่ด้วย
+
+### 4.2 LINE OA (Messaging API) — แจ้งเตือนทาง LINE
+
+1. [LINE Official Account Manager](https://manager.line.biz/) สร้าง LINE OA ของตลาด → Settings → Messaging API → **Enable** โดยเลือก **Provider เดียวกับ LINE Login channel** (ข้อ 4.1)
+   — user ID ของผู้ค้าจาก LINE Login ใช้ส่งข้อความได้เฉพาะ channel ใน provider เดียวกัน
+2. LINE Developers Console → Messaging API channel ที่ได้:
+   - แท็บ Basic settings → **Channel secret** → `LINE_MESSAGING_CHANNEL_SECRET`
+   - แท็บ Messaging API → **Channel access token (long-lived)** → Issue → `LINE_MESSAGING_ACCESS_TOKEN`
+   - **Webhook URL:** `https://WEB_DOMAIN/api/v1/line/webhook` → Verify (ต้องได้ Success) → เปิด **Use webhook**
+   - ปิด **Auto-reply messages** และ **Greeting messages** (ใน LINE OA Manager) ถ้าไม่ต้องการให้บอทตอบอัตโนมัติ
+   - เปิด **Allow bot to join group chats** (ใช้กับข้อ 4.3)
+3. LINE Login channel (ข้อ 4.1) → แท็บ Basic settings → **Linked LINE Official Account** = OA นี้ และตั้ง LIFF ให้ **Add friend option = On (aggressive)** — ผู้ค้าจะถูกชวนเพิ่ม OA เป็นเพื่อนตอน login (ไม่เป็นเพื่อน = LINE ส่งไม่ได้ ระบบส่ง SMS แทน)
+4. ใส่ค่าใน `docker/.env` แล้ว `dc up -d api`
+5. ตรวจ: อนุมัติผู้ค้าที่ login ด้วย LINE → ผู้ค้าได้ข้อความ "บัญชีผู้ค้าได้รับการอนุมัติแล้ว" ใน LINE
+
+> โควตาข้อความของ LINE OA ขึ้นกับแพ็กเกจ (แพ็กเกจฟรีมีจำนวนจำกัดต่อเดือน) — แจ้งรอบเปิดถึงผู้ค้าทุกคนใช้โควตามาก ตั้ง `แจ้งเตือนก่อนรอบเปิดจอง` = 0 เพื่อปิดได้ เมื่อโควตาหมด LINE ตอบ 429 ระบบลองใหม่จนครบรอบแล้วส่ง SMS แทน
+
+### 4.3 กลุ่ม LINE เจ้าหน้าที่
+
+1. สร้างกลุ่ม LINE ของเจ้าหน้าที่ (การเงิน/ผู้ดูแล) แล้ว **เชิญ LINE OA เข้ากลุ่ม**
+2. บอทตอบในกลุ่มว่า "group ID ของกลุ่มนี้: C…" (พิมพ์ `group id` ในกลุ่มเพื่อขอใหม่ได้)
+3. ระบบหลังบ้าน → ตั้งค่าระบบ → **LINE กลุ่มเจ้าหน้าที่ (group ID)** → วาง ID → บันทึก
+4. ตรวจ: ให้ผู้ค้าส่งสลิป → กลุ่มได้ข้อความ "มีสลิปใหม่รอตรวจ" พร้อมปุ่มเปิดหน้าตรวจสลิป
+
+### 4.4 SMS — ThaiBulkSMS
+
+1. สมัคร/เติมเครดิตที่ [thaibulksms.com](https://www.thaibulksms.com/) และ **ลงทะเบียนชื่อผู้ส่ง (Sender name)** ให้อนุมัติก่อน (ใช้เวลาหลายวันทำการ)
+2. เมนู API → สร้าง **API Key / API Secret** (ถ้าเปิด IP whitelist ให้ใส่ IP ของ VPS)
+3. ใส่ค่าใน `docker/.env`:
+   ```
+   SMS_PROVIDER=thaibulksms
+   SMS_API_KEY=<API Key>
+   SMS_API_SECRET=<API Secret>
+   SMS_SENDER=<ชื่อผู้ส่งที่อนุมัติแล้ว ตัวพิมพ์เล็ก/ใหญ่ต้องตรง>
+   SMS_CREDIT_TYPE=corporate      # หรือ standard / เว้นว่าง = ค่าเริ่มต้นของบัญชี
+   ```
+   ตั้ง `thaibulksms` แต่ค่าไม่ครบ → api ไม่ start และบอกชื่อตัวแปรที่ขาด (`dc logs api`)
+4. `dc up -d api` แล้วตรวจ: ขอ OTP ด้วยเบอร์ของตัวเองที่ `https://WEB_DOMAIN/login`
+5. ตั้งแจ้งเตือนเครดิตใกล้หมดในเว็บ ThaiBulkSMS — เครดิตหมด: OTP ขอไม่ได้ทันที ("บริการไม่พร้อมใช้งาน") ส่วนแจ้งเตือนรอในคิวและลองใหม่ ~1 ชั่วโมง
+
+> SMS ภาษาไทย 1 เครดิตต่อ 70 ตัวอักษร — ข้อความแจ้งเตือนเขียนให้สั้น (มีลิงก์ไปหน้าที่เกี่ยวข้อง)
 
 ---
 
@@ -231,6 +283,19 @@ Monitor ที่ควรตั้ง:
 - API log เป็น JSON (pino) — field `req.id` ตรงกับ header `x-request-id` ของ response (ใช้ตามหา request ที่ผู้ใช้แจ้งปัญหาได้)
 - ห้าม log OTP/รหัสผ่าน/token (ระบบไม่ log อยู่แล้ว) — ระวังตอน debug อย่าตั้ง `LOG_LEVEL=trace` ทิ้งไว้
 
+### ข้อความแจ้งเตือน (LINE/SMS)
+ทุกข้อความอยู่ในตาราง `notification_logs`: `PENDING` (รอส่ง) → `SENT` | `RETRYING` (ผู้ให้บริการล่ม รอลองใหม่) → `FAILED` (ส่งไม่ได้/ลองครบ ~1 ชั่วโมง)
+```bash
+# สรุป 24 ชั่วโมงล่าสุด
+dc exec postgres psql -U market -d market_booking -c \
+  "select channel, status, count(*) from notification_logs where created_at > now() - interval '1 day' group by 1, 2 order by 1, 2"
+# ล้มล่าสุด พร้อมสาเหตุ (เช่น เครดิต SMS หมด, token LINE ผิด)
+dc exec postgres psql -U market -d market_booking -c \
+  "select created_at, channel, template, error from notification_logs where status = 'FAILED' order by created_at desc limit 20"
+```
+- LINE ส่งไม่ถึงผู้ค้า (เช่น ยังไม่เพิ่ม OA เป็นเพื่อน/บล็อก) → ส่ง SMS แทนอัตโนมัติ 1 ครั้ง
+- ข้อความค้าง `PENDING` เกิน 5 นาที (Redis ล่มตอนใส่คิว) ถูกใส่คิวใหม่เองทุกนาที
+
 ---
 
 ## 9. จัดการ Admin
@@ -255,7 +320,9 @@ Monitor ที่ควรตั้ง:
 | `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET` | `dc up -d api` | ทุกคน (ผู้ค้า + admin) ต้อง login ใหม่ — ใช้เมื่อสงสัยว่า token รั่ว |
 | `POSTGRES_PASSWORD` | ดูด้านล่าง | ไม่มี downtime เกิน restart api |
 | `MINIO_SECRET_KEY` | `dc up -d minio minio-init api` | presigned URL ที่ออกไปแล้วใช้ไม่ได้ (อายุสั้นอยู่แล้ว) |
-| `LINE_*` | `docker/scripts/deploy.sh` (LIFF ID ฝังในหน้าเว็บ) | — |
+| `LINE_LIFF_ID`, `LINE_LOGIN_CHANNEL_ID` | `docker/scripts/deploy.sh` (LIFF ID ฝังในหน้าเว็บ) | — |
+| `LINE_MESSAGING_ACCESS_TOKEN`, `LINE_MESSAGING_CHANNEL_SECRET` | ออก token/secret ใหม่ใน LINE Developers Console → `dc up -d api` | ข้อความที่ส่งระหว่างเปลี่ยนจะลองใหม่เอง |
+| `SMS_API_KEY`, `SMS_API_SECRET` | สร้าง key ใหม่ในเว็บ ThaiBulkSMS → `dc up -d api` → ลบ key เก่า | — |
 
 เปลี่ยนรหัส PostgreSQL (ค่าใน `.env` ใช้ตอนสร้าง DB ครั้งแรกเท่านั้น จึงต้อง ALTER เองก่อน):
 ```bash
@@ -277,7 +344,9 @@ dc up -d api backup
 | ออก cert ไม่ผ่าน | `dig +short WEB_DOMAIN` ต้องได้ IP ของ VPS, `curl http://WEB_DOMAIN/healthz` จากนอกเครื่องต้องได้ `ok`; Let's Encrypt จำกัด 5 ครั้ง/สัปดาห์ — ทดลองด้วย `LETSENCRYPT_STAGING=1` |
 | ผังไม่อัปเดตแบบ realtime | DevTools → Network → WS ต้องเห็น `/socket.io/` สถานะ 101; ถ้ามี proxy/CDN อื่นหน้า nginx ต้องเปิด WebSocket |
 | อัปโหลดสลิป/รูปไม่ได้ | `dc ps minio minio-init` (minio-init ต้อง Exited 0); `MINIO_BUCKET` ใน `.env` ต้องตรงกับที่ nginx proxy (`/<bucket>/`) |
-| ผู้ค้าขอ OTP แล้วขึ้น "บริการไม่พร้อมใช้งาน" | ยังไม่มีผู้ให้บริการ SMS จริง (ข้อ 12) — ให้ใช้ LINE |
+| ผู้ค้าขอ OTP แล้วขึ้น "บริการไม่พร้อมใช้งาน" | `dc logs --since 10m api | grep ThaiBulkSMS` — `ERROR_INSUFFICIENT_CREDIT` เติมเครดิต, `ERROR_SENDER_NOT_FOUND` ชื่อผู้ส่งไม่ตรง/ยังไม่อนุมัติ, `ERROR_AUTHENTICATION_FAILED` key/secret ผิด, `ERROR_IP_NOT_ALLOWED` เพิ่ม IP ของ VPS ใน whitelist; ยังเป็น `SMS_PROVIDER=mock` = ยังไม่ได้ตั้ง SMS (§4.4) |
+| ผู้ค้าไม่ได้รับแจ้งเตือน | ดู `notification_logs` (§8) ของผู้ค้าคนนั้น: `FAILED` + error บอกสาเหตุ; ไม่มีแถวเลย = เหตุการณ์นั้นไม่ส่งแจ้งเตือน (เช่น ผู้ค้ายกเลิกเอง) |
+| บอทไม่ตอบ group ID ในกลุ่ม | Webhook URL + Use webhook + Allow bot to join group chats (§4.2); `dc logs api | grep "LINE"`; ลายเซ็นไม่ผ่าน = `LINE_MESSAGING_CHANNEL_SECRET` ไม่ตรงกับ channel |
 | rate limit (429) โดนทั้งระบบพร้อมกัน | api ต้องเห็น IP จริงของผู้ใช้: `TRUST_PROXY: 1` ใน compose; ถ้าวาง proxy/CDN เพิ่มหน้า nginx ต้องเพิ่มค่านี้ตามจำนวนชั้น |
 | ดิสก์ใกล้เต็ม | `docker system df`; ลบ image เก่า (ข้อ 5), `docker builder prune` |
 
@@ -285,7 +354,8 @@ dc up -d api backup
 
 ## 12. ข้อจำกัดที่ต้องรู้
 
-- **SMS OTP ยังไม่มีผู้ให้บริการจริง** (`SMS_PROVIDER=mock` ใช้ไม่ได้ใน production — API ตอบ `SERVICE_UNAVAILABLE`) ผู้ค้าต้องเข้าสู่ระบบด้วย **LINE** จนกว่า Phase 7 จะเพิ่ม SMS gateway
+- **ต้องตั้ง SMS (ThaiBulkSMS, §4.4) ก่อนเปิดให้ผู้ค้าใช้ OTP** — ถ้ายังเป็น `SMS_PROVIDER=mock` ขอ OTP ใน production ไม่ได้ (`SERVICE_UNAVAILABLE`) ผู้ค้าต้องเข้าด้วย LINE
+- แจ้งรอบเปิดส่งถึงผู้ค้าที่อนุมัติแล้วทุกคน — ผู้ค้าที่ไม่มี LINE ใช้เครดิต SMS คนละ 1–2 เครดิตต่อรอบ
 - API รัน 1 instance (Socket.IO ใช้ Redis adapter อยู่แล้ว เพิ่ม instance ได้ภายหลังโดยเพิ่ม service + upstream ใน nginx)
 - Redis ไม่มีรหัสผ่าน — อยู่ใน network ภายในของ Docker เท่านั้น ห้ามเปิด port ออกนอกเครื่อง
 - API ใช้ root credentials ของ MinIO (MVP) — แยก service account ภายหลังได้

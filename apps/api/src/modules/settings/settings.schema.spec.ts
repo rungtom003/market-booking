@@ -16,7 +16,7 @@ describe('settings schema (Overview §12)', () => {
       promptpay_id: null,
       cancel_before_hours: 48,
     });
-    expect(SETTING_KEYS).toHaveLength(13);
+    expect(SETTING_KEYS).toHaveLength(15);
   });
 
   it('accepts a partial update', () => {
@@ -49,5 +49,16 @@ describe('settings schema (Overview §12)', () => {
   it('rejects malformed PromptPay ids but allows clearing with null', () => {
     expect(updateSettingsSchema.safeParse({ promptpay_id: '12345' }).success).toBe(false);
     expect(updateSettingsSchema.parse({ promptpay_id: null })).toEqual({ promptpay_id: null });
+  });
+
+  it('accepts a LINE group id (trimmed) or null', () => {
+    const id = `C${'a1'.repeat(16)}`;
+    expect(updateSettingsSchema.parse({ line_admin_group_id: ` ${id} ` })).toEqual({
+      line_admin_group_id: id,
+    });
+    expect(updateSettingsSchema.parse({ line_admin_group_id: null })).toEqual({
+      line_admin_group_id: null,
+    });
+    expect(updateSettingsSchema.safeParse({ line_admin_group_id: 'U123' }).success).toBe(false);
   });
 });

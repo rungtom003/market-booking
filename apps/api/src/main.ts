@@ -9,7 +9,8 @@ import { setupApp } from './setup-app';
 
 async function bootstrap(): Promise<void> {
   // เก็บ log ตอน boot ไว้จนกว่า pino logger พร้อม (setupApp → useLogger)
-  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+  // rawBody: ตรวจลายเซ็น webhook ของ LINE (HMAC ของ body ดิบ)
+  const app = await NestFactory.create(AppModule, { bufferLogs: true, rawBody: true });
   setupApp(app);
 
   const port = app.get(AppConfigService).get('PORT');

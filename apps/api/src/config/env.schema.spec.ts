@@ -51,6 +51,15 @@ describe('validateEnv', () => {
     expect(() => validateEnv({ ...validEnv, WORKERS_ENABLED: '0' })).toThrow(/WORKERS_ENABLED/);
   });
 
+  it('requires credentials and sender for SMS_PROVIDER=thaibulksms', () => {
+    const sms = { SMS_PROVIDER: 'thaibulksms', SMS_API_KEY: 'k', SMS_API_SECRET: 's' };
+    expect(() => validateEnv({ ...validEnv, ...sms })).toThrow(/SMS_PROVIDER/);
+    expect(validateEnv({ ...validEnv, ...sms, SMS_SENDER: 'MARKET' }).SMS_PROVIDER).toBe(
+      'thaibulksms',
+    );
+    expect(() => validateEnv({ ...validEnv, SMS_PROVIDER: 'twilio' })).toThrow(/SMS_PROVIDER/);
+  });
+
   it('treats empty strings as unset', () => {
     expect(validateEnv(validEnv).LINE_LIFF_ID).toBeUndefined();
   });

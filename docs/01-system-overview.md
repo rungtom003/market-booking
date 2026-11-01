@@ -391,7 +391,7 @@ CREATE INDEX ix_bookings_pay_due    ON bookings (payment_due_at)  WHERE status =
 | ip, user_agent | varchar null | |
 | created_at | timestamptz | (ไม่มี updated_at — append only) |
 
-**`notification_logs`** — channel, recipient, template, payload, status, error, sent_at
+**`notification_logs`** — channel (`LINE`/`SMS`), recipient, template, payload, status (`PENDING` → `SENT` | `RETRYING` → `FAILED`), error, attempts, dedupe_key (unique — กันส่งซ้ำ), vendor_id null, sent_at
 
 ### 7.3 ER Diagram (ย่อ)
 ```
@@ -437,7 +437,7 @@ SUSPENDED
    │ payment_required = false │ payment_required = true
    ▼                          ▼
 CONFIRMED              PENDING_PAYMENT ── payment_due_at ผ่าน ──► EXPIRED
-   ▲                          │
+   ▲                          │  └── admin รับเงินสด ──► CONFIRMED
    │                   upload slip
    │                          ▼
    └──── approve ──── PENDING_VERIFY ── reject slip ──► PENDING_PAYMENT
@@ -702,7 +702,9 @@ Code ของรอบการจอง (เพิ่มใน Phase 3.2): `MA
 | `waitlist_claim_minutes` | int | 30 | 1–1440 | |
 | `noshow_threshold` | int | 3 | 1–20 | |
 | `noshow_suspend_days` | int | 30 | 1–365 | |
-| `notify_before_round_open_minutes` | int | 60 | 0–10080 (0 = ไม่แจ้ง) | |
+| `notify_before_round_open_minutes` | int | 60 | 0–10080 (0 = ไม่แจ้ง) | แจ้งผู้ค้าที่อนุมัติแล้วก่อนรอบเปิด |
+| `notify_before_payment_due_minutes` | int | 60 | 0–1440 (0 = ไม่แจ้ง) | เตือนผู้ค้าที่ยังไม่ชำระ (ไม่เตือนถ้า `payment_deadline_minutes` ≤ ค่านี้) |
+| `line_admin_group_id` | string \| null | null | `C` + hex 32 ตัว | LINE กลุ่มเจ้าหน้าที่ — รับแจ้งผู้ค้าสมัครใหม่/สลิปใหม่ (บอทตอบ ID เมื่อถูกเชิญเข้ากลุ่ม) |
 
 - Schema ของทุก key อยู่ที่ `packages/shared/src/settings.ts` (`settingFields`, `SETTING_DEFAULTS`) — API และหน้า admin ใช้ตัวเดียวกัน
 - `PUT /admin/settings` ส่งเฉพาะ key ที่จะแก้ (key ที่ไม่รู้จัก/ค่าผิดประเภท/นอกช่วง → 400 `VALIDATION_ERROR`) และคืนค่าทั้งชุด; audit log เก็บ before/after เฉพาะ key ที่เปลี่ยน
@@ -771,9 +773,13 @@ MINIO_USE_SSL=false
 # TEST_MINIO_BUCKET=market-booking-test
 LINE_LOGIN_CHANNEL_ID=
 LINE_LIFF_ID=
-LINE_MESSAGING_ACCESS_TOKEN=
-SMS_PROVIDER=mock
+LINE_MESSAGING_ACCESS_TOKEN=   (LINE OA — ว่าง = ไม่ส่ง LINE ผู้ค้าได้ SMS แทน)
+LINE_MESSAGING_CHANNEL_SECRET= (ตรวจลายเซ็น webhook POST /line/webhook)
+SMS_PROVIDER=mock         (mock | thaibulksms — thaibulksms ต้องมี SMS_API_KEY, SMS_API_SECRET, SMS_SENDER)
 SMS_API_KEY=
+SMS_API_SECRET=
+SMS_SENDER=               (ชื่อผู้ส่งที่ลงทะเบียนกับ ThaiBulkSMS)
+SMS_CREDIT_TYPE=          (standard | corporate — ว่าง = ค่าเริ่มต้นของบัญชี)
 WEB_ORIGIN=http://localhost:5173
 ADMIN_ORIGIN=http://localhost:5174
 SEED_ADMIN_USERNAME=admin
@@ -899,8 +905,16 @@ VITE_LINE_LIFF_ID=        (ฝั่ง web — ว่าง = ซ่อนป�
 | 2026-11-01 | Backup: service `backup` (postgres:16-alpine) วน `pg_dump -Fc` ตาม `BACKUP_TIME` (UTC) เก็บ 14 วันใน `docker/backups` (bind mount) + push URL ไป uptime monitor; deploy และ restore ทำ backup ก่อนทุกครั้ง | ไม่ต้องตั้ง cron บน host; pg_dump เวอร์ชันตรงกับ server; รู้ได้เมื่อ backup หยุดทำงาน; restore ผิดไฟล์ย้อนกลับได้ |
 | 2026-11-01 | image ติด tag = git commit และจด `IMAGE_TAG` ใน `docker/.env` (deploy.sh / rollback.sh) — rollback = ใช้ image เก่า ไม่ย้อน migration | tag ลอย (`current`) ทำให้ compose ไม่สร้าง container ใหม่เมื่อ image เปลี่ยน (เจอตอนทดสอบ); migration ที่ออกแบบแบบเพิ่มอย่างเดียวให้โค้ดเก่ารันต่อได้ |
 | 2026-11-01 | ใช้ `pgsty/minio` ต่อใน production (ทบทวนแล้วตามที่ตั้งไว้ใน Phase 1.1) pin release เดิม | ยังเป็น fork ที่ดูแลอยู่และ S3 API เดิม; เปลี่ยนไป S3-compatible อื่นได้โดยแก้แค่ env |
+| 2026-11-01 | SMS ใช้ **ThaiBulkSMS** API v2 (`POST https://api-v2.thaibulksms.com/sms`, Basic auth key:secret, form `msisdn`/`message`/`sender`/`force`) ผ่าน adapter `SmsProvider` — เลือกด้วย `SMS_PROVIDER=thaibulksms` | ผู้ให้บริการไทย ราคาต่อข้อความต่ำ ชื่อผู้ส่งตั้งได้ (ผู้ใช้เลือก — ปิด Open Question); `thaibulksms` แต่ค่าไม่ครบ → api ไม่ start |
+| 2026-11-01 | แจ้งเตือนทุกข้อความผ่าน queue `notification` (BullMQ): บันทึก `notification_logs` ก่อน แล้ว worker ส่ง — ลองใหม่ 8 ครั้ง exponential 30 วินาที (~1 ชั่วโมง) เฉพาะ error ชั่วคราว (เครือข่าย/429/5xx/เครดิต SMS หมด); OTP ยังส่ง SMS ตรง (ต้องรู้ผลทันที) | ผู้ให้บริการล่มไม่กระทบ flow หลัก (AC Phase 7), มี log ทุกข้อความ; error ถาวร (เบอร์/ผู้รับผิด) ไม่เปลืองรอบ |
+| 2026-11-01 | กันส่งซ้ำด้วย `dedupe_key` unique (`createMany … skipDuplicates`) เช่น `booking.confirmed:<id>`, `payment.due_soon:<id>:<dueAt>`, `round.opening_soon:<round>:<openAt>:<vendor>`; job ประจำ `tick` ทุก 1 นาที คำนวณใหม่ทุกครั้งแทนการตั้ง delayed job ล่วงหน้า | event ซ้ำ/tick ซ้ำ/หลาย instance ไม่ส่งซ้ำ; เลื่อนเวลารอบหรือกำหนดชำระแล้วแจ้งตามเวลาใหม่เอง ไม่ต้องตามลบ job |
+| 2026-11-01 | ช่องทาง: ผู้ค้ามี `line_user_id` และตั้ง LINE OA แล้ว → LINE (Flex + `X-Line-Retry-Key` = id ของ log), ไม่มี → SMS; LINE ปฏิเสธถาวร (เช่น ยังไม่เพิ่ม OA เป็นเพื่อน) → ส่ง SMS แทน 1 ครั้ง; เจ้าหน้าที่ → กลุ่ม LINE (`line_admin_group_id`) เท่านั้น | LINE ฟรี/ถูกกว่า SMS; ผู้ค้าต้องได้ข้อความแม้ LINE ส่งไม่ถึง; retry key กัน LINE ส่งซ้ำเมื่อเราลองใหม่หลัง timeout |
+| 2026-11-01 | เพิ่ม setting `notify_before_payment_due_minutes` (60, 0 = ปิด; ไม่เตือนถ้าช่วงชำระ ≤ ค่านี้) และ `line_admin_group_id`; webhook `POST /line/webhook` (ตรวจ `x-line-signature` ด้วย `LINE_MESSAGING_CHANNEL_SECRET`, `rawBody: true`) ตอบ group ID เมื่อบอทถูกเชิญเข้ากลุ่ม | template "ใกล้หมดเวลาชำระ" ต้องมีเวลาเตือน; group ID หาได้จาก webhook เท่านั้น — ให้บอทบอกเองแทนให้ผู้ดูแลไปดู log |
+| 2026-11-01 | ไม่แจ้งเตือน: ผู้ค้ายกเลิกเอง, หมดเวลา hold/ชำระ, ปลดระงับ, สมัครแบบอนุมัติอัตโนมัติ (ผู้ค้าเห็นบนหน้าจอขณะทำเอง) | ประหยัดโควตา LINE/เครดิต SMS — แจ้งเฉพาะสิ่งที่ผู้ค้าไม่ได้ทำเอง/ต้องลงมือ |
+| 2026-11-01 | `PENDING_PAYMENT → CONFIRMED` (admin รับเงินสดก่อนผู้ค้าส่งสลิป) เพิ่มใน `BOOKING_TRANSITIONS` | bug จาก 5.1: รับเงินสดของการจองที่ยังไม่ส่งสลิปได้ 500 (test เดิมครอบแค่ PENDING_VERIFY/HOLD) — เจอตอนเขียน test ของ Phase 7 |
+| 2026-11-01 | MockSmsProvider เก็บข้อความเป็น list `mock-sms:outbox:<เบอร์>` (ใหม่สุดก่อน, 20 ข้อความ) แทน key เดียว | SMS แจ้งเตือนจาก queue มาหลัง OTP ได้ — E2E ต้องหา OTP ล่าสุดจากหลายข้อความ |
 
 ### Open Questions
 - [ ] ใช้กับตลาดเดียวหรือหลายตลาด (ตอนนี้ schema รองรับแล้ว แต่ UI ยังเป็นตลาดเดียว)
-- [ ] ผู้ให้บริการ SMS ที่จะใช้
+- [x] ผู้ให้บริการ SMS ที่จะใช้ → **ThaiBulkSMS** (ตัดสินใจ 2026-11-01, Phase 7)
 - [ ] ต้องการระบบ Lottery/Waiting Room ตั้งแต่ต้นหรือไม่ (ขึ้นกับจำนวนผู้ค้าที่คาด)

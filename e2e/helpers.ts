@@ -8,13 +8,14 @@ export function randomPhone(): string {
   return `09${String(Math.floor(Math.random() * 1e8)).padStart(8, '0')}`;
 }
 
-/** OTP ล่าสุดที่ MockSmsProvider "ส่ง" ไปเบอร์นี้ (เก็บใน Redis เฉพาะ dev/test) */
+/** OTP ล่าสุดที่ MockSmsProvider "ส่ง" ไปเบอร์นี้ (list ใน Redis เฉพาะ dev/test — มี SMS แจ้งเตือนปนได้) */
 export async function readOtp(phone: string): Promise<string> {
   const redis = new Redis(E2E_REDIS_URL);
   try {
     for (let i = 0; i < 20; i++) {
-      const text = await redis.get(`mock-sms:last:${phone}`);
-      const code = text?.match(/\b(\d{6})\b/)?.[1];
+      // ใหม่สุดก่อน
+      const messages = await redis.lrange(`mock-sms:outbox:${phone}`, 0, -1);
+      const code = messages.map((m) => /รหัส OTP ของคุณคือ (\d{6})/.exec(m)?.[1]).find(Boolean);
       if (code) return code;
       await new Promise((r) => setTimeout(r, 250));
     }

@@ -1,18 +1,21 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { ErrorCode } from '@market-booking/shared';
 import type Redis from 'ioredis';
-import { AppException } from '../../../common/exceptions/app.exception';
 import { AppConfigService } from '../../../config/app-config.service';
 import { REDIS } from '../../../redis/redis.module';
+import { DeliveryError } from '../delivery-error';
 import type { SmsMessage, SmsProvider } from './sms.provider';
 
-/** E2E test อ่านข้อความล่าสุดของเบอร์จาก key นี้ (dev/test เท่านั้น) */
-export const MOCK_SMS_OUTBOX_PREFIX = 'mock-sms:last:';
+/**
+ * E2E test อ่านข้อความของเบอร์จาก list นี้ (ใหม่สุดก่อน, dev/test เท่านั้น) — เป็น list เพราะ SMS แจ้งเตือน
+ * (queue `notification`) อาจมาถึงหลัง OTP ได้
+ */
+export const MOCK_SMS_OUTBOX_PREFIX = 'mock-sms:outbox:';
 const OUTBOX_TTL_SECONDS = 300;
+const OUTBOX_MAX = 20;
 
 /**
  * ไม่ส่ง SMS จริง — dev แสดงข้อความ (รวม OTP) ใน log ให้นักพัฒนาเอาไปกรอก,
- * integration test อ่านจาก `sent`, E2E test อ่านจาก Redis (`mock-sms:last:<เบอร์>`)
+ * integration test อ่านจาก `sent`, E2E test อ่านจาก Redis (`mock-sms:outbox:<เบอร์>`)
  * production: ไม่ log ไม่เก็บ และโยน SERVICE_UNAVAILABLE (ต้องตั้ง SMS_PROVIDER จริงก่อนเปิด OTP)
  */
 @Injectable()
@@ -28,15 +31,16 @@ export class MockSmsProvider implements SmsProvider {
 
   async send(message: SmsMessage): Promise<void> {
     if (this.config.isProduction) {
-      throw new AppException(ErrorCode.SERVICE_UNAVAILABLE, 'SMS provider is not configured');
+      throw new DeliveryError('SMS provider is not configured', false);
     }
     this.sent.push(message);
-    await this.redis.set(
-      `${MOCK_SMS_OUTBOX_PREFIX}${message.to}`,
-      message.text,
-      'EX',
-      OUTBOX_TTL_SECONDS,
-    );
+    const key = `${MOCK_SMS_OUTBOX_PREFIX}${message.to}`;
+    await this.redis
+      .multi()
+      .lpush(key, message.text)
+      .ltrim(key, 0, OUTBOX_MAX - 1)
+      .expire(key, OUTBOX_TTL_SECONDS)
+      .exec();
     if (this.config.get('NODE_ENV') === 'development') {
       // ข้อยกเว้นเดียวของกฎ "ห้าม log OTP" — dev เท่านั้น (Phase 1.4 task)
       this.logger.warn(`[mock SMS → ${message.to}] ${message.text}`);
