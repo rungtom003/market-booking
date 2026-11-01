@@ -21,6 +21,7 @@ import {
 } from '@market-booking/shared';
 import type {
   BookingChangedPayload,
+  CheckinUpdatedPayload,
   PaymentSubmittedPayload,
   RoundChangedPayload,
   ServerTimePayload,
@@ -33,7 +34,11 @@ import type { Namespace, Socket } from 'socket.io';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { Principal } from '../auth/principal';
 import { TokenService } from '../auth/token.service';
-import { type BookingChangedEvent, BookingEvents } from '../booking/booking-events';
+import {
+  type BookingChangedEvent,
+  type BookingCheckedInEvent,
+  BookingEvents,
+} from '../booking/booking-events';
 import { isLapsed } from '../booking/booking-mapper';
 import { MarketService } from '../market/market.service';
 import {
@@ -79,6 +84,7 @@ export class RealtimeGateway
   onModuleInit(): void {
     this.unsubscribe.push(
       this.bookingEvents.onChanged((e) => this.onBookingChanged(e)),
+      this.bookingEvents.onCheckedIn((e) => this.onCheckedIn(e)),
       this.roundEvents.onChanged((e) => this.onRoundChanged(e)),
       this.notify.onVendorStatusChanged((e) => this.onVendorStatusChanged(e)),
       this.notify.onPaymentSubmitted((e) => this.onPaymentSubmitted(e)),
@@ -185,6 +191,19 @@ export class RealtimeGateway
       holdExpiresAt: event.holdExpiresAt?.toISOString() ?? null,
       paymentDueAt: event.paymentDueAt?.toISOString() ?? null,
     } satisfies BookingChangedPayload);
+  }
+
+  /** check-in แล้ว → ผัง/หน้า check-in ของ admin ทุกคนในตลาด + หน้า QR ของผู้ค้า */
+  onCheckedIn(event: BookingCheckedInEvent): void {
+    const payload = {
+      bookingId: event.bookingId,
+      marketDayId: event.marketDayId,
+      stallId: event.stallId,
+      checkedInAt: event.checkedInAt.toISOString(),
+    } satisfies CheckinUpdatedPayload;
+    this.server
+      .to([socketRoom.admin(event.marketId), socketRoom.vendor(event.vendorId)])
+      .emit(SocketEvent.CHECKIN_UPDATED, payload);
   }
 
   onRoundChanged(event: RoundChangedEvent): void {

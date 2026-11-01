@@ -170,6 +170,7 @@ export class BookingAdminService {
                 amount: Number(b.amount),
                 holdExpiresAt: b.holdExpiresAt?.toISOString() ?? null,
                 paymentDueAt: b.paymentDueAt?.toISOString() ?? null,
+                checkedInAt: b.checkedInAt?.toISOString() ?? null,
                 vendor: toVendor(b.vendor),
               }
             : null,
@@ -340,6 +341,7 @@ export class BookingAdminService {
         amount: true,
         holdExpiresAt: true,
         paymentDueAt: true,
+        checkedInAt: true,
         vendor: { select: VENDOR_FIELDS },
         stall: { select: { code: true, zone: { select: { name: true } } } },
       },

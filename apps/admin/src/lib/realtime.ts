@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { ErrorCode, SOCKET_NAMESPACE, SocketEvent } from '@market-booking/shared';
-import type { StallUpdatedPayload } from '@market-booking/shared';
+import type { CheckinUpdatedPayload, StallUpdatedPayload } from '@market-booking/shared';
 import { type Socket, io } from 'socket.io-client';
 import { renewAccessToken } from './api-client';
 import { session } from './session';
@@ -90,16 +90,42 @@ export function useAdminMarketDaySocket(marketDayId: string | null): void {
       void s.emitWithAck(SocketEvent.MD_JOIN, { marketDayId });
       refresh();
     };
-    const onStall = (p: StallUpdatedPayload) => {
+    const onStall = (p: StallUpdatedPayload | CheckinUpdatedPayload) => {
       if (p.marketDayId === marketDayId) refresh();
     };
     s.on('connect', join);
     s.on(SocketEvent.STALL_UPDATED, onStall);
+    // check-in ส่งห้อง admin ของตลาด (ไม่ใช่ห้องวันขาย)
+    s.on(SocketEvent.CHECKIN_UPDATED, onStall);
     if (s.connected) join();
     return () => {
       if (s.connected) s.emit(SocketEvent.MD_LEAVE, { marketDayId });
       s.off('connect', join);
       s.off(SocketEvent.STALL_UPDATED, onStall);
+      s.off(SocketEvent.CHECKIN_UPDATED, onStall);
     };
   }, [marketDayId, queryClient]);
+}
+
+/**
+ * หน้า check-in: เจ้าหน้าที่หลายคนสแกนพร้อมกัน → โหลดรายการใหม่เมื่อมี `checkin:updated` ของวันนั้น
+ * (ต่อใหม่หลังหลุด = โหลดใหม่ เผื่อพลาด event)
+ */
+export function useCheckinSocket(marketDayId: string | null, date: string): void {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (!marketDayId) return;
+    const s = adminSocket();
+    const refresh = () => void queryClient.invalidateQueries({ queryKey: ['admin-checkin', date] });
+    const onCheckin = (p: CheckinUpdatedPayload) => {
+      if (p.marketDayId === marketDayId) refresh();
+    };
+    s.on(SocketEvent.CHECKIN_UPDATED, onCheckin);
+    s.on('connect', refresh);
+    return () => {
+      s.off(SocketEvent.CHECKIN_UPDATED, onCheckin);
+      s.off('connect', refresh);
+    };
+  }, [marketDayId, date, queryClient]);
 }

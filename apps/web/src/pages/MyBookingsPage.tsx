@@ -143,6 +143,16 @@ function BookingCard({
           </Link>
         </p>
       )}
+      {b.status === 'CONFIRMED' &&
+        (b.checkedInAt ? (
+          <p className="font-semibold text-green-800">
+            ✓ เช็คอินแล้ว {formatThaiDateTime(b.checkedInAt)}
+          </p>
+        ) : (
+          <Link to={`/bookings/${b.id}/checkin`} className={linkButtonClass}>
+            QR เช็คอินหน้างาน
+          </Link>
+        ))}
       {b.status === 'CANCELLED' && (
         <p className="text-gray-500">
           {b.cancelledByAdmin ? 'ยกเลิกโดยเจ้าหน้าที่' : 'คุณยกเลิกเอง'}

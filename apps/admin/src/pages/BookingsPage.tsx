@@ -63,7 +63,7 @@ function mapStatus(s: DayStall): StallMapItem['status'] {
     case 'HOLD':
       return 'HELD';
     case 'BOOKED':
-      return 'BOOKED';
+      return s.booking?.checkedInAt ? 'CHECKED_IN' : 'BOOKED';
     case 'CLOSED':
       return 'UNAVAILABLE';
     default:
@@ -203,10 +203,11 @@ export function BookingsPage() {
                   />
                   <StallMapLegend
                     zones={day.data.zones}
-                    statuses={['HELD', 'BOOKED', 'UNAVAILABLE']}
+                    statuses={['HELD', 'BOOKED', 'CHECKED_IN', 'UNAVAILABLE']}
                   />
                   <Typography variant="body2" color="text.secondary">
-                    คลิกล็อคเพื่อดูผู้จอง ยกเลิก หรือจองแทนผู้ค้า · ผังอัปเดตเองเมื่อมีการจอง
+                    คลิกล็อคเพื่อดูผู้จอง ยกเลิก หรือจองแทนผู้ค้า ·
+                    ผังอัปเดตเองเมื่อมีการจองหรือเช็คอิน
                   </Typography>
                 </>
               )}

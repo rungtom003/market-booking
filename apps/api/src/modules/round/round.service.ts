@@ -28,6 +28,9 @@ const DAY_FIELDS = {
   id: true,
   marketDate: true,
   isCancelled: true,
+  checkinOpenAt: true,
+  checkinCloseAt: true,
+  noshowProcessedAt: true,
   _count: {
     select: {
       overrides: true,
@@ -73,6 +76,9 @@ export function toRoundDetail(row: RoundRow, now: Date): RoundDetail {
       isCancelled: d.isCancelled,
       overrideCount: d._count.overrides,
       bookingCount: d._count.bookings,
+      checkinOpenAt: d.checkinOpenAt?.toISOString() ?? null,
+      checkinCloseAt: d.checkinCloseAt?.toISOString() ?? null,
+      noshowProcessed: d.noshowProcessedAt !== null,
     })),
   };
 }

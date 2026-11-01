@@ -1,4 +1,5 @@
 import type { ErrorCode } from './error-codes.js';
+import { formatBangkokTime } from './checkin.js';
 import { formatIsoDateTh } from './round.js';
 
 type Details = Record<string, unknown> | undefined;
@@ -67,6 +68,22 @@ export const ERROR_MESSAGES_TH: Record<ErrorCode, string | ((details: Details) =
   HOLD_EXPIRED: 'หมดเวลายืนยันการจอง กรุณาเลือกใหม่',
   INVALID_STATE_TRANSITION: 'รายการนี้ถูกเปลี่ยนสถานะไปแล้ว กรุณาโหลดใหม่',
   CANCEL_WINDOW_PASSED: 'เลยกำหนดเวลายกเลิกการจองแล้ว',
+  CHECKIN_INVALID: (d) =>
+    d?.status
+      ? 'การจองนี้ถูกยกเลิกแล้ว check-in ไม่ได้'
+      : 'ไม่พบ QR นี้ในระบบ (QR ไม่ถูกต้องหรือเป็นของตลาดอื่น)',
+  CHECKIN_WRONG_DAY: (d) =>
+    typeof d?.marketDate === 'string'
+      ? `QR นี้เป็นของวันขาย ${formatIsoDateTh(d.marketDate)} ไม่ใช่วันนี้`
+      : 'QR นี้เป็นของวันขายอื่น',
+  CHECKIN_NOT_OPEN: (d) =>
+    typeof d?.openAt === 'string'
+      ? `ยังไม่ถึงเวลา check-in (เปิด ${formatBangkokTime(d.openAt)} น.)`
+      : 'ยังไม่ถึงเวลา check-in',
+  CHECKIN_CLOSED: (d) =>
+    typeof d?.closeAt === 'string'
+      ? `ปิด check-in แล้ว (ปิด ${formatBangkokTime(d.closeAt)} น.)`
+      : 'ปิด check-in แล้ว',
   OTP_INVALID: (d) => {
     const left = Number(d?.attemptsLeft);
     if (!Number.isFinite(left)) return 'รหัส OTP ไม่ถูกต้อง';

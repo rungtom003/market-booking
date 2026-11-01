@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link as RouterLink, useLocation, useNavigate, useParams } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { formatIsoDateTh } from '@market-booking/shared';
+import { formatBangkokTime, formatIsoDateTh } from '@market-booking/shared';
 import type { RoundDetail, RoundMarketDay } from '@market-booking/shared';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import Alert from '@mui/material/Alert';
@@ -17,6 +17,7 @@ import DialogTitle from '@mui/material/DialogTitle';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import Table from '@mui/material/Table';
+import TextField from '@mui/material/TextField';
 import TableBody from '@mui/material/TableBody';
 import TableCell from '@mui/material/TableCell';
 import TableHead from '@mui/material/TableHead';
@@ -44,6 +45,7 @@ export function RoundDetailPage() {
   const [editing, setEditing] = useState(false);
   const [adding, setAdding] = useState(false);
   const [confirm, setConfirm] = useState<Confirm>(null);
+  const [checkinDay, setCheckinDay] = useState<RoundMarketDay | null>(null);
 
   const round = useQuery({ queryKey: ['round', id], queryFn: () => adminApi.rounds.get(id) });
 
@@ -210,6 +212,7 @@ export function RoundDetailPage() {
                 <TableCell>สถานะ</TableCell>
                 <TableCell align="right">ล็อคที่ตั้งค่าเฉพาะวัน</TableCell>
                 <TableCell align="right">การจอง</TableCell>
+                <TableCell>เวลาเช็คอิน</TableCell>
                 <TableCell align="right" />
               </TableRow>
             </TableHead>
@@ -228,6 +231,7 @@ export function RoundDetailPage() {
                   </TableCell>
                   <TableCell align="right">{d.overrideCount}</TableCell>
                   <TableCell align="right">{d.bookingCount}</TableCell>
+                  <TableCell sx={{ whiteSpace: 'nowrap' }}>{checkinLabel(d)}</TableCell>
                   <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
                     <Button
                       size="small"
@@ -237,6 +241,15 @@ export function RoundDetailPage() {
                     >
                       ตั้งค่าล็อค
                     </Button>
+                    {!cancelled && !d.isCancelled && !d.noshowProcessed && (
+                      <Button
+                        size="small"
+                        aria-label={`เวลาเช็คอิน ${formatIsoDateTh(d.marketDate)}`}
+                        onClick={() => setCheckinDay(d)}
+                      >
+                        เวลาเช็คอิน
+                      </Button>
+                    )}
                     {!cancelled && (
                       <Button
                         size="small"
@@ -273,7 +286,7 @@ export function RoundDetailPage() {
               ))}
               {r.marketDays.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={5}>
+                  <TableCell colSpan={6}>
                     ยังไม่มีวันขาย — กด "เพิ่มวันขาย" เพื่อเลือกจากปฏิทิน
                   </TableCell>
                 </TableRow>
@@ -295,6 +308,16 @@ export function RoundDetailPage() {
           round={r}
           onClose={() => setAdding(false)}
           onDone={(saved, count) => done(saved, `เพิ่มวันขาย ${count} วันแล้ว`)}
+        />
+      )}
+      {checkinDay && (
+        <CheckinWindowDialog
+          roundId={r.id}
+          day={checkinDay}
+          onClose={() => setCheckinDay(null)}
+          onDone={(saved) =>
+            done(saved, `ตั้งเวลาเช็คอินวัน${formatIsoDateTh(checkinDay.marketDate)} แล้ว`)
+          }
         />
       )}
       {confirm && (
@@ -319,6 +342,89 @@ export function RoundDetailPage() {
         </Dialog>
       )}
     </Stack>
+  );
+}
+
+/** "06:00–12:00 น." / "ทั้งวัน" (ไม่ตั้ง) — ปิดเช็คอินที่เที่ยงคืนแสดงเป็น 24:00 */
+function checkinLabel(d: RoundMarketDay): string {
+  if (!d.checkinOpenAt && !d.checkinCloseAt) return 'ทั้งวัน';
+  const open = d.checkinOpenAt ? formatBangkokTime(d.checkinOpenAt) : '00:00';
+  const close = d.checkinCloseAt ? formatBangkokTime(d.checkinCloseAt) : '24:00';
+  return `${open}–${close.replace(/^00:00$/, '24:00')} น.`;
+}
+
+/** เวลาเปิด/ปิดเช็คอินของวันขาย (เวลาไทยของวันนั้น) — เว้นว่าง = 00:00 / 24:00 */
+function CheckinWindowDialog({
+  roundId,
+  day,
+  onClose,
+  onDone,
+}: {
+  roundId: string;
+  day: RoundMarketDay;
+  onClose: () => void;
+  onDone: (round: RoundDetail) => void;
+}) {
+  const [open, setOpen] = useState(day.checkinOpenAt ? formatBangkokTime(day.checkinOpenAt) : '');
+  const [close, setClose] = useState(
+    day.checkinCloseAt ? formatBangkokTime(day.checkinCloseAt) : '',
+  );
+  const [error, setError] = useState<string | null>(null);
+  const toIso = (time: string) =>
+    time ? new Date(`${day.marketDate}T${time}:00+07:00`).toISOString() : null;
+
+  const save = useMutation({
+    mutationFn: () =>
+      adminApi.rounds.setCheckinWindow(roundId, day.id, {
+        checkinOpenAt: toIso(open),
+        checkinCloseAt: toIso(close),
+      }),
+    onSuccess: (r) => {
+      onClose();
+      onDone(r);
+    },
+    onError: (e) => setError(errorMessage(e)),
+  });
+
+  return (
+    <Dialog open onClose={onClose} fullWidth maxWidth="xs">
+      <DialogTitle>เวลาเช็คอิน วัน{formatIsoDateTh(day.marketDate)}</DialogTitle>
+      <DialogContent>
+        <DialogContentText variant="body2">
+          ผู้ค้าที่ยืนยันการจองแล้วแต่ไม่เช็คอินภายในเวลานี้ ระบบจะนับเป็นไม่มาขายหลังปิดเช็คอิน
+          (แก้ไม่ได้หลังนับแล้ว) — เว้นว่าง = เปิด 00:00 / ปิด 24:00
+        </DialogContentText>
+        <Stack direction="row" spacing={2} sx={{ mt: 2 }}>
+          <TextField
+            label="เปิดเช็คอิน"
+            type="time"
+            fullWidth
+            value={open}
+            onChange={(e) => setOpen(e.target.value)}
+            slotProps={{ inputLabel: { shrink: true } }}
+          />
+          <TextField
+            label="ปิดเช็คอิน"
+            type="time"
+            fullWidth
+            value={close}
+            onChange={(e) => setClose(e.target.value)}
+            slotProps={{ inputLabel: { shrink: true } }}
+          />
+        </Stack>
+        {error && (
+          <Alert severity="error" sx={{ mt: 2 }}>
+            {error}
+          </Alert>
+        )}
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>ยกเลิก</Button>
+        <Button variant="contained" loading={save.isPending} onClick={() => save.mutate()}>
+          บันทึก
+        </Button>
+      </DialogActions>
+    </Dialog>
   );
 }
 

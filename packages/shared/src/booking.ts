@@ -64,6 +64,8 @@ export interface Booking {
   cancelReason: string | null;
   /** ยกเลิกโดยเจ้าหน้าที่ (ไม่เปิดเผยว่าใคร) */
   cancelledByAdmin: boolean;
+  /** เวลาที่เจ้าหน้าที่ check-in (Phase 10) */
+  checkedInAt: string | null;
   createdAt: string;
 }
 
@@ -128,6 +130,7 @@ export interface AdminMarketDayStalls extends Omit<MarketDayStalls, 'stalls'> {
       amount: number;
       holdExpiresAt: string | null;
       paymentDueAt: string | null;
+      checkedInAt: string | null;
       vendor: { id: string; name: string; shopName: string | null; phone: string };
     } | null;
   })[];

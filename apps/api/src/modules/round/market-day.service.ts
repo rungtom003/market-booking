@@ -2,12 +2,14 @@ import { Injectable } from '@nestjs/common';
 import {
   ACTIVE_BOOKING_STATUSES,
   AddMarketDaysInput,
+  CheckinWindowInput,
   ErrorCode,
   RoundDetail,
   RoundStatus,
   SetStallDayOverrideInput,
   StallDayOverride,
   UpdateMarketDayInput,
+  checkinWindow,
 } from '@market-booking/shared';
 import { Prisma } from '../../generated/prisma/client';
 import { AppException } from '../../common/exceptions/app.exception';
@@ -167,6 +169,57 @@ export class MarketDayService {
       if (isUniqueViolation(error)) throw dateTaken([date]);
       throw error;
     }
+  }
+
+  /**
+   * ตั้งช่วงเวลา check-in (null = ค่าเริ่มต้น 00:00–24:00 ของวันขาย) — ช่วงที่ได้ต้องปิดหลังเปิด
+   * แก้ไม่ได้หลังระบบนับ No-show ของวันนั้นแล้ว
+   */
+  async setCheckinWindow(
+    admin: AdminPrincipal,
+    roundId: string,
+    dayId: string,
+    input: CheckinWindowInput,
+    now: Date = new Date(),
+  ): Promise<RoundDetail> {
+    const round = await this.rounds.findInScope(admin, roundId);
+    if (round.status === RoundStatus.CANCELLED) throw roundCancelled();
+    const day = this.dayOf(round, dayId);
+    if (day.isCancelled || day.noshowProcessedAt) {
+      throw new AppException(ErrorCode.INVALID_STATE_TRANSITION, 'Check-in window is final', {
+        reason: day.isCancelled ? 'cancelled' : 'noshow_processed',
+      });
+    }
+    const date = toIsoDate(day.marketDate);
+    const window = checkinWindow({ marketDate: date, ...input });
+    if (window.closeAt <= window.openAt) {
+      throw new AppException(ErrorCode.VALIDATION_ERROR, 'Request validation failed', [
+        { path: 'checkinCloseAt', message: 'เวลาปิด check-in ต้องหลังเวลาเปิด', code: 'custom' },
+      ]);
+    }
+    const data = {
+      checkinOpenAt: input.checkinOpenAt ? new Date(input.checkinOpenAt) : null,
+      checkinCloseAt: input.checkinCloseAt ? new Date(input.checkinCloseAt) : null,
+    };
+    return this.prisma.$transaction(async (tx) => {
+      await tx.marketDay.update({ where: { id: dayId }, data });
+      await this.audit.log(
+        {
+          actorType: 'ADMIN',
+          actorId: admin.id,
+          action: 'market_day.checkin_window',
+          entity: { type: 'market_day', id: dayId },
+          before: {
+            marketDate: date,
+            checkinOpenAt: day.checkinOpenAt?.toISOString() ?? null,
+            checkinCloseAt: day.checkinCloseAt?.toISOString() ?? null,
+          },
+          after: { marketDate: date, ...input },
+        },
+        tx,
+      );
+      return this.detail(tx, roundId, now);
+    });
   }
 
   /** ลบวันขายที่ไม่มีการจอง/คิวเลย (override ถูกลบตาม) — มีแล้วให้ยกเลิกวันแทน */

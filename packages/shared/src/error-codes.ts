@@ -55,6 +55,16 @@ export const ErrorCode = {
   INVALID_STATE_TRANSITION: 'INVALID_STATE_TRANSITION',
   CANCEL_WINDOW_PASSED: 'CANCEL_WINDOW_PASSED',
   OTP_INVALID: 'OTP_INVALID',
+
+  // Check-in (Phase 10)
+  /** ไม่พบ QR ในตลาดนี้ หรือการจองไม่ได้ยืนยันแล้ว (ยกเลิก) — `details.status` ถ้าพบการจอง */
+  CHECKIN_INVALID: 'CHECKIN_INVALID',
+  /** QR ของวันขายอื่น — `details.marketDate` (YYYY-MM-DD) */
+  CHECKIN_WRONG_DAY: 'CHECKIN_WRONG_DAY',
+  /** ยังไม่ถึงเวลาเปิด check-in — `details.openAt` */
+  CHECKIN_NOT_OPEN: 'CHECKIN_NOT_OPEN',
+  /** ปิด check-in แล้ว — `details.closeAt` */
+  CHECKIN_CLOSED: 'CHECKIN_CLOSED',
 } as const;
 
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];

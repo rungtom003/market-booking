@@ -16,6 +16,8 @@ export const SocketEvent = {
   ROUND_CHANGED: 'round:changed',
   BOOKING_CHANGED: 'booking:changed',
   WAITLIST_OFFER: 'waitlist:offer',
+  /** ห้อง admin ของตลาด + ห้องผู้ค้าเจ้าของการจอง */
+  CHECKIN_UPDATED: 'checkin:updated',
   SERVER_TIME: 'server:time',
   // Server → Admin
   VENDOR_REGISTERED: 'vendor:registered',
@@ -91,4 +93,12 @@ export interface WaitlistOfferPayload {
   marketDayId: string;
   stallCode: string;
   expiresAt: string;
+}
+
+/** `checkin:updated` — เจ้าหน้าที่ check-in การจองแล้ว (ข้อมูลจริงโหลดผ่าน REST) */
+export interface CheckinUpdatedPayload {
+  bookingId: string;
+  marketDayId: string;
+  stallId: string;
+  checkedInAt: string;
 }

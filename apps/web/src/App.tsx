@@ -1,6 +1,7 @@
 import { BrowserRouter, Link, Route, Routes } from 'react-router';
 import { Layout } from './components/Layout';
 import { AuthBootstrap, RedirectIfAuthenticated, RequireAuth } from './features/auth/AuthProvider';
+import { CheckinQrPage } from './pages/CheckinQrPage';
 import { DayMapPage } from './pages/DayMapPage';
 import { HomePage } from './pages/HomePage';
 import { LoginPage } from './pages/LoginPage';
@@ -78,6 +79,14 @@ export function App() {
             element={
               <RequireAuth>
                 <PaymentPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/bookings/:bookingId/checkin"
+            element={
+              <RequireAuth>
+                <CheckinQrPage />
               </RequireAuth>
             }
           />

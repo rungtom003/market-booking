@@ -28,8 +28,16 @@ export default defineConfig({
       // แอป admin — desktop-first
       name: 'admin-desktop',
       testMatch:
-        /admin(-market|-rounds|-bookings|-payments|-reports|-map-editor|-waitlist|-announcements)?\.spec\.ts/,
-      use: { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 800 } },
+        /admin(-market|-rounds|-bookings|-payments|-reports|-map-editor|-waitlist|-announcements|-checkin)?\.spec\.ts/,
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 1280, height: 800 },
+        // หน้าเช็คอินเปิดกล้อง — ใช้กล้องจำลองของ Chrome และอนุญาตไว้ก่อน (ไม่มี dialog)
+        permissions: ['camera'],
+        launchOptions: {
+          args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'],
+        },
+      },
     },
   ],
   webServer: [

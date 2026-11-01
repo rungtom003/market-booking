@@ -11,6 +11,7 @@ import { AppConfigService } from './config/app-config.service';
 import { AppConfigModule } from './config/config.module';
 import { AdminUserModule } from './modules/admin-user/admin-user.module';
 import { AnnouncementModule } from './modules/announcement/announcement.module';
+import { CheckinModule } from './modules/checkin/checkin.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { BookingModule } from './modules/booking/booking.module';
@@ -62,6 +63,7 @@ import { REDIS, RedisModule } from './redis/redis.module';
     ReportModule,
     WaitlistModule,
     AnnouncementModule,
+    CheckinModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

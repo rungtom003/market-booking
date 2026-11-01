@@ -133,6 +133,25 @@ export async function adminRequest(request: APIRequestContext) {
       }
       return bookingId;
     },
+    /** รับเงินสดเต็มยอด → CONFIRMED (มี QR check-in) */
+    async payCash(bookingId: string) {
+      const res = await request.post(`${API_URL}/admin/payments/cash`, {
+        headers,
+        data: { bookingId },
+      });
+      expect(res.ok(), await res.text()).toBeTruthy();
+    },
+    /** ตั้งเวลาเช็คอินของวันขาย (ไม่ผูกกับวันที่ — ใช้เปิดเช็คอินให้วันขายล่วงหน้าใน test) */
+    async setCheckinWindow(roundId: string, dayId: string, openAt: Date, closeAt: Date) {
+      const res = await request.put(
+        `${API_URL}/admin/rounds/${roundId}/market-days/${dayId}/checkin-window`,
+        {
+          headers,
+          data: { checkinOpenAt: openAt.toISOString(), checkinCloseAt: closeAt.toISOString() },
+        },
+      );
+      expect(res.ok(), await res.text()).toBeTruthy();
+    },
     async cancelBooking(id: string, reason: string) {
       const res = await request.post(`${API_URL}/admin/bookings/${id}/cancel`, {
         headers,

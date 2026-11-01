@@ -32,6 +32,11 @@ export type NotificationTemplate =
       template: 'waitlist.offer';
       params: { stallCode: string; marketDate: string; expiresAt: string };
     }
+  | {
+      template: 'booking.no_show';
+      /** `stallCodes` เช่น "A1, A2" — นับครั้งเดียวต่อวันขาย */
+      params: { stallCodes: string; marketDate: string; count: number; threshold: number };
+    }
   | { template: 'announcement'; params: { title: string; body: string } }
   | { template: 'admin.vendor_registered'; params: { vendorName: string } }
   | {
@@ -157,6 +162,21 @@ export function renderTemplate(n: NotificationTemplate, ctx: RenderContext): Ren
         ],
         link: { label: 'ยืนยันการจอง', url: web('/bookings') },
         sms: `ได้สิทธิ์ล็อค ${n.params.stallCode} ยืนยันภายใน ${until} น. ${web('/bookings')}`,
+      };
+    }
+    case 'booking.no_show': {
+      const date = formatIsoDateTh(n.params.marketDate, true);
+      const { count, threshold } = n.params;
+      const left = threshold - (count % threshold);
+      return {
+        title: 'ไม่ได้ check-in ตามเวลา',
+        lines: [
+          `ล็อค ${n.params.stallCodes} วันขาย ${date}`,
+          `นับเป็นไม่มาขายครั้งที่ ${count}`,
+          `ไม่มาขายอีก ${left} ครั้ง จะถูกระงับสิทธิ์การจองชั่วคราว`,
+        ],
+        link: { label: 'การจองของฉัน', url: web('/bookings') },
+        sms: `ไม่พบการ check-in ล็อค ${n.params.stallCodes} วันที่ ${date} นับเป็นไม่มาขายครั้งที่ ${count} อีก ${left} ครั้งจะถูกระงับสิทธิ์`,
       };
     }
     case 'announcement': {

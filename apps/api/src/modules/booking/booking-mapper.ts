@@ -26,6 +26,7 @@ export const SCALAR_FIELDS = {
   cancelledAt: true,
   cancelReason: true,
   cancelledByAdminId: true,
+  checkedInAt: true,
   createdAt: true,
 } satisfies Prisma.BookingSelect;
 
@@ -84,11 +85,12 @@ export function toBooking(row: BookingRow, now: Date): Booking {
     cancelledAt: row.cancelledAt?.toISOString() ?? null,
     cancelReason: row.cancelReason,
     cancelledByAdmin: row.cancelledByAdminId !== null,
+    checkedInAt: row.checkedInAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),
   };
 }
 
-/** token ของ QR check-in (Phase 8) — สร้างทุกครั้งที่การจองเป็น CONFIRMED; 32 ตัวอักษร base64url */
+/** token ของ QR check-in (Phase 10) — สร้างทุกครั้งที่การจองเป็น CONFIRMED; 32 ตัวอักษร base64url */
 export function newCheckinToken(): string {
   return randomBytes(24).toString('base64url');
 }

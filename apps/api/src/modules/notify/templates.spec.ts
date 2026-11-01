@@ -46,6 +46,10 @@ const samples = {
     template: 'waitlist.offer',
     params: { stallCode: 'B4', marketDate: '2026-11-21', expiresAt: '2026-11-20T05:30:00.000Z' },
   },
+  'booking.no_show': {
+    template: 'booking.no_show',
+    params: { stallCodes: 'A1, A2', marketDate: '2026-11-21', count: 2, threshold: 3 },
+  },
   announcement: {
     template: 'announcement',
     params: { title: 'งดขายวันสงกรานต์', body: 'ตลาดปิด 13–15 เม.ย.\r\nเปิดตามปกติ 16 เม.ย.' },
@@ -105,6 +109,12 @@ describe('notification templates', () => {
     );
     expect(long.lines[0]).toHaveLength(498);
     expect(long.lines[0]!.endsWith('…')).toBe(true);
+  });
+
+  it('No-show: บอกครั้งที่นับและจำนวนครั้งที่เหลือก่อนถูกระงับ', () => {
+    const m = renderTemplate(samples['booking.no_show'], ctx);
+    expect(m.lines).toContain('นับเป็นไม่มาขายครั้งที่ 2');
+    expect(m.lines).toContain('ไม่มาขายอีก 1 ครั้ง จะถูกระงับสิทธิ์การจองชั่วคราว');
   });
 
   it('ข้อความของเจ้าหน้าที่ลิงก์ไปแอป admin', () => {

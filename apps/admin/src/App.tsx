@@ -5,6 +5,7 @@ import Typography from '@mui/material/Typography';
 import { AuthBootstrap, Protected } from './components/guards';
 import { AdminUsersPage } from './pages/AdminUsersPage';
 import { AnnouncementsPage } from './pages/AnnouncementsPage';
+import { CheckinPage } from './pages/CheckinPage';
 import { AuditLogPage } from './pages/AuditLogPage';
 import { BookingsPage } from './pages/BookingsPage';
 import { HomePage } from './pages/HomePage';
@@ -71,6 +72,14 @@ export function App() {
             element={
               <Protected permission={Permission.AUDIT_LOG_VIEW}>
                 <AuditLogPage />
+              </Protected>
+            }
+          />
+          <Route
+            path="/checkin"
+            element={
+              <Protected permission={Permission.CHECKIN}>
+                <CheckinPage />
               </Protected>
             }
           />

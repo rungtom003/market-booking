@@ -2,12 +2,14 @@ import { useEffect, useSyncExternalStore } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { ErrorCode, SOCKET_NAMESPACE, SocketEvent } from '@market-booking/shared';
 import type {
+  CheckinUpdatedPayload,
   BookingChangedPayload,
   StallUpdatedPayload,
   WaitlistOfferPayload,
 } from '@market-booking/shared';
 import { type Socket, io } from 'socket.io-client';
 import { MY_BOOKINGS_KEY } from '../api/booking';
+import { checkinQrKey } from '../api/checkin';
 import { type MarketDayStallsData, marketDayKey } from '../api/market';
 import { paymentKey } from '../api/payment';
 import { WAITLIST_KEY } from '../api/waitlist';
@@ -132,7 +134,7 @@ export function useMarketDaySocket(marketDayId: string): void {
 }
 
 /**
- * การจองของฉันเปลี่ยน (เช่น เจ้าหน้าที่อนุมัติ/ไม่ผ่านสลิป, หมดเวลาชำระ) → โหลดการจองและการชำระใหม่
+ * การจองของฉันเปลี่ยน (เช่น เจ้าหน้าที่อนุมัติ/ไม่ผ่านสลิป, หมดเวลาชำระ, check-in แล้ว) → โหลดการจอง/การชำระ/QR ใหม่
  * ใช้ในหน้าที่ไม่ได้ดูผัง (หน้าชำระเงิน, การจองของฉัน); ต่อใหม่หลังหลุด = โหลดใหม่ทั้งหมด
  */
 export function useMyBookingUpdates(): void {
@@ -146,15 +148,22 @@ export function useMyBookingUpdates(): void {
       // HOLD จากคิวรอ ยืนยัน/หมดเวลา = สถานะคิวเปลี่ยน
       void queryClient.invalidateQueries({ queryKey: WAITLIST_KEY });
     };
+    const onCheckin = (p: CheckinUpdatedPayload) => {
+      void queryClient.invalidateQueries({ queryKey: MY_BOOKINGS_KEY });
+      void queryClient.invalidateQueries({ queryKey: checkinQrKey(p.bookingId) });
+    };
     const resync = () => {
       void queryClient.invalidateQueries({ queryKey: MY_BOOKINGS_KEY });
       void queryClient.invalidateQueries({ queryKey: ['payment'] });
       void queryClient.invalidateQueries({ queryKey: WAITLIST_KEY });
+      void queryClient.invalidateQueries({ queryKey: ['checkin-qr'] });
     };
     s.on(SocketEvent.BOOKING_CHANGED, onBooking);
+    s.on(SocketEvent.CHECKIN_UPDATED, onCheckin);
     s.on('connect', resync);
     return () => {
       s.off(SocketEvent.BOOKING_CHANGED, onBooking);
+      s.off(SocketEvent.CHECKIN_UPDATED, onCheckin);
       s.off('connect', resync);
     };
   }, [queryClient]);

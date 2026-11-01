@@ -122,6 +122,11 @@ export interface RoundMarketDay {
   overrideCount: number;
   /** การจองที่ยังมีผล — มากกว่า 0 ลบวันไม่ได้ */
   bookingCount: number;
+  /** ตั้งเอง (null = ค่าเริ่มต้นทั้งวัน — ดู `checkinWindow`) */
+  checkinOpenAt: string | null;
+  checkinCloseAt: string | null;
+  /** ระบบนับ No-show แล้ว — แก้เวลา check-in ไม่ได้ */
+  noshowProcessed: boolean;
 }
 
 export interface Round {

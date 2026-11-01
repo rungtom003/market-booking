@@ -271,17 +271,19 @@ model BookingRound {
 }
 
 model MarketDay {
-  id             String    @id @default(uuid(7)) @db.Uuid
+  id                String    @id @default(uuid(7)) @db.Uuid
   /// เก็บซ้ำกับ round เพื่อบังคับ unique (market, date) ระดับ DB
-  marketId       String    @map("market_id") @db.Uuid
-  roundId        String    @map("round_id") @db.Uuid
-  marketDate     DateTime  @map("market_date") @db.Date
+  marketId          String    @map("market_id") @db.Uuid
+  roundId           String    @map("round_id") @db.Uuid
+  marketDate        DateTime  @map("market_date") @db.Date
   /// ใช้ตัดสิน No-show
-  checkinOpenAt  DateTime? @map("checkin_open_at") @db.Timestamptz(6)
-  checkinCloseAt DateTime? @map("checkin_close_at") @db.Timestamptz(6)
-  isCancelled    Boolean   @default(false) @map("is_cancelled")
-  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  checkinOpenAt     DateTime? @map("checkin_open_at") @db.Timestamptz(6)
+  checkinCloseAt    DateTime? @map("checkin_close_at") @db.Timestamptz(6)
+  /// worker นับ No-show ของวันนี้แล้ว (Phase 10) — กันนับซ้ำ
+  noshowProcessedAt DateTime? @map("noshow_processed_at") @db.Timestamptz(6)
+  isCancelled       Boolean   @default(false) @map("is_cancelled")
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   market    Market             @relation(fields: [marketId], references: [id])
   round     BookingRound       @relation(fields: [roundId], references: [id], onDelete: Cascade)
@@ -331,6 +333,8 @@ model Booking {
   cancelReason       String?       @map("cancel_reason")
   cancelledByAdminId String?       @map("cancelled_by_admin_id") @db.Uuid
   checkedInAt        DateTime?     @map("checked_in_at") @db.Timestamptz(6)
+  /// ยืนยันแล้วแต่ไม่ check-in ภายในเวลา — เวลาที่ระบบนับ (Phase 10)
+  noshowAt           DateTime?     @map("noshow_at") @db.Timestamptz(6)
   /// สำหรับ QR check-in
   checkinToken       String?       @unique @map("checkin_token") @db.VarChar(64)
   /// optimistic lock

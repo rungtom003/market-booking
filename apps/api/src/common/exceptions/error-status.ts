@@ -41,6 +41,10 @@ export const ERROR_HTTP_STATUS: Record<ErrorCode, HttpStatus> = {
   INVALID_STATE_TRANSITION: HttpStatus.CONFLICT,
   CANCEL_WINDOW_PASSED: HttpStatus.CONFLICT,
   OTP_INVALID: HttpStatus.BAD_REQUEST,
+  CHECKIN_INVALID: HttpStatus.NOT_FOUND,
+  CHECKIN_WRONG_DAY: HttpStatus.CONFLICT,
+  CHECKIN_NOT_OPEN: HttpStatus.CONFLICT,
+  CHECKIN_CLOSED: HttpStatus.CONFLICT,
 };
 
 /** ใช้กับ HttpException ทั่วไปที่ไม่ได้มาจาก AppException (เช่น 404 ของ router, 429 ของ throttler) */

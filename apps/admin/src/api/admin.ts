@@ -1,4 +1,8 @@
 import type {
+  CheckinDay,
+  CheckinResult,
+  CheckinScanInput,
+  CheckinWindowInput,
   AdminAnnouncement,
   CreateAnnouncementInput,
   UpdateAnnouncementInput,
@@ -183,6 +187,13 @@ export const adminApi = {
       ),
     removeDay: (id: string, dayId: string) =>
       apiClient.delete(`/admin/rounds/${id}/market-days/${dayId}`),
+    setCheckinWindow: (id: string, dayId: string, input: CheckinWindowInput) =>
+      unwrap(
+        apiClient.put<ApiResponse<RoundDetail>>(
+          `/admin/rounds/${id}/market-days/${dayId}/checkin-window`,
+          input,
+        ),
+      ),
   },
 
   marketDays: {
@@ -275,6 +286,15 @@ export const adminApi = {
       ),
     remove: (id: string) =>
       unwrap(apiClient.delete<ApiResponse<AdminWaitlistEntry>>(`/admin/waitlists/${id}`)),
+  },
+
+  checkin: {
+    day: (date: string) =>
+      unwrap(apiClient.get<ApiResponse<CheckinDay | null>>('/admin/checkin', { params: { date } })),
+    scan: (input: CheckinScanInput) =>
+      unwrap(apiClient.post<ApiResponse<CheckinResult>>('/admin/checkin/scan', input)),
+    manual: (bookingId: string) =>
+      unwrap(apiClient.post<ApiResponse<CheckinResult>>(`/admin/checkin/bookings/${bookingId}`)),
   },
 
   announcements: {

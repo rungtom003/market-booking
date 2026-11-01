@@ -18,6 +18,7 @@ import {
   RoundDetail,
   StallDayOverride,
   addMarketDaysSchema,
+  checkinWindowSchema,
   createRoundSchema,
   setStallDayOverrideSchema,
   updateMarketDaySchema,
@@ -34,6 +35,7 @@ class UpdateRoundDto extends createZodDto(updateRoundSchema) {}
 class AddMarketDaysDto extends createZodDto(addMarketDaysSchema) {}
 class UpdateMarketDayDto extends createZodDto(updateMarketDaySchema) {}
 class SetStallDayOverrideDto extends createZodDto(setStallDayOverrideSchema) {}
+class CheckinWindowDto extends createZodDto(checkinWindowSchema) {}
 
 @ApiTags('admin / rounds')
 @ApiBearerAuth()
@@ -133,6 +135,17 @@ export class RoundAdminController {
     @Body() body: UpdateMarketDayDto,
   ): Promise<RoundDetail> {
     return this.days.update(admin, id, dayId, body);
+  }
+
+  @Put(':id/market-days/:dayId/checkin-window')
+  @ApiOperation({ summary: 'ตั้งเวลาเปิด/ปิด check-in ของวันขาย (null = ทั้งวัน)' })
+  setCheckinWindow(
+    @CurrentAdmin() admin: AdminPrincipal,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('dayId', ParseUUIDPipe) dayId: string,
+    @Body() body: CheckinWindowDto,
+  ): Promise<RoundDetail> {
+    return this.days.setCheckinWindow(admin, id, dayId, body);
   }
 
   @Delete(':id/market-days/:dayId')

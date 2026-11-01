@@ -14,6 +14,16 @@ export interface BookingChangedEvent {
   paymentDueAt: Date | null;
 }
 
+/** เจ้าหน้าที่ check-in การจองแล้ว (Phase 10) — realtime ส่ง `checkin:updated` */
+export interface BookingCheckedInEvent {
+  bookingId: string;
+  marketId: string;
+  marketDayId: string;
+  stallId: string;
+  vendorId: string;
+  checkedInAt: Date;
+}
+
 /** Event ภายในของการจอง (`booking.changed`) — Service ไม่เรียก Gateway/Queue ตรง */
 @Injectable()
 export class BookingEvents {
@@ -29,5 +39,18 @@ export class BookingEvents {
 
   emitChanged(events: readonly BookingChangedEvent[]): void {
     this.channel.emit(events);
+  }
+
+  private readonly checkedInChannel = new EventChannel<BookingCheckedInEvent>(
+    'booking.checked_in',
+    new Logger(BookingEvents.name),
+  );
+
+  onCheckedIn(listener: (event: BookingCheckedInEvent) => void | Promise<void>): () => void {
+    return this.checkedInChannel.on(listener);
+  }
+
+  emitCheckedIn(event: BookingCheckedInEvent): void {
+    this.checkedInChannel.emit([event]);
   }
 }

@@ -179,7 +179,7 @@ market-booking/
 │   │   │       ├── booking/
 │   │   │       ├── payment/
 │   │   │       ├── waitlist/
-│   │   │       ├── checkin/
+│   │   │       ├── checkin/     # QR check-in, NoShowService + queue noshow (Phase 10)
 │   │   │       ├── notify/      # LINE, SMS adapters + queue
 │   │   │       ├── report/
 │   │   │       ├── audit/
@@ -332,7 +332,8 @@ modules/booking/
 | market_id | uuid FK | เก็บซ้ำกับ round เพื่อบังคับ unique (market, date) ระดับ DB |
 | round_id | uuid FK | |
 | market_date | date | unique ต่อ (market, date) เฉพาะวันที่ไม่ยกเลิก (partial index `uq_market_day_date`) |
-| checkin_open_at, checkin_close_at | timestamptz null | ใช้ตัดสิน No-show |
+| checkin_open_at, checkin_close_at | timestamptz null | ช่วงเวลา check-in — null = 00:00 / 24:00 ของวันขาย (เวลาไทย); ใช้ตัดสิน No-show |
+| noshow_processed_at | timestamptz null | worker นับ No-show ของวันนี้แล้ว (กันนับซ้ำ; หลังจากนี้แก้เวลา check-in ไม่ได้) |
 | is_cancelled | boolean | |
 
 **`stall_day_overrides`** (optional) — stall_id, market_day_id, price_override, is_closed
@@ -354,7 +355,8 @@ modules/booking/
 | cancel_reason | text null | |
 | cancelled_by_admin_id | uuid null | |
 | checked_in_at | timestamptz null | |
-| checkin_token | varchar(64) unique null | สำหรับ QR |
+| noshow_at | timestamptz null | ยืนยันแล้วแต่ไม่ check-in ภายในเวลา — เวลาที่ระบบนับ |
+| checkin_token | varchar(64) unique null | ข้อความใน QR — ค่าสุ่ม 24 byte (base64url 32 ตัว) สร้างตอนเป็น `CONFIRMED` |
 | version | int | optimistic lock |
 
 ```sql
@@ -542,6 +544,13 @@ Vendor กด "ยืนยันการจอง" → POST /bookings/:id/conf
 3. หลัง `checkin_close_at` Worker ตรวจผู้ไม่ Check-in → `noshow_count + 1`
 4. `noshow_count` ถึง `noshow_threshold` → ระงับสิทธิ์ `noshow_suspend_days` วัน → แจ้งผู้ค้า
 
+กติกาที่ใช้จริง (Phase 10):
+- ช่วงเวลา check-in ต่อวันขาย ตั้งที่หน้ารอบการจอง (`PUT /admin/rounds/:id/market-days/:dayId/checkin-window`) — ไม่ตั้ง = ทั้งวันขาย 00:00–24:00 เวลาไทย (`checkinWindow()` ใน shared); แก้ไม่ได้หลังนับ No-show แล้ว
+- สแกน: เจ้าหน้าที่เลือกวันขาย (ค่าเริ่มต้นวันนี้) แล้วสแกน — token ไม่พบ/ตลาดอื่น/การจองยกเลิกแล้ว → `CHECKIN_INVALID`; ของวันอื่น → `CHECKIN_WRONG_DAY`; ก่อนเปิด/หลังปิด → `CHECKIN_NOT_OPEN`/`CHECKIN_CLOSED`; check-in แล้ว → ตอบ `alreadyCheckedIn: true` (ไม่นับซ้ำ แม้นอกเวลา) — `UPDATE … WHERE checked_in_at IS NULL` สแกนพร้อมกันนับครั้งเดียว; audit `booking.checkin` (`method: scan|manual`)
+- สำรองเมื่อสแกนไม่ได้: ค้นหารหัสล็อค/ชื่อ/ร้าน/เบอร์ในรายการของวัน แล้วกดเช็คอิน (`POST /admin/checkin/bookings/:id` กติกาเดียวกัน)
+- No-show (worker `noshow` ทุก 5 นาที): วันขายที่ปิด check-in แล้ว (ไม่เกิน 3 วัน — ไม่ย้อนนับข้อมูลก่อนมีระบบ) จองวันด้วย `noshow_processed_at` → การจอง `CONFIRMED` ที่ไม่ check-in ได้ `noshow_at` → ผู้ค้า `noshow_count + 1` **ครั้งเดียวต่อวันขาย** (แม้จองหลายล็อค) + audit `vendor.noshow` (SYSTEM); การจองที่ยังไม่ชำระไม่นับ
+- ครบทุก `noshow_threshold` ครั้ง (3, 6, 9, … — ตัวนับสะสมไว้ใช้ในรายงาน) และผู้ค้ายัง APPROVED → ระงับ `noshow_suspend_days` วัน (`vendor.suspend` โดย SYSTEM, แจ้ง `vendor.suspended` พร้อมเหตุผล); ไม่ครบ → แจ้ง `booking.no_show` (ครั้งที่เท่าไร เหลืออีกกี่ครั้ง) — การจองอื่นที่มีอยู่ไม่ถูกยกเลิก
+
 ---
 
 ## 10. Realtime Design
@@ -566,6 +575,7 @@ Vendor กด "ยืนยันการจอง" → POST /bookings/:id/conf
 | S → C | `round:changed` | `{ roundId, openAt, closeAt, status }` |
 | S → C | `booking:changed` | `{ bookingId, marketDayId, stallId, status, holdExpiresAt, paymentDueAt }` (เฉพาะห้อง vendor ของเจ้าของ) |
 | S → C | `waitlist:offer` | `{ waitlistId, bookingId, marketDayId, stallCode, expiresAt }` (ห้อง `vendor:{id}` — มาพร้อม `booking:changed` ของ HOLD ใหม่) |
+| S → C | `checkin:updated` | `{ bookingId, marketDayId, stallId, checkedInAt }` (ห้อง `admin:{marketId}` + `vendor:{id}` เจ้าของ — ผัง/หน้าเช็คอินของ admin และหน้า QR ผู้ค้าโหลดใหม่) |
 | S → C | `server:time` | `{ now }` (ส่งตอน connect) |
 | S → C (admin) | `vendor:registered` (`{ vendorId }` เมื่อมีผู้ค้ารออนุมัติ — ไม่มีข้อมูลส่วนตัว), `payment:submitted` (`{ paymentId, bookingId }` เมื่อผู้ค้าส่งสลิป) | สำหรับ badge แจ้งเตือน |
 
@@ -625,7 +635,7 @@ Vendor กด "ยืนยันการจอง" → POST /bookings/:id/conf
 | GET | `/bookings/:id/payment` | ยอด, `paymentDueAt`, `promptpay: { id, payload }` (payload EMVCo สำหรับวาด QR; `null` ถ้ายังไม่ตั้ง `promptpay_id`) และประวัติการชำระทั้งหมด |
 | POST | `/bookings/:id/payments/slip-upload` | `{ contentType, size }` → presigned PUT (key `vendors/<vendorId>/slips/<bookingId>/<uuid>`) — เฉพาะการจองที่รอชำระ |
 | POST | `/bookings/:id/payments` | `{ slipImageKey }` → การจอง `PENDING_VERIFY` + payment `PENDING` (เลยกำหนด → `PAYMENT_DUE_PASSED`) |
-| GET | `/bookings/:id/checkin-qr` | |
+| GET | `/bookings/:id/checkin-qr` | QR (`token`) + ช่วงเวลา check-in + `checkedInAt`/`noshow` — เฉพาะของตัวเองที่ `CONFIRMED` (อื่นๆ → `INVALID_STATE_TRANSITION`) |
 | GET / POST / DELETE | `/waitlists` / `/waitlists` / `/waitlists/:id` | คิวของฉัน (พร้อม `ahead` = คิวก่อนหน้า), เข้าคิว `{ marketDayId, stallId | zoneId }`, ออกจากคิว (ได้สิทธิ์อยู่ = สละ HOLD) |
 | GET | `/announcements` | ประกาศที่กำลังแสดงของตลาดตัวเอง (`publish_at ≤ now < expire_at`) ปักหมุดก่อนแล้วใหม่สุดก่อน ≤ 20 รายการ — ผู้ค้าทุกสถานะ |
 
@@ -658,7 +668,8 @@ Vendor กด "ยืนยันการจอง" → POST /bookings/:id/conf
 | GET | `/admin/payments?status=PENDING&page=` (รอตรวจ: เก่าสุดก่อน, มี URL รูปสลิปอายุสั้น — สิทธิ์ `PAYMENTS_VERIFY`) |
 | POST | `/admin/payments/:id/approve` (→ `CONFIRMED` + `checkin_token`) · `/reject` (`{ reason }` → `PENDING_PAYMENT` + กำหนดชำระใหม่) |
 | POST | `/admin/payments/cash` (`{ bookingId, amount? }` รับเงินสด — การจอง HOLD/รอชำระ/รอตรวจ → `CONFIRMED`) |
-| POST | `/admin/checkin/scan` |
+| GET | `/admin/checkin?date=YYYY-MM-DD` (วันขายของวันนั้น + การจองที่ยืนยันแล้วพร้อมสถานะ check-in; ไม่มีวันขาย = `null`) · POST `/admin/checkin/scan` (`{ marketDayId, token }`) · POST `/admin/checkin/bookings/:id` (ค้นหาแล้วกด) — สิทธิ์ `CHECKIN` |
+| PUT | `/admin/rounds/:id/market-days/:dayId/checkin-window` (`{ checkinOpenAt, checkinCloseAt }` null = ค่าเริ่มต้น; audit `market_day.checkin_window`) — สิทธิ์ `ROUNDS_MANAGE` |
 | GET | `/admin/reports/dashboard` (ผู้ค้ารออนุมัติ, สลิปรอตรวจ, อัตราการจอง + รายได้ของรอบปัจจุบัน) |
 | GET | `/admin/reports/revenue` (`groupBy=day\|round\|zone`), `/occupancy` (`groupBy=day\|zone`), `/vendors` (`sort=bookings\|revenue\|cancelled\|noshow`) — ทุกตัวรับ `from`, `to` (วันขาย), `roundId`, `format=json\|xlsx\|csv` (ไฟล์ลง audit `report.export`) |
 | CRUD | `/admin/users` |
@@ -676,6 +687,8 @@ Code ของผู้ค้า (เพิ่มใน Phase 2.1): `PHONE_ALREA
 
 Code ของการตั้งค่าตลาด (เพิ่มใน Phase 3.1): `STALL_CODE_TAKEN` (`details.codes`), `LAYOUT_OUTDATED` (Phase 9.1 — มีคนบันทึกผังก่อน, `details.version` ล่าสุด), `RESOURCE_IN_USE` (ลบไม่ได้เพราะมีข้อมูลอ้างถึง — `details` เป็นจำนวน เช่น `{ bookings, waitlists }`)
 
+Code ของ check-in (Phase 10): `CHECKIN_INVALID` (404 — `details.status` ถ้าการจองถูกยกเลิก), `CHECKIN_WRONG_DAY` (`details.marketDate`), `CHECKIN_NOT_OPEN` (`details.openAt`), `CHECKIN_CLOSED` (`details.closeAt`)
+
 Code ของคิวรอ (Phase 9.2): `WAITLIST_NOT_NEEDED` (ยังว่าง จองได้เลย), `WAITLIST_ALREADY_JOINED`, `WAITLIST_LIMIT_REACHED` (`details.limit`)
 
 Code ของการชำระเงิน (เพิ่มใน Phase 5.1): `PAYMENT_DUE_PASSED` (ส่งสลิปหลังเลย `payment_due_at` — การจองเป็น EXPIRED); สลิปผิด → `UPLOAD_INVALID` (`details.field = slipImageKey`)
@@ -691,8 +704,8 @@ Code ของรอบการจอง (เพิ่มใน Phase 3.2): `MA
 | 400 | `VALIDATION_ERROR` (`details` = `[{ path, message, code }]` รายฟิลด์), `BAD_REQUEST`, `OTP_INVALID`, `OTP_EXPIRED`, `UPLOAD_INVALID` |
 | 401 | `UNAUTHORIZED` (token หาย/ผิด/หมดอายุ → client ลอง refresh), `INVALID_CREDENTIALS` |
 | 403 | `FORBIDDEN`, `VENDOR_NOT_APPROVED`, `VENDOR_SUSPENDED` |
-| 404 | `NOT_FOUND` |
-| 409 | `CONFLICT`, `USERNAME_TAKEN`, `LINE_ALREADY_LINKED`, `PHONE_ALREADY_REGISTERED`, `STALL_CODE_TAKEN`, `LAYOUT_OUTDATED`, `WAITLIST_NOT_NEEDED`, `WAITLIST_ALREADY_JOINED`, `WAITLIST_LIMIT_REACHED`, `RESOURCE_IN_USE`, `MARKET_DATE_TAKEN`, `ROUND_ALREADY_OPENED`, `PAYMENT_DUE_PASSED`, `ROUND_NOT_OPEN`, `STALL_TAKEN`, `STALL_UNAVAILABLE`, `QUOTA_EXCEEDED`, `HOLD_EXPIRED`, `INVALID_STATE_TRANSITION`, `CANCEL_WINDOW_PASSED` |
+| 404 | `NOT_FOUND`, `CHECKIN_INVALID` |
+| 409 | `CONFLICT`, `USERNAME_TAKEN`, `LINE_ALREADY_LINKED`, `PHONE_ALREADY_REGISTERED`, `STALL_CODE_TAKEN`, `LAYOUT_OUTDATED`, `WAITLIST_NOT_NEEDED`, `WAITLIST_ALREADY_JOINED`, `WAITLIST_LIMIT_REACHED`, `RESOURCE_IN_USE`, `MARKET_DATE_TAKEN`, `ROUND_ALREADY_OPENED`, `PAYMENT_DUE_PASSED`, `ROUND_NOT_OPEN`, `STALL_TAKEN`, `STALL_UNAVAILABLE`, `QUOTA_EXCEEDED`, `HOLD_EXPIRED`, `INVALID_STATE_TRANSITION`, `CANCEL_WINDOW_PASSED`, `CHECKIN_WRONG_DAY`, `CHECKIN_NOT_OPEN`, `CHECKIN_CLOSED` |
 | 422 | `CATEGORY_NOT_ALLOWED` |
 | 429 | `RATE_LIMITED`, `ACCOUNT_LOCKED` |
 | 500 | `INTERNAL_ERROR` (ไม่ส่งข้อความจริงออกไป — ดูใน log ด้วย `x-request-id`) |
@@ -950,6 +963,10 @@ VITE_LINE_LIFF_ID=        (ฝั่ง web — ว่าง = ซ่อนป�
 | 2026-11-01 | เข้าคิวได้เฉพาะล็อค/โซนที่เต็ม, คิวที่ไม่มีสิทธิ์ตอนให้สิทธิ์ข้ามแต่ยังรอต่อ, จำกัด 5 คิวต่อผู้ค้าต่อวัน | คิวมีไว้เมื่อจองเองไม่ได้; ผู้ค้าที่เกินโควตาวันนี้อาจมีสิทธิ์ภายหลัง (ยกเลิกล็อคอื่น) |
 | 2026-11-01 | ประกาศส่ง LINE ด้วย push ทีละคนผ่านคิว `notification` (ผู้ค้า APPROVED ที่เชื่อม LINE, dedupe ต่อประกาศ+ผู้ค้า) แทน broadcast API ของ LINE OA และไม่ส่ง SMS แทน | broadcast ของ OA ส่งถึงทุกคนที่เพิ่มเพื่อน (รวมคนที่ไม่ใช่ผู้ค้า/ตลาดอื่น) และไม่มี log ต่อคน; ใช้ retry/log เดิมของ Phase 7 ได้; ประกาศอาจยาว — ค่า SMS สูงและผู้ค้าเห็นในเว็บอยู่แล้ว |
 | 2026-11-01 | ส่ง LINE ของประกาศจาก reminder tick: จองด้วย `broadcasted_at` แบบมีเงื่อนไข (ส่งครั้งเดียวแม้มีหลาย instance), ยังไม่ตั้ง LINE OA = รอไว้ | ประกาศตั้งเวลาล่วงหน้าได้โดยไม่ต้องมี job แยก; แก้ประกาศหลังส่งแล้วไม่ส่งซ้ำ; ตั้ง LINE ทีหลังประกาศที่ยังแสดงอยู่ก็ยังส่งได้ |
+| 2026-11-01 | QR check-in = `checkin_token` สุ่ม 24 byte เก็บใน DB (unique) แทนการเซ็นข้อความด้วย HMAC | เดาไม่ได้เท่ากับลายเซ็น แต่ยกเลิก/หมดอายุได้ทันทีจาก DB และไม่ต้องดูแลกุญแจ; การตรวจ "วันอื่น/ยกเลิกแล้ว" ต้องอ่าน DB อยู่แล้ว |
+| 2026-11-01 | ไม่ตั้งเวลา check-in = ทั้งวันขาย (00:00–24:00 เวลาไทย) แทน null = ไม่เปิด | ใช้งานได้ทันทีโดยไม่ต้องตั้งทุกวัน; No-show นับหลังจบวันขาย |
+| 2026-11-01 | No-show นับครั้งเดียวต่อวันขายต่อผู้ค้า, ระงับเมื่อครบทุก `noshow_threshold` ครั้ง (count % threshold) ไม่รีเซ็ตตัวนับ, ย้อนนับไม่เกิน 3 วัน | จองหลายล็อคแล้วไม่มาไม่ควรถูกระงับในวันเดียว; ตัวนับสะสมใช้ในรายงาน ส่วนการระงับรอบถัดไปต้องไม่มาอีก threshold ครั้ง; เปิดใช้ครั้งแรกไม่ลงโทษข้อมูลเก่าที่ไม่มีระบบ check-in |
+| 2026-11-01 | อ่าน QR ฝั่ง admin ด้วย `jsqr` (กล้องผ่าน `getUserMedia` + อ่านเฟรมเอง, รูปผ่าน canvas) แทน `html5-qrcode` และโหลดแบบ lazy | ทดสอบ token สุ่ม 150 ตัว: html5-qrcode 2.3.8 อ่าน QR ที่สร้างถูกต้องไม่ได้ 3–8% ส่วน jsQR 0/453; ตัวอ่าน 130 kB โหลดเฉพาะตอนสแกน (bundle หลัก +23 kB) |
 
 ### Open Questions
 - [ ] ใช้กับตลาดเดียวหรือหลายตลาด (ตอนนี้ schema รองรับแล้ว แต่ UI ยังเป็นตลาดเดียว)

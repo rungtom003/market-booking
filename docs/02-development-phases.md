@@ -74,7 +74,7 @@
 | 9.1 | ↳ Map Editor (ลากวาง) | ✅ DONE | 2026-11-01 | 2026-11-01 |
 | 9.2 | ↳ Waitlist | ✅ DONE | 2026-11-01 | 2026-11-01 |
 | 9.3 | ↳ Announcements | ✅ DONE | 2026-11-01 | 2026-11-01 |
-| 10 | Check-in & No-show | ⬜ TODO | | |
+| 10 | Check-in & No-show | ✅ DONE | 2026-11-01 | 2026-11-01 |
 | 11 | Hardening & Scale | ⬜ TODO | | |
 
 **Milestone MVP** = Phase 0 – 6 (สมัคร → อนุมัติ → ตั้งค่าตลาด → จอง Realtime → ชำระเงิน → ขึ้นระบบจริง)
@@ -781,19 +781,28 @@
 ---
 
 ## Phase 10 — Check-in & No-show
-**สถานะ:** ⬜ TODO · **Dependencies:** Phase 9 · **เริ่ม:** – · **เสร็จ:** –
+**สถานะ:** ✅ DONE · **Dependencies:** Phase 9 · **เริ่ม:** 2026-11-01 · **เสร็จ:** 2026-11-01
 
 **Tasks**
-- [ ] QR จาก `checkin_token` (signed) ในหน้า "การจองของฉัน"
-- [ ] Admin โหมดมือถือ: สแกน QR ด้วยกล้อง (เช่น `html5-qrcode`) + ค้นหาด้วยรหัสล็อค/เบอร์โทร (สำรอง)
-- [ ] ตั้ง `checkin_open_at/close_at` ต่อวันขาย
-- [ ] Worker หลังปิด check-in: นับ No-show → ระงับตาม `noshow_threshold`/`noshow_suspend_days` → แจ้งผู้ค้า
-- [ ] ผัง realtime วันขาย: แสดงล็อคที่ check-in แล้ว
+- [x] QR จาก `checkin_token` (signed) ในหน้า "การจองของฉัน"
+- [x] Admin โหมดมือถือ: สแกน QR ด้วยกล้อง (เช่น `html5-qrcode`) + ค้นหาด้วยรหัสล็อค/เบอร์โทร (สำรอง)
+- [x] ตั้ง `checkin_open_at/close_at` ต่อวันขาย
+- [x] Worker หลังปิด check-in: นับ No-show → ระงับตาม `noshow_threshold`/`noshow_suspend_days` → แจ้งผู้ค้า
+- [x] ผัง realtime วันขาย: แสดงล็อคที่ check-in แล้ว
 
 **Acceptance Criteria**
 - สแกน QR ซ้ำ → แจ้งว่า check-in แล้ว (ไม่นับซ้ำ); QR วันอื่น → ปฏิเสธ
 
-**Agent Notes:** –
+**Agent Notes:**
+- ✅ AC: `checkin.int-spec.ts` — สแกนครั้งแรก `alreadyCheckedIn: false` → สแกนซ้ำ (คนละเจ้าหน้าที่) `alreadyCheckedIn: true` เวลาเดิม, audit `booking.checkin` 1 รายการ; QR ของวันพรุ่งนี้ → 409 `CHECKIN_WRONG_DAY` (`details.marketDate`); token ไม่รู้จัก/ตลาดอื่น/การจองยกเลิก → 404 `CHECKIN_INVALID`; E2E `admin-checkin.spec.ts`: สแกนซ้ำขึ้น "เช็คอินแล้ว · ล็อค A2 … ไม่นับซ้ำ" และตัวนับไม่เพิ่ม
+- test อื่น: QR เฉพาะของตัวเองที่ยืนยันแล้ว + ช่วงเวลาค่าเริ่มต้น 00:00–24:00 เวลาไทย; ตั้งเวลาเช็คอิน → ก่อนเปิด `CHECKIN_NOT_OPEN` / หลังปิด `CHECKIN_CLOSED` / ช่วงว่าง 400 / STAFF 403; ค้นหาแล้วกด; No-show: นับครั้งเดียวต่อวัน (2 ล็อค = +1), ไม่นับการจองที่ยังไม่ชำระ/ที่เช็คอินแล้ว, ครบเกณฑ์ → SUSPENDED 14 วัน (SYSTEM) + แจ้ง `vendor.suspended` แทน `booking.no_show`, รอบถัดไปไม่นับซ้ำ, วันเก่ากว่า 3 วันไม่ย้อนนับ, แก้เวลาเช็คอินหลังนับแล้ว 409
+- API (`modules/checkin/`): `CheckinService` (`GET /bookings/:id/checkin-qr`, `GET /admin/checkin?date=`, `POST /admin/checkin/scan`, `POST /admin/checkin/bookings/:id` — สิทธิ์ `CHECKIN`), `NoShowService` + `NoShowProcessor` (queue `noshow` ทุก 5 นาที), `PUT /admin/rounds/:id/market-days/:dayId/checkin-window` (`ROUNDS_MANAGE`); migration `market_days.noshow_processed_at`, `bookings.noshow_at`; error code ใหม่ 4 ตัว; template `booking.no_show`; `Booking.checkedInAt` ในการจองของผู้ค้าและผังของ admin
+- Realtime: `BookingEvents.emitCheckedIn` → socket `checkin:updated` ไปห้อง admin ของตลาด + ห้องผู้ค้า — ผังจัดการการจอง/หน้าเช็คอิน (เจ้าหน้าที่หลายเครื่อง) และหน้า QR ของผู้ค้าเปลี่ยนเองไม่ต้องรีเฟรช
+- เว็บผู้ค้า: การจองที่ยืนยันแล้วมีปุ่ม "QR เช็คอินหน้างาน" → `/bookings/:id/checkin` (QR ใหญ่, ช่วงเวลาเช็คอิน, เช็คอินแล้ว/ไม่มา); รายการแสดง "✓ เช็คอินแล้ว"
+- Admin: เมนู "เช็คอินหน้างาน" (`/checkin`, ใช้บนมือถือได้ — E2E ตรวจที่ 360px ไม่มี scroll แนวนอน): เลือกวันขาย, ตัวนับเช็คอินแล้ว X/Y, เปิดกล้องหลัง (ปิดเมื่อออกจากหน้า), สแกนจากรูป, ผลการสแกนตัวใหญ่ (สำเร็จ/เช็คอินแล้ว/ข้อผิดพลาดภาษาไทย), สแกนชิ้นเดิมซ้ำใน 3 วินาทีไม่ส่งซ้ำ, ค้นหา + ยืนยันก่อนกดเช็คอิน; หน้ารอบการจองมีคอลัมน์/ปุ่ม "เวลาเช็คอิน"; ผังวันขายมีสถานะ "เช็คอินแล้ว" (สีเขียวเข้ม)
+- ตัวอ่าน QR: เริ่มด้วย `html5-qrcode` 2.3.8 แต่ E2E ล้มเป็นพักๆ — ทดสอบแยก token สุ่ม 150 ตัว อ่าน QR ถูกต้องไม่ได้ 3–8% จึงเปลี่ยนเป็น `jsqr` 1.4.0 (0/453) อ่านเฟรมจาก `getUserMedia` เอง (`lib/qr-reader.ts`), โหลดแบบ lazy 130 kB; เจอบั๊ก React StrictMode เปิดกล้องซ้อน → `AbortSignal` (E2E ใช้กล้องจำลองของ Chrome ตรวจว่าเปิด/ปิดได้)
+- ข้อจำกัด: ยังไม่ได้ทดสอบสแกนด้วยกล้องมือถือจริง (E2E ใช้กล้องจำลอง + สแกนจากรูป QR จริงของผู้ค้า) — ต้อง HTTPS บน production (getUserMedia); ไม่มีปุ่มยกเลิกการเช็คอิน/แก้ No-show ย้อนหลัง (แก้ใน DB หรือปลดระงับจากหน้าผู้ค้า); ผู้ค้าถูกระงับยังเห็น QR ของการจองเดิมไม่ได้ (guard ผู้ค้าที่อนุมัติแล้ว) แต่การจองเดิมไม่ถูกยกเลิก
+- ทดสอบ: unit 220 (+2 template), integration 276 (+4 `checkin.int-spec.ts`), E2E 34 (+1)
 
 ---
 
@@ -867,3 +876,5 @@
 | 2026-11-01 | 9.2 | ✅ DONE | คิวรอ: ส่งสิทธิ์เป็น HOLD ในชื่อผู้ค้า (ฟัง booking.changed, ล็อค advisory, ตรวจโควตา/ประเภทสินค้า/สถานะ), ส่งต่อเมื่อหมดเวลา/สละสิทธิ์, `waitlist:offer` + LINE/SMS, UI ผู้ค้า (bottom sheet + การจองของฉัน) และ admin (แผงคิวรอ); AC สิทธิ์วนครบ 3 คิวแล้วล็อคว่าง — unit 215 / integration 268 / E2E 32 — ถัดไป: 9.3 Announcements |
 | 2026-11-01 | 9.3 | 🟨 IN PROGRESS | เริ่ม Announcements: CRUD + ช่วงเวลาแสดง/ปักหมุด, การ์ดหน้าแรกผู้ค้า, ตัวเลือกส่ง LINE ครั้งเดียวเมื่อถึงเวลา |
 | 2026-11-01 | 9.3 | ✅ DONE | ประกาศ: API ผู้ค้า + admin CRUD (audit, สิทธิ์ `ANNOUNCEMENTS_MANAGE`), ส่ง LINE ถึงผู้ค้าที่เชื่อม LINE ผ่านคิวแจ้งเตือน (ครั้งเดียว, รอเมื่อยังไม่ตั้ง LINE OA), การ์ดหน้าแรกผู้ค้า, หน้า admin — unit 218 / integration 272 / E2E 33 — Phase 9 ✅ ถัดไป: Phase 10 Check-in & No-show (Phase 6 ยังรอ deploy บน VPS จริง) |
+| 2026-11-01 | 10 | 🟨 IN PROGRESS | เริ่ม Check-in & No-show: QR check-in ของผู้ค้า, หน้าสแกน/ค้นหาของเจ้าหน้าที่ (มือถือ), เวลา check-in ต่อวันขาย, worker นับ No-show + ระงับอัตโนมัติ, ผังแสดงล็อคที่ check-in แล้ว |
+| 2026-11-01 | 10 | ✅ DONE | QR check-in (token สุ่มใน DB) + หน้าเช็คอินของเจ้าหน้าที่บนมือถือ (กล้อง/รูป/ค้นหา, jsQR), เวลาเช็คอินต่อวันขาย, worker No-show (ครั้งเดียวต่อวัน, ระงับเมื่อครบเกณฑ์, แจ้งเตือน), `checkin:updated` realtime + ผังแสดงเช็คอินแล้ว; AC สแกนซ้ำไม่นับซ้ำ/QR วันอื่นถูกปฏิเสธ — unit 220 / integration 276 / E2E 34 — ถัดไป: Phase 11 Hardening & Scale (Phase 6 ยังรอ deploy บน VPS จริง) |
