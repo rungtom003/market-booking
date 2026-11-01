@@ -92,7 +92,8 @@ test.describe('ผู้ค้าจองล็อค (จอ 360px)', () => {
     await holdPanel(winner).getByRole('button', { name: 'ยืนยันการจอง' }).click();
     // ต้องชำระเงิน → ไปหน้าชำระเงินทันที
     await expect(winner).toHaveURL(/\/bookings\/[0-9a-f-]+\/pay$/);
-    await expect(winner.getByRole('img', { name: 'QR พร้อมเพย์ ยอด 120 บาท' })).toBeVisible();
+    // ไม่อิง QR — DB ใหม่ (CI) ยังไม่ตั้ง promptpay_id จนกว่า admin-payments จะรัน
+    await expect(winner.getByRole('timer', { name: 'เวลาที่เหลือในการชำระเงิน' })).toBeVisible();
     await expect(stall(loser, 'B3')).toHaveAttribute('data-status', 'BOOKED', { timeout: 2_000 });
   });
 
