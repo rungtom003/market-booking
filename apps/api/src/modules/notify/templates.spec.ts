@@ -42,6 +42,10 @@ const samples = {
     template: 'booking.cancelled',
     params: { stallCode: 'A1', marketDate: '2026-11-21', reason: 'จัดเวที' },
   },
+  'waitlist.offer': {
+    template: 'waitlist.offer',
+    params: { stallCode: 'B4', marketDate: '2026-11-21', expiresAt: '2026-11-20T05:30:00.000Z' },
+  },
   'admin.vendor_registered': {
     template: 'admin.vendor_registered',
     params: { vendorName: 'สมชาย ใจดี' },

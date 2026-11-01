@@ -28,6 +28,10 @@ export type NotificationTemplate =
       template: 'booking.cancelled';
       params: { stallCode: string; marketDate: string; reason: string | null };
     }
+  | {
+      template: 'waitlist.offer';
+      params: { stallCode: string; marketDate: string; expiresAt: string };
+    }
   | { template: 'admin.vendor_registered'; params: { vendorName: string } }
   | {
       template: 'admin.payment_submitted';
@@ -140,6 +144,18 @@ export function renderTemplate(n: NotificationTemplate, ctx: RenderContext): Ren
         lines: [`วันขาย ${date}`, ...reasonLine(n.params.reason)],
         link: { label: 'การจองของฉัน', url: web('/bookings') },
         sms: `การจองล็อค ${n.params.stallCode} วันที่ ${date} ถูกยกเลิกโดยเจ้าหน้าที่`,
+      };
+    }
+    case 'waitlist.offer': {
+      const until = formatDateTimeTh(n.params.expiresAt);
+      return {
+        title: `ได้สิทธิ์ล็อค ${n.params.stallCode} จากคิวรอ`,
+        lines: [
+          `วันขาย ${formatIsoDateTh(n.params.marketDate, true)}`,
+          `ยืนยันภายใน ${until} น. ไม่เช่นนั้นสิทธิ์จะส่งต่อคิวถัดไป`,
+        ],
+        link: { label: 'ยืนยันการจอง', url: web('/bookings') },
+        sms: `ได้สิทธิ์ล็อค ${n.params.stallCode} ยืนยันภายใน ${until} น. ${web('/bookings')}`,
       };
     }
     case 'admin.vendor_registered':

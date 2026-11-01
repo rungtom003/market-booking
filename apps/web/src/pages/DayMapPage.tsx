@@ -5,12 +5,13 @@ import { formatIsoDateTh } from '@market-booking/shared';
 import type { Booking, MarketDayStall, MapZone } from '@market-booking/shared';
 import { StallMap, StallMapLegend } from '@market-booking/stall-map';
 import { MY_BOOKINGS_KEY, bookingApi, useMyBookings } from '../api/booking';
+import { WAITLIST_KEY, findOpenEntry, useMyWaitlists, waitlistApi } from '../api/waitlist';
 import { type MarketDayStallsData, marketDayKey, useMarketDayStalls } from '../api/market';
 import { Layout } from '../components/Layout';
 import { Alert, Button, Spinner } from '../components/ui';
 import { errorCode, errorMessage } from '../lib/errors';
 import { formatBaht, formatThaiDateTime, toMapStatus } from '../lib/format';
-import { useMarketDaySocket, useSocketConnected } from '../lib/realtime';
+import { useMarketDaySocket, useSocketConnected, useWaitlistOffer } from '../lib/realtime';
 import { formatCountdown, useCountdown } from '../lib/server-clock';
 
 type Notice = { tone: 'error' | 'success' | 'info' | 'warning'; text: string } | null;
@@ -62,6 +63,17 @@ export function DayMapPage() {
       refreshAll();
     },
     [refreshAll],
+  );
+  // ได้สิทธิ์จากคิวรอ → แถบยืนยัน (HOLD) ขึ้นเองจาก booking:changed; แจ้งให้รู้ว่ามาจากคิว
+  useWaitlistOffer(
+    useCallback(
+      (offer) =>
+        setNotice({
+          tone: 'success',
+          text: `ได้สิทธิ์ล็อค ${offer.stallCode} จากคิวรอ — กดยืนยันก่อนหมดเวลา`,
+        }),
+      [],
+    ),
   );
 
   // Optimistic เฉพาะการจอง: ล็อคเป็น "ของฉัน" ทันที แล้วย้อนกลับถ้า error
@@ -191,7 +203,13 @@ export function DayMapPage() {
         selected && (
           <StallSheet
             stall={selected}
+            marketDayId={marketDayId}
             zoneName={zoneById.get(selected.zoneId)?.name ?? '—'}
+            // เข้าคิวได้เมื่อรอบเผยแพร่แล้วและวันขายยังไม่ยกเลิก
+            canWait={data.round.phase !== null && !data.marketDay.isCancelled}
+            zoneFull={data.stalls
+              .filter((s) => s.zoneId === selected.zoneId)
+              .every((s) => s.status !== 'AVAILABLE')}
             canBook={data.round.phase === 'OPEN' && !data.marketDay.isCancelled}
             booking={hold.isPending}
             onBook={() => hold.mutate(selected)}
@@ -246,14 +264,20 @@ function RoundStatus({ data, onDue }: { data: MarketDayStallsData; onDue: () => 
 
 function StallSheet({
   stall,
+  marketDayId,
   zoneName,
+  canWait,
+  zoneFull,
   canBook,
   booking,
   onBook,
   onClose,
 }: {
   stall: MarketDayStall;
+  marketDayId: string;
   zoneName: string;
+  canWait: boolean;
+  zoneFull: boolean;
   canBook: boolean;
   booking: boolean;
   onBook: () => void;
@@ -303,7 +327,94 @@ function StallSheet({
         ) : (
           <Button disabled>ยังไม่เปิดจอง</Button>
         ))}
+      {canWait && !stall.mine && (stall.status === 'HOLD' || stall.status === 'BOOKED') && (
+        <WaitlistActions
+          marketDayId={marketDayId}
+          stall={stall}
+          zoneName={zoneName}
+          zoneFull={zoneFull}
+        />
+      )}
     </BottomPanel>
+  );
+}
+
+/** ล็อคไม่ว่าง → เข้าคิวรอล็อคนี้ (หรือทั้งโซนถ้าโซนเต็ม) / ดูลำดับ / ออกจากคิว (Overview §9.7) */
+function WaitlistActions({
+  marketDayId,
+  stall,
+  zoneName,
+  zoneFull,
+}: {
+  marketDayId: string;
+  stall: MarketDayStall;
+  zoneName: string;
+  zoneFull: boolean;
+}) {
+  const queryClient = useQueryClient();
+  const waitlists = useMyWaitlists();
+  const [error, setError] = useState<string | null>(null);
+  const done = () => {
+    setError(null);
+    void queryClient.invalidateQueries({ queryKey: WAITLIST_KEY });
+  };
+  const join = useMutation({
+    mutationFn: (target: { stallId: string } | { zoneId: string }) =>
+      waitlistApi.join({ marketDayId, ...target }),
+    onSuccess: done,
+    onError: (e) => setError(errorMessage(e)),
+  });
+  const leave = useMutation({
+    mutationFn: (id: string) => waitlistApi.leave(id),
+    onSuccess: done,
+    onError: (e) => setError(errorMessage(e)),
+  });
+  const stallEntry = findOpenEntry(waitlists.data, marketDayId, { stallId: stall.id });
+  const zoneEntry = findOpenEntry(waitlists.data, marketDayId, { zoneId: stall.zoneId });
+
+  const status = (entry: NonNullable<typeof stallEntry>, what: string) => (
+    <div className="flex items-center justify-between gap-2 rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-900">
+      <span>
+        {entry.status === 'NOTIFIED'
+          ? `ได้สิทธิ์${what}แล้ว — ยืนยันที่แถบด้านล่าง`
+          : `อยู่ในคิว${what} · ${entry.ahead === 0 ? 'คิวแรก' : `มีคิวก่อนหน้า ${entry.ahead}`}`}
+      </span>
+      <Button variant="ghost" loading={leave.isPending} onClick={() => leave.mutate(entry.id)}>
+        ออกจากคิว
+      </Button>
+    </div>
+  );
+
+  return (
+    <div className="flex flex-col gap-2 border-t border-gray-100 pt-2" aria-label="คิวรอ">
+      <p className="text-sm text-gray-600">
+        ล็อคว่างเมื่อไร ระบบจองให้คิวแรกอัตโนมัติ และแจ้งให้ยืนยันทาง LINE/SMS
+      </p>
+      {stallEntry ? (
+        status(stallEntry, 'ล็อคนี้')
+      ) : (
+        <Button
+          variant="secondary"
+          loading={join.isPending && join.variables && 'stallId' in join.variables}
+          onClick={() => join.mutate({ stallId: stall.id })}
+        >
+          เข้าคิวรอล็อคนี้
+        </Button>
+      )}
+      {zoneFull &&
+        (zoneEntry ? (
+          status(zoneEntry, `ทั้ง${zoneName}`)
+        ) : (
+          <Button
+            variant="secondary"
+            loading={join.isPending && join.variables && 'zoneId' in join.variables}
+            onClick={() => join.mutate({ zoneId: stall.zoneId })}
+          >
+            เข้าคิวรอทั้ง{zoneName}
+          </Button>
+        ))}
+      {error && <Alert>{error}</Alert>}
+    </div>
   );
 }
 

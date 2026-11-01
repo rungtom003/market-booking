@@ -13,6 +13,7 @@ import type {
   AdminUser,
   AdminUserListQuery,
   AdminVendorDetail,
+  AdminWaitlistEntry,
   AdminVendorListItem,
   AdminStallListQuery,
   AdminVendorListQuery,
@@ -260,6 +261,17 @@ export const adminApi = {
         })
       ).data,
     actions: () => unwrap(apiClient.get<ApiResponse<string[]>>('/admin/audit-logs/actions')),
+  },
+
+  waitlists: {
+    list: (marketDayId: string) =>
+      unwrap(
+        apiClient.get<ApiResponse<AdminWaitlistEntry[]>>(
+          `/admin/market-days/${marketDayId}/waitlists`,
+        ),
+      ),
+    remove: (id: string) =>
+      unwrap(apiClient.delete<ApiResponse<AdminWaitlistEntry>>(`/admin/waitlists/${id}`)),
   },
 
   payments: {

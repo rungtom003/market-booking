@@ -344,6 +344,8 @@ model Booking {
   marketDay        MarketDay  @relation(fields: [marketDayId], references: [id])
   cancelledByAdmin AdminUser? @relation("BookingCancelledBy", fields: [cancelledByAdminId], references: [id])
   payments         Payment[]
+  /// HOLD นี้สร้างให้ผู้ค้าจากคิวรอ (Phase 9.2)
+  waitlistOffer    Waitlist?
 
   // predicate ของ partial index ต้องเขียนในรูปที่ PostgreSQL normalize แล้ว (`= ANY (ARRAY[...])`)
   // ถ้าเขียน `IN (...)` (เหมือน §7.2) prisma migrate จะเห็นเป็น drift และสร้าง DROP/CREATE ทุก migration
@@ -383,23 +385,26 @@ model Payment {
 }
 
 model Waitlist {
-  id          String         @id @default(uuid(7)) @db.Uuid
-  vendorId    String         @map("vendor_id") @db.Uuid
-  marketDayId String         @map("market_day_id") @db.Uuid
+  id             String         @id @default(uuid(7)) @db.Uuid
+  vendorId       String         @map("vendor_id") @db.Uuid
+  marketDayId    String         @map("market_day_id") @db.Uuid
   /// เจาะจงล็อค หรือ null = ทั้งโซน
-  stallId     String?        @map("stall_id") @db.Uuid
-  zoneId      String?        @map("zone_id") @db.Uuid
-  position    Int
-  status      WaitlistStatus @default(WAITING)
-  notifiedAt  DateTime?      @map("notified_at") @db.Timestamptz(6)
-  expiresAt   DateTime?      @map("expires_at") @db.Timestamptz(6)
-  createdAt   DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt   DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+  stallId        String?        @map("stall_id") @db.Uuid
+  zoneId         String?        @map("zone_id") @db.Uuid
+  position       Int
+  status         WaitlistStatus @default(WAITING)
+  notifiedAt     DateTime?      @map("notified_at") @db.Timestamptz(6)
+  expiresAt      DateTime?      @map("expires_at") @db.Timestamptz(6)
+  /// HOLD ที่ระบบสร้างให้ตอนได้สิทธิ์ (NOTIFIED) — สถานะของ booking นี้เลื่อนคิวต่อ (FULFILLED/EXPIRED)
+  offerBookingId String?        @unique @map("offer_booking_id") @db.Uuid
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  vendor    Vendor    @relation(fields: [vendorId], references: [id])
-  marketDay MarketDay @relation(fields: [marketDayId], references: [id], onDelete: Cascade)
-  stall     Stall?    @relation(fields: [stallId], references: [id])
-  zone      Zone?     @relation(fields: [zoneId], references: [id])
+  vendor       Vendor    @relation(fields: [vendorId], references: [id])
+  marketDay    MarketDay @relation(fields: [marketDayId], references: [id], onDelete: Cascade)
+  stall        Stall?    @relation(fields: [stallId], references: [id])
+  zone         Zone?     @relation(fields: [zoneId], references: [id])
+  offerBooking Booking?  @relation(fields: [offerBookingId], references: [id])
 
   @@index([marketDayId, status, position])
   @@index([vendorId])

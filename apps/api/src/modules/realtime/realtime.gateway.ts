@@ -27,6 +27,7 @@ import type {
   SocketAck,
   StallUpdatedPayload,
   VendorRegisteredPayload,
+  WaitlistOfferPayload,
 } from '@market-booking/shared';
 import type { Namespace, Socket } from 'socket.io';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -39,6 +40,7 @@ import {
   NotifyService,
   type PaymentSubmittedEvent,
   type VendorStatusChangedEvent,
+  type WaitlistOfferedEvent,
 } from '../notify/notify.service';
 import { type RoundChangedEvent, RoundEvents } from '../round/round-events';
 import { VendorStatusService } from '../vendor/vendor-status.service';
@@ -80,6 +82,7 @@ export class RealtimeGateway
       this.roundEvents.onChanged((e) => this.onRoundChanged(e)),
       this.notify.onVendorStatusChanged((e) => this.onVendorStatusChanged(e)),
       this.notify.onPaymentSubmitted((e) => this.onPaymentSubmitted(e)),
+      this.notify.onWaitlistOffered((e) => this.onWaitlistOffered(e)),
     );
   }
 
@@ -207,6 +210,16 @@ export class RealtimeGateway
       paymentId: event.paymentId,
       bookingId: event.bookingId,
     } satisfies PaymentSubmittedPayload);
+  }
+
+  onWaitlistOffered(event: WaitlistOfferedEvent): void {
+    this.server.to(socketRoom.vendor(event.vendorId)).emit(SocketEvent.WAITLIST_OFFER, {
+      waitlistId: event.waitlistId,
+      bookingId: event.bookingId,
+      marketDayId: event.marketDayId,
+      stallCode: event.stallCode,
+      expiresAt: event.expiresAt.toISOString(),
+    } satisfies WaitlistOfferPayload);
   }
 
   // ───────────── ภายใน ─────────────

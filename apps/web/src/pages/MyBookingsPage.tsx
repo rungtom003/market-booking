@@ -1,15 +1,16 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Link } from 'react-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { BOOKING_STATUS_TH, formatIsoDateTh } from '@market-booking/shared';
-import type { Booking } from '@market-booking/shared';
+import { BOOKING_STATUS_TH, WAITLIST_STATUS_TH, formatIsoDateTh } from '@market-booking/shared';
+import type { Booking, WaitlistEntry } from '@market-booking/shared';
 import { MY_BOOKINGS_KEY, bookingApi, useMyBookings } from '../api/booking';
 import { useCurrentRound } from '../api/market';
+import { WAITLIST_KEY, useMyWaitlists, waitlistApi } from '../api/waitlist';
 import { Layout } from '../components/Layout';
 import { Alert, Button, Card, Spinner, linkButtonClass } from '../components/ui';
 import { errorMessage } from '../lib/errors';
 import { BOOKING_STATUS_STYLE, formatBaht, formatThaiDateTime } from '../lib/format';
-import { useMyBookingUpdates } from '../lib/realtime';
+import { useMyBookingUpdates, useWaitlistOffer } from '../lib/realtime';
 import { formatCountdown, useClockOffset, useCountdown } from '../lib/server-clock';
 
 type Notice = { tone: 'success' | 'error' | 'info'; text: string } | null;
@@ -22,6 +23,20 @@ export function MyBookingsPage() {
   // เจ้าหน้าที่ตรวจสลิป/ยกเลิก → สถานะในหน้านี้อัปเดตเอง
   useMyBookingUpdates();
   const [notice, setNotice] = useState<Notice>(null);
+  const waitlists = useMyWaitlists();
+  useWaitlistOffer(
+    useCallback(
+      (offer) =>
+        setNotice({
+          tone: 'success',
+          text: `ได้สิทธิ์ล็อค ${offer.stallCode} จากคิวรอ — กดยืนยันในรายการด้านล่างก่อนหมดเวลา`,
+        }),
+      [],
+    ),
+  );
+  const openWaitlists = waitlists.data?.filter(
+    (w) => w.status === 'WAITING' || w.status === 'NOTIFIED',
+  );
 
   return (
     <Layout title="การจองของฉัน">
@@ -43,6 +58,18 @@ export function MyBookingsPage() {
           </li>
         ))}
       </ul>
+      {openWaitlists && openWaitlists.length > 0 && (
+        <section className="flex flex-col gap-2">
+          <h2 className="text-base font-semibold text-gray-900">คิวรอล็อค</h2>
+          <ul className="flex flex-col gap-2" aria-label="คิวรอล็อค">
+            {openWaitlists.map((w) => (
+              <li key={w.id}>
+                <WaitlistCard entry={w} onNotice={setNotice} />
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
     </Layout>
   );
 }
@@ -165,5 +192,42 @@ function HoldCountdown({ until }: { until: string }) {
         {formatCountdown(remaining).replace(/^00:/, '')}
       </span>
     </p>
+  );
+}
+
+function WaitlistCard({
+  entry: w,
+  onNotice,
+}: {
+  entry: WaitlistEntry;
+  onNotice: (notice: Notice) => void;
+}) {
+  const queryClient = useQueryClient();
+  const leave = useMutation({
+    mutationFn: () => waitlistApi.leave(w.id),
+    onSuccess: () => {
+      onNotice({ tone: 'success', text: 'ออกจากคิวแล้ว' });
+      void queryClient.invalidateQueries({ queryKey: WAITLIST_KEY });
+      void queryClient.invalidateQueries({ queryKey: MY_BOOKINGS_KEY });
+    },
+    onError: (e) => onNotice({ tone: 'error', text: errorMessage(e) }),
+  });
+  const what = w.stall ? `ล็อค ${w.stall.code}` : `ทั้ง${w.zone.name}`;
+  return (
+    <Card className="flex items-center justify-between gap-2 text-sm text-gray-700">
+      <div>
+        <p className="font-semibold text-gray-900">
+          {what} · {formatIsoDateTh(w.marketDay.marketDate, true)}
+        </p>
+        <p>
+          {w.status === 'NOTIFIED' && w.expiresAt
+            ? `ได้สิทธิ์แล้ว — ยืนยันการจองด้านบนภายใน ${formatThaiDateTime(w.expiresAt)}`
+            : `${WAITLIST_STATUS_TH[w.status]} · ${w.ahead === 0 ? 'คิวแรก' : `มีคิวก่อนหน้า ${w.ahead}`}`}
+        </p>
+      </div>
+      <Button variant="ghost" loading={leave.isPending} onClick={() => leave.mutate()}>
+        ออกจากคิว
+      </Button>
+    </Card>
   );
 }

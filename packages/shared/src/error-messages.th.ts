@@ -40,6 +40,10 @@ export const ERROR_MESSAGES_TH: Record<ErrorCode, string | ((details: Details) =
   },
   LAYOUT_OUTDATED: 'มีผู้อื่นบันทึกผังตลาดไปก่อนแล้ว กรุณาโหลดผังล่าสุดแล้วแก้ใหม่',
   RESOURCE_IN_USE: 'ลบไม่ได้เพราะมีข้อมูลที่ใช้งานอยู่',
+  WAITLIST_NOT_NEEDED: 'ยังมีล็อคว่าง จองได้เลยไม่ต้องเข้าคิว',
+  WAITLIST_ALREADY_JOINED: 'คุณอยู่ในคิวนี้แล้ว',
+  WAITLIST_LIMIT_REACHED: (d) =>
+    `เข้าคิวได้ไม่เกิน ${typeof d?.limit === 'number' ? d.limit : 5} คิวต่อวันขาย`,
   MARKET_DATE_TAKEN: (d) => {
     const dates = Array.isArray(d?.dates) ? (d.dates as string[]) : [];
     if (dates.length === 0) return 'วันขายนี้มีอยู่แล้ว';

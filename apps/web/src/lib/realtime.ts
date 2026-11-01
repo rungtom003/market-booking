@@ -1,11 +1,16 @@
 import { useEffect, useSyncExternalStore } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { ErrorCode, SOCKET_NAMESPACE, SocketEvent } from '@market-booking/shared';
-import type { BookingChangedPayload, StallUpdatedPayload } from '@market-booking/shared';
+import type {
+  BookingChangedPayload,
+  StallUpdatedPayload,
+  WaitlistOfferPayload,
+} from '@market-booking/shared';
 import { type Socket, io } from 'socket.io-client';
 import { MY_BOOKINGS_KEY } from '../api/booking';
 import { type MarketDayStallsData, marketDayKey } from '../api/market';
 import { paymentKey } from '../api/payment';
+import { WAITLIST_KEY } from '../api/waitlist';
 import { refreshAccessToken } from './api-client';
 import { session } from './session';
 
@@ -101,6 +106,8 @@ export function useMarketDaySocket(marketDayId: string): void {
     const onBooking = (p: BookingChangedPayload) => {
       void queryClient.invalidateQueries({ queryKey: MY_BOOKINGS_KEY });
       void queryClient.invalidateQueries({ queryKey: paymentKey(p.bookingId) });
+      // HOLD จากคิวรอ ยืนยัน/หมดเวลา = สถานะคิวเปลี่ยน
+      void queryClient.invalidateQueries({ queryKey: WAITLIST_KEY });
     };
     const onVisible = () => {
       if (document.visibilityState === 'visible') refetch();
@@ -136,10 +143,13 @@ export function useMyBookingUpdates(): void {
     const onBooking = (p: BookingChangedPayload) => {
       void queryClient.invalidateQueries({ queryKey: MY_BOOKINGS_KEY });
       void queryClient.invalidateQueries({ queryKey: paymentKey(p.bookingId) });
+      // HOLD จากคิวรอ ยืนยัน/หมดเวลา = สถานะคิวเปลี่ยน
+      void queryClient.invalidateQueries({ queryKey: WAITLIST_KEY });
     };
     const resync = () => {
       void queryClient.invalidateQueries({ queryKey: MY_BOOKINGS_KEY });
       void queryClient.invalidateQueries({ queryKey: ['payment'] });
+      void queryClient.invalidateQueries({ queryKey: WAITLIST_KEY });
     };
     s.on(SocketEvent.BOOKING_CHANGED, onBooking);
     s.on('connect', resync);
@@ -148,4 +158,25 @@ export function useMyBookingUpdates(): void {
       s.off('connect', resync);
     };
   }, [queryClient]);
+}
+
+/**
+ * ได้สิทธิ์ล็อคจากคิวรอ (`waitlist:offer`) — HOLD ในชื่อผู้ค้าถูกสร้างแล้ว (มาพร้อม `booking:changed`)
+ * หน้าใช้แสดงข้อความแจ้งทันที; callback ควรคงที่ (useCallback)
+ */
+export function useWaitlistOffer(onOffer: (offer: WaitlistOfferPayload) => void): void {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    const s = vendorSocket();
+    const handler = (p: WaitlistOfferPayload) => {
+      void queryClient.invalidateQueries({ queryKey: WAITLIST_KEY });
+      void queryClient.invalidateQueries({ queryKey: MY_BOOKINGS_KEY });
+      onOffer(p);
+    };
+    s.on(SocketEvent.WAITLIST_OFFER, handler);
+    return () => {
+      s.off(SocketEvent.WAITLIST_OFFER, handler);
+    };
+  }, [queryClient, onOffer]);
 }

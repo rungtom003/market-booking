@@ -22,6 +22,19 @@ export interface PaymentSubmittedEvent {
   marketId: string;
 }
 
+/** ได้สิทธิ์ล็อคจากคิวรอ — ระบบสร้าง HOLD ให้แล้ว (Phase 9.2) */
+export interface WaitlistOfferedEvent {
+  waitlistId: string;
+  bookingId: string;
+  vendorId: string;
+  marketId: string;
+  marketDayId: string;
+  stallCode: string;
+  /** YYYY-MM-DD */
+  marketDate: string;
+  expiresAt: Date;
+}
+
 const BOOKING_INFO = {
   vendorId: true,
   cancelReason: true,
@@ -51,6 +64,11 @@ export class NotifyService implements OnModuleInit, OnModuleDestroy {
     this.logger,
   );
 
+  private readonly waitlistOfferChannel = new EventChannel<WaitlistOfferedEvent>(
+    'waitlist.offered',
+    this.logger,
+  );
+
   private unsubscribe?: () => void;
 
   constructor(
@@ -73,6 +91,27 @@ export class NotifyService implements OnModuleInit, OnModuleDestroy {
 
   onPaymentSubmitted(listener: (event: PaymentSubmittedEvent) => void): () => void {
     return this.paymentSubmittedChannel.on(listener);
+  }
+
+  onWaitlistOffered(listener: (event: WaitlistOfferedEvent) => void): () => void {
+    return this.waitlistOfferChannel.on(listener);
+  }
+
+  /** ได้สิทธิ์จากคิว → socket `waitlist:offer` + LINE/SMS (ต้องยืนยันภายในเวลา) */
+  async waitlistOffered(event: WaitlistOfferedEvent): Promise<void> {
+    this.waitlistOfferChannel.emit([event]);
+    await this.notifications.toVendor(
+      event.vendorId,
+      {
+        template: 'waitlist.offer',
+        params: {
+          stallCode: event.stallCode,
+          marketDate: event.marketDate,
+          expiresAt: event.expiresAt.toISOString(),
+        },
+      },
+      `waitlist.offer:${event.waitlistId}:${event.bookingId}`,
+    );
   }
 
   /** สลิปใหม่ → badge ของ admin + กลุ่ม LINE เจ้าหน้าที่ */

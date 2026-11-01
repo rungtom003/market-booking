@@ -83,3 +83,12 @@ export interface PaymentSubmittedPayload {
   paymentId: string;
   bookingId: string;
 }
+
+/** `waitlist:offer` → ห้อง `vendor:{id}`: ได้สิทธิ์ล็อคจากคิว (มี HOLD ในชื่อผู้ค้าแล้ว ยืนยันก่อน `expiresAt`) */
+export interface WaitlistOfferPayload {
+  waitlistId: string;
+  bookingId: string;
+  marketDayId: string;
+  stallCode: string;
+  expiresAt: string;
+}

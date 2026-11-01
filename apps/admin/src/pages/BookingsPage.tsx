@@ -30,6 +30,7 @@ import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import { DataGrid, type GridColDef, type GridPaginationModel } from '@mui/x-data-grid';
 import { adminApi } from '../api/admin';
+import { WaitlistPanel } from '../components/WaitlistPanel';
 import { errorMessage } from '../lib/errors';
 import { saveBlob } from '../lib/download';
 import { formatBaht, formatDateTime, formatPhone } from '../lib/format';
@@ -220,6 +221,8 @@ export function BookingsPage() {
           )}
         </Paper>
       )}
+
+      {dayId && <WaitlistPanel dayId={dayId} onDone={done} />}
 
       {selected && day.data && (
         <StallDialog

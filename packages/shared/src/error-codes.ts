@@ -27,6 +27,9 @@ export const ErrorCode = {
   /** รหัสล็อคซ้ำในตลาด — `details.codes` */
   STALL_CODE_TAKEN: 'STALL_CODE_TAKEN',
   LAYOUT_OUTDATED: 'LAYOUT_OUTDATED',
+  WAITLIST_NOT_NEEDED: 'WAITLIST_NOT_NEEDED',
+  WAITLIST_ALREADY_JOINED: 'WAITLIST_ALREADY_JOINED',
+  WAITLIST_LIMIT_REACHED: 'WAITLIST_LIMIT_REACHED',
   /** ลบไม่ได้เพราะมีข้อมูลอื่นอ้างถึง (เช่น ล็อคที่มีประวัติการจอง) — `details` บอกจำนวนที่อ้างถึง */
   RESOURCE_IN_USE: 'RESOURCE_IN_USE',
 

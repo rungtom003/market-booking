@@ -133,6 +133,13 @@ export async function adminRequest(request: APIRequestContext) {
       }
       return bookingId;
     },
+    async cancelBooking(id: string, reason: string) {
+      const res = await request.post(`${API_URL}/admin/bookings/${id}/cancel`, {
+        headers,
+        data: { reason },
+      });
+      expect(res.ok(), await res.text()).toBeTruthy();
+    },
     /** ผังทั้งชุดของ Map Editor (`GET /admin/stalls/layout`) */
     async layout() {
       const res = await request.get(`${API_URL}/admin/stalls/layout`, { headers });

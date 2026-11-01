@@ -83,6 +83,8 @@ export function useAdminMarketDaySocket(marketDayId: string | null): void {
     const refresh = () => {
       void queryClient.invalidateQueries({ queryKey: ['admin-day', marketDayId] });
       void queryClient.invalidateQueries({ queryKey: ['admin-bookings'] });
+      // ล็อคเปลี่ยน = คิวรออาจได้สิทธิ์/หมดเวลา
+      void queryClient.invalidateQueries({ queryKey: ['admin-waitlists', marketDayId] });
     };
     const join = () => {
       void s.emitWithAck(SocketEvent.MD_JOIN, { marketDayId });

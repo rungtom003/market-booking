@@ -72,7 +72,7 @@
 | 8 | Reports & Dashboard | ✅ DONE | 2026-11-01 | 2026-11-01 |
 | 9 | Advanced Booking | 🟨 IN PROGRESS | 2026-11-01 | |
 | 9.1 | ↳ Map Editor (ลากวาง) | ✅ DONE | 2026-11-01 | 2026-11-01 |
-| 9.2 | ↳ Waitlist | ⬜ TODO | | |
+| 9.2 | ↳ Waitlist | ✅ DONE | 2026-11-01 | 2026-11-01 |
 | 9.3 | ↳ Announcements | ⬜ TODO | | |
 | 10 | Check-in & No-show | ⬜ TODO | | |
 | 11 | Hardening & Scale | ⬜ TODO | | |
@@ -741,18 +741,25 @@
 - ทดสอบ: unit 214, integration 261 (+7 `map-layout.int-spec.ts`), E2E 31 (+3)
 
 ### 9.2 Waitlist
-**สถานะ:** ⬜ TODO · **Dependencies:** 7 · **เริ่ม:** – · **เสร็จ:** –
+**สถานะ:** ✅ DONE · **Dependencies:** 7 · **เริ่ม:** 2026-11-01 · **เสร็จ:** 2026-11-01
 
 **Tasks**
-- [ ] API เข้า/ออกคิว (เจาะจงล็อค หรือทั้งโซน)
-- [ ] เมื่อ booking → EXPIRED/CANCELLED: หา waitlist ลำดับแรก → สร้าง HOLD ให้อัตโนมัติ (`waitlist_claim_minutes`) → แจ้ง `waitlist:offer` + LINE
-- [ ] ไม่ยืนยันภายในเวลา → ส่งต่อคิวถัดไป (ตรวจโควต้าของผู้รับสิทธิ์ด้วย)
-- [ ] UI ฝั่ง vendor และ admin
+- [x] API เข้า/ออกคิว (เจาะจงล็อค หรือทั้งโซน)
+- [x] เมื่อ booking → EXPIRED/CANCELLED: หา waitlist ลำดับแรก → สร้าง HOLD ให้อัตโนมัติ (`waitlist_claim_minutes`) → แจ้ง `waitlist:offer` + LINE
+- [x] ไม่ยืนยันภายในเวลา → ส่งต่อคิวถัดไป (ตรวจโควต้าของผู้รับสิทธิ์ด้วย)
+- [x] UI ฝั่ง vendor และ admin
 
 **Acceptance Criteria**
 - Test: ยกเลิก 1 ล็อคที่มีคิว 3 คน ไม่มีใครยืนยัน → สิทธิ์วนครบทั้ง 3 แล้วล็อคกลับเป็น AVAILABLE
 
-**Agent Notes:** –
+**Agent Notes:**
+- ✅ AC: `waitlist.int-spec.ts` — คิว 3 คน, เจ้าหน้าที่ยกเลิกล็อค → คิวที่ 1 ได้ HOLD (`hold_expires_at − notified_at = waitlist_claim_minutes`, ผังเป็น HOLD, `GET /waitlists` = NOTIFIED + bookingId + expiresAt, มี notification `waitlist.offer`) → worker กวาดหมดเวลา → EXPIRED → คิวที่ 2 → 3 → ครบแล้วไม่มี HOLD เหลือและล็อคเป็น `AVAILABLE`, คิวทั้งหมด `EXPIRED`
+- test อื่น: เข้าคิวได้เฉพาะเมื่อเต็ม/ห้ามซ้ำ/เจ้าของไม่ต้องรอ, คิวโซนนับคิวก่อนหน้ารวมคิวล็อค, ยืนยัน HOLD จากคิว → FULFILLED + BOOKED, ผู้ค้ายกเลิกเองก็ส่งสิทธิ์, สละสิทธิ์ (DELETE ขณะ NOTIFIED) → HOLD ยกเลิก + คิวถัดไปได้ทันที, ข้ามคิวที่เกินโควตา (ยังรอต่อ) + คิวทั้งโซนได้ล็อคในโซน, วันขายยกเลิก → ไม่ให้สิทธิ์, admin ดู/นำออก (audit) — E2E `admin-waitlist.spec.ts`: ผู้ค้าเข้าคิวจาก bottom sheet → admin เห็นคิว → ยกเลิกล็อค → ผู้ค้าเห็น "ได้สิทธิ์ล็อค B3 จากคิวรอ" + แถบยืนยันทันทีไม่รีเฟรช → ยืนยัน → หน้าชำระเงิน; คิวของ admin เหลือ 0
+- API (`modules/waitlist/`): `WaitlistService` (`GET/POST /waitlists`, `DELETE /waitlists/:id`, admin `GET /admin/market-days/:id/waitlists`, `DELETE /admin/waitlists/:id`), `WaitlistOfferService` (ฟัง `booking.changed`: EXPIRED/CANCELLED → อัปเดตคิวที่ผูก HOLD + ให้สิทธิ์คิวถัดไป; PENDING_PAYMENT/CONFIRMED → FULFILLED); migration `waitlists.offer_booking_id`; error code ใหม่ 3 ตัว
+- แจ้งเตือน: `NotifyService.waitlistOffered` → socket `waitlist:offer` (gateway) + template `waitlist.offer` (LINE Flex/SMS พร้อมเวลาที่ต้องยืนยัน)
+- เว็บผู้ค้า: bottom sheet ของล็อคที่ไม่ว่าง (ไม่ใช่ของตัวเอง) มีปุ่ม "เข้าคิวรอล็อคนี้" + "เข้าคิวรอทั้งโซน" (เมื่อโซนเต็ม) / สถานะคิว + ออกจากคิว; ได้สิทธิ์ → แถบยืนยัน (HOLD) ขึ้นเอง + ข้อความแจ้ง; หน้า "การจองของฉัน" มีส่วน "คิวรอล็อค"
+- Admin: แผง "คิวรอ (N)" ใต้ผังในหน้าจัดการการจอง (ลำดับ, ผู้ค้า, ล็อค/โซน, สถานะ + เวลาต้องยืนยัน, นำออก) — อัปเดตตาม socket ของวันขาย
+- ทดสอบ: unit 215 (+1 template), integration 268 (+7), E2E 32 (+1)
 
 ### 9.3 Announcements
 **สถานะ:** ⬜ TODO · **Dependencies:** 7 · **เริ่ม:** – · **เสร็จ:** –
@@ -847,3 +854,5 @@
 | 2026-11-01 | 8 | ✅ DONE | Dashboard, รายงาน 3 แบบ (SQL aggregate) + export xlsx/csv (ปิดเบอร์ตามสิทธิ์ `VENDOR_PHONE_VIEW`), หน้า audit log, benchmark 1 ปีทุกรายงาน ≤ 35 ms + index `audit_logs(action, created_at)` — unit 214 / integration 254 / E2E 28 — ถัดไป: Phase 9.1 Map Editor (Phase 6 ยังรอ deploy บน VPS จริง) |
 | 2026-11-01 | 9.1 | 🟨 IN PROGRESS | เริ่ม Map Editor: react-konva editor, รูปแปลน + สัญลักษณ์, PUT /admin/stalls/layout แบบ transaction, StallMap ฝั่งผู้ค้าแสดงพื้นหลัง/สัญลักษณ์ |
 | 2026-11-01 | 9.1 | ✅ DONE | Map Editor (ลาก/ย่อ-ขยาย/หมุนหลายชิ้น, snap กริด, copy/paste, undo/redo, สัญลักษณ์ 6 แบบ, รูปแปลน) + `GET/PUT /admin/stalls/layout` (transaction + optimistic lock `layout_version`) + ผู้ค้าเห็นพื้นหลัง/สัญลักษณ์ — unit 214 / integration 261 / E2E 31 — ถัดไป: 9.2 Waitlist |
+| 2026-11-01 | 9.2 | 🟨 IN PROGRESS | เริ่ม Waitlist: เข้า/ออกคิว (ล็อค/โซน), ส่งสิทธิ์ HOLD อัตโนมัติเมื่อล็อคว่าง, ส่งต่อคิวเมื่อหมดเวลา, UI ผู้ค้า + admin |
+| 2026-11-01 | 9.2 | ✅ DONE | คิวรอ: ส่งสิทธิ์เป็น HOLD ในชื่อผู้ค้า (ฟัง booking.changed, ล็อค advisory, ตรวจโควตา/ประเภทสินค้า/สถานะ), ส่งต่อเมื่อหมดเวลา/สละสิทธิ์, `waitlist:offer` + LINE/SMS, UI ผู้ค้า (bottom sheet + การจองของฉัน) และ admin (แผงคิวรอ); AC สิทธิ์วนครบ 3 คิวแล้วล็อคว่าง — unit 215 / integration 268 / E2E 32 — ถัดไป: 9.3 Announcements |

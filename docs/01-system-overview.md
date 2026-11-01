@@ -380,7 +380,7 @@ CREATE INDEX ix_bookings_pay_due    ON bookings (payment_due_at)  WHERE status =
 | verified_at | timestamptz null | |
 | reject_reason | text null | |
 
-**`waitlists`** — vendor_id, market_day_id, stall_id null, zone_id null, position, status, notified_at, expires_at
+**`waitlists`** — vendor_id, market_day_id, stall_id null (null = ทั้งโซน), zone_id (โซนของล็อคเสมอ), position (ลำดับต่อวันขาย), status, notified_at, expires_at, offer_booking_id unique null (HOLD ที่ระบบสร้างให้ตอนได้สิทธิ์ — Phase 9.2)
 
 **`system_settings`** — market_id, key, value (jsonb), updated_by — unique (market_id, key)
 
@@ -528,6 +528,13 @@ Vendor กด "ยืนยันการจอง" → POST /bookings/:id/conf
 2. มีล็อคว่าง (expire/cancel) → แจ้งคิวลำดับแรก พร้อมสิทธิ์ล็อคพิเศษ `waitlist_claim_minutes` (เป็น HOLD ในชื่อผู้ค้าคนนั้นอัตโนมัติ)
 3. ไม่ยืนยันภายในเวลา → ส่งต่อคิวถัดไป
 
+รายละเอียด (Phase 9.2):
+- เข้าคิวได้เฉพาะเมื่อ "เต็ม" จริง: ล็อคมีคนอื่นจองอยู่ / โซนไม่มีล็อคว่าง (ว่าง = `WAITLIST_NOT_NEEDED`), วันขายไม่ยกเลิก + รอบ PUBLISHED, ประเภทสินค้าขายในโซนได้, ไม่ซ้ำ (`WAITLIST_ALREADY_JOINED`), ไม่เกิน 5 คิวที่ยังมีผลต่อวัน (`WAITLIST_LIMIT_REACHED`)
+- การจองเป็น `EXPIRED`/`CANCELLED` (ทุกทาง: หมดเวลา hold/ชำระ, ผู้ค้า/เจ้าหน้าที่ยกเลิก) → `WaitlistOfferService` (ฟัง `booking.changed`) ล็อค advisory ต่อ (ล็อค, วัน) → ล็อคว่างจริง → คิว WAITING ลำดับแรกของล็อคนั้นหรือทั้งโซนของล็อค ที่ยังมีสิทธิ์ (ผู้ค้า APPROVED, ประเภทสินค้าตรงโซน, ไม่เกินโควตาของรอบ) ได้ HOLD ในชื่อตัวเอง `hold_expires_at = now + waitlist_claim_minutes` → คิว `NOTIFIED` + `waitlist:offer` + LINE/SMS (`waitlist.offer`)
+- คิวที่ไม่มีสิทธิ์ตอนนั้นข้ามไปแต่ยังรอต่อ; ไม่ให้สิทธิ์เมื่อวันขายยกเลิก/รอบไม่ PUBLISHED/วันขายจบแล้ว
+- HOLD จากคิว: ยืนยัน → `FULFILLED`; หมดเวลา (worker booking-expiry เดิม) → `EXPIRED`; สละ/ถูกนำออก (ยกเลิก HOLD) → `CANCELLED` — สองกรณีหลังทำให้ล็อคว่างอีกครั้งจึงส่งต่อคิวถัดไปผ่านทางเดียวกัน
+- ยืนยัน HOLD จากคิวได้แม้รอบปิดรับจองแล้ว (เหมือน hold ปกติที่ไม่ตรวจรอบตอนยืนยัน)
+
 ### 9.8 Check-in และ No-show
 1. ผู้ค้าที่ `CONFIRMED` ได้ QR (เข้ารหัส `checkin_token`)
 2. เจ้าหน้าที่สแกนผ่าน `apps/admin` (โหมดมือถือ) → บันทึก `checked_in_at`
@@ -557,7 +564,7 @@ Vendor กด "ยืนยันการจอง" → POST /bookings/:id/conf
 | S → C | `stall:updated` | `{ marketDayId, stallId, state: 'AVAILABLE'\|'HOLD'\|'BOOKED'\|'CLOSED', mine: boolean, updatedAt }` |
 | S → C | `round:changed` | `{ roundId, openAt, closeAt, status }` |
 | S → C | `booking:changed` | `{ bookingId, marketDayId, stallId, status, holdExpiresAt, paymentDueAt }` (เฉพาะห้อง vendor ของเจ้าของ) |
-| S → C | `waitlist:offer` | `{ waitlistId, bookingId, expiresAt }` |
+| S → C | `waitlist:offer` | `{ waitlistId, bookingId, marketDayId, stallCode, expiresAt }` (ห้อง `vendor:{id}` — มาพร้อม `booking:changed` ของ HOLD ใหม่) |
 | S → C | `server:time` | `{ now }` (ส่งตอน connect) |
 | S → C (admin) | `vendor:registered` (`{ vendorId }` เมื่อมีผู้ค้ารออนุมัติ — ไม่มีข้อมูลส่วนตัว), `payment:submitted` (`{ paymentId, bookingId }` เมื่อผู้ค้าส่งสลิป) | สำหรับ badge แจ้งเตือน |
 
@@ -618,7 +625,7 @@ Vendor กด "ยืนยันการจอง" → POST /bookings/:id/conf
 | POST | `/bookings/:id/payments/slip-upload` | `{ contentType, size }` → presigned PUT (key `vendors/<vendorId>/slips/<bookingId>/<uuid>`) — เฉพาะการจองที่รอชำระ |
 | POST | `/bookings/:id/payments` | `{ slipImageKey }` → การจอง `PENDING_VERIFY` + payment `PENDING` (เลยกำหนด → `PAYMENT_DUE_PASSED`) |
 | GET | `/bookings/:id/checkin-qr` | |
-| POST / DELETE | `/waitlists` / `/waitlists/:id` | |
+| GET / POST / DELETE | `/waitlists` / `/waitlists` / `/waitlists/:id` | คิวของฉัน (พร้อม `ahead` = คิวก่อนหน้า), เข้าคิว `{ marketDayId, stallId | zoneId }`, ออกจากคิว (ได้สิทธิ์อยู่ = สละ HOLD) |
 | GET | `/announcements` | |
 
 ### Admin
@@ -644,6 +651,7 @@ Vendor กด "ยืนยันการจอง" → POST /bookings/:id/conf
 | GET | `/admin/market-days` (วันขายของรอบที่ไม่ใช่ DRAFT ตั้งแต่ 30 วันก่อน + จำนวนการจอง) |
 | GET | `/admin/market-days/:id/stalls` (ผังวันขาย + การจองและผู้ค้าของแต่ละล็อค — เฉพาะ admin) |
 | GET | `/admin/market-days/:id/bookings.xlsx` (รายชื่อผู้ค้าที่จองวันนั้น — ลง audit `booking.export`) |
+| GET | `/admin/market-days/:id/waitlists` (คิวรอทุกสถานะ + ผู้ค้า) · DELETE `/admin/waitlists/:id` (นำออกจากคิว — ลง audit `waitlist.remove`) — สิทธิ์ `BOOKINGS_CANCEL` |
 | POST | `/admin/bookings/:id/cancel` (`{ reason }` บังคับ, สิทธิ์ `BOOKINGS_CANCEL`, ลง audit `booking.cancel`) |
 | POST | `/admin/bookings` (จองแทนผู้ค้า `{ vendorId, stallId, marketDayId, status: CONFIRMED|PENDING_PAYMENT, amount? }` — ข้ามรอบ/โควตา/ล็อคสงวน/ปิดเฉพาะวัน/ประเภทสินค้าได้ แต่ผู้ค้าต้อง APPROVED, ล็อคต้องเปิดใช้งาน, วันขายไม่ถูกยกเลิก และไม่ข้าม unique index) |
 | GET | `/admin/payments?status=PENDING&page=` (รอตรวจ: เก่าสุดก่อน, มี URL รูปสลิปอายุสั้น — สิทธิ์ `PAYMENTS_VERIFY`) |
@@ -666,6 +674,8 @@ Code ของผู้ค้า (เพิ่มใน Phase 2.1): `PHONE_ALREA
 
 Code ของการตั้งค่าตลาด (เพิ่มใน Phase 3.1): `STALL_CODE_TAKEN` (`details.codes`), `LAYOUT_OUTDATED` (Phase 9.1 — มีคนบันทึกผังก่อน, `details.version` ล่าสุด), `RESOURCE_IN_USE` (ลบไม่ได้เพราะมีข้อมูลอ้างถึง — `details` เป็นจำนวน เช่น `{ bookings, waitlists }`)
 
+Code ของคิวรอ (Phase 9.2): `WAITLIST_NOT_NEEDED` (ยังว่าง จองได้เลย), `WAITLIST_ALREADY_JOINED`, `WAITLIST_LIMIT_REACHED` (`details.limit`)
+
 Code ของการชำระเงิน (เพิ่มใน Phase 5.1): `PAYMENT_DUE_PASSED` (ส่งสลิปหลังเลย `payment_due_at` — การจองเป็น EXPIRED); สลิปผิด → `UPLOAD_INVALID` (`details.field = slipImageKey`)
 
 Code ของรอบการจอง (เพิ่มใน Phase 3.2): `MARKET_DATE_TAKEN` (`details.dates`), `ROUND_ALREADY_OPENED`; publish/cancel/ลบ/แก้รอบผิดสถานะ → `INVALID_STATE_TRANSITION` (`details.status`); `ROUND_NOT_OPEN` มี `details: { phase, openAt, closeAt, marketDayCancelled }`
@@ -680,7 +690,7 @@ Code ของรอบการจอง (เพิ่มใน Phase 3.2): `MA
 | 401 | `UNAUTHORIZED` (token หาย/ผิด/หมดอายุ → client ลอง refresh), `INVALID_CREDENTIALS` |
 | 403 | `FORBIDDEN`, `VENDOR_NOT_APPROVED`, `VENDOR_SUSPENDED` |
 | 404 | `NOT_FOUND` |
-| 409 | `CONFLICT`, `USERNAME_TAKEN`, `LINE_ALREADY_LINKED`, `PHONE_ALREADY_REGISTERED`, `STALL_CODE_TAKEN`, `LAYOUT_OUTDATED`, `RESOURCE_IN_USE`, `MARKET_DATE_TAKEN`, `ROUND_ALREADY_OPENED`, `PAYMENT_DUE_PASSED`, `ROUND_NOT_OPEN`, `STALL_TAKEN`, `STALL_UNAVAILABLE`, `QUOTA_EXCEEDED`, `HOLD_EXPIRED`, `INVALID_STATE_TRANSITION`, `CANCEL_WINDOW_PASSED` |
+| 409 | `CONFLICT`, `USERNAME_TAKEN`, `LINE_ALREADY_LINKED`, `PHONE_ALREADY_REGISTERED`, `STALL_CODE_TAKEN`, `LAYOUT_OUTDATED`, `WAITLIST_NOT_NEEDED`, `WAITLIST_ALREADY_JOINED`, `WAITLIST_LIMIT_REACHED`, `RESOURCE_IN_USE`, `MARKET_DATE_TAKEN`, `ROUND_ALREADY_OPENED`, `PAYMENT_DUE_PASSED`, `ROUND_NOT_OPEN`, `STALL_TAKEN`, `STALL_UNAVAILABLE`, `QUOTA_EXCEEDED`, `HOLD_EXPIRED`, `INVALID_STATE_TRANSITION`, `CANCEL_WINDOW_PASSED` |
 | 422 | `CATEGORY_NOT_ALLOWED` |
 | 429 | `RATE_LIMITED`, `ACCOUNT_LOCKED` |
 | 500 | `INTERNAL_ERROR` (ไม่ส่งข้อความจริงออกไป — ดูใน log ด้วย `x-request-id`) |
@@ -933,6 +943,9 @@ VITE_LINE_LIFF_ID=        (ฝั่ง web — ว่าง = ซ่อนป�
 | 2026-11-01 | Editor เก็บผังทั้งชุดเป็นก้อนเดียว (undo/redo 100 ขั้น — 1 ขั้นต่อการปล่อยเมาส์/แก้ช่อง), snap ทั้งตำแหน่งและขนาดตามกริดตอนปล่อย, หมุนดูดที่ทุก 45°; ลบได้เฉพาะสัญลักษณ์และล็อคที่ยังไม่บันทึก | ล็อคเดิมมีประวัติการจอง — ลบ/ปิดใช้งานที่หน้าตารางตามกติกาเดิม (`RESOURCE_IN_USE`) |
 | 2026-11-01 | `packages/stall-map` ขึ้นกับ `@market-booking/shared` (type ของสัญลักษณ์/พื้นหลัง) และ export `FEATURE_STYLE` ให้ editor ใช้สี/ตัวอักษรเดียวกัน | กติกา "enum ใช้จาก shared ห้ามประกาศซ้ำ"; หน้าตาใน editor ตรงกับที่ผู้ค้าเห็น |
 | 2026-11-01 | หา node ของ Konva ด้วย `findOne((n) => n.id() === key)` ไม่ใช่ selector `#id` | UUID ขึ้นต้นด้วยตัวเลข — selector ต้อง escape แบบ CSS ซึ่ง Konva ไม่รองรับ (เจอใน E2E: ลากแล้วไม่บันทึก/ไม่มี Transformer) |
+| 2026-11-01 | คิวรอส่งสิทธิ์ด้วยการ "สร้าง HOLD ในชื่อผู้ค้า" แล้วใช้ปุ่มยืนยัน/worker หมดเวลาเดิม; ผูกคิวกับ HOLD ด้วย `waitlists.offer_booking_id` และเลื่อนคิวจาก `booking.changed` ทั้งหมด (ไม่มี timer/queue แยก) | ไม่มี state machine ซ้ำ — หมดเวลา/ยกเลิกทุกทางส่งต่อคิวเอง; ล็อคที่ได้สิทธิ์ถูกกันไว้จริงด้วย unique index เดิม |
+| 2026-11-01 | ส่งสิทธิ์ใน transaction ที่ล็อค advisory ต่อ (ล็อค, วันขาย) แล้วต่อ (ผู้ค้า, วันขาย) เพื่อตรวจโควตา; คนอื่นจองตัดหน้า (unique) = ไม่ให้สิทธิ์ | event ซ้ำ/หลาย instance ไม่ให้สิทธิ์ซ้อน; ลำดับล็อคเดียวกับ `hold` ฝั่งผู้ค้า (ผู้ค้าเท่านั้น) จึงไม่ deadlock |
+| 2026-11-01 | เข้าคิวได้เฉพาะล็อค/โซนที่เต็ม, คิวที่ไม่มีสิทธิ์ตอนให้สิทธิ์ข้ามแต่ยังรอต่อ, จำกัด 5 คิวต่อผู้ค้าต่อวัน | คิวมีไว้เมื่อจองเองไม่ได้; ผู้ค้าที่เกินโควตาวันนี้อาจมีสิทธิ์ภายหลัง (ยกเลิกล็อคอื่น) |
 
 ### Open Questions
 - [ ] ใช้กับตลาดเดียวหรือหลายตลาด (ตอนนี้ schema รองรับแล้ว แต่ UI ยังเป็นตลาดเดียว)
