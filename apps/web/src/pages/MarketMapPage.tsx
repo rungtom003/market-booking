@@ -39,7 +39,7 @@ export function MarketMapPage() {
     );
   }
 
-  const { zones, stalls } = layout.data;
+  const { zones, stalls, background, features } = layout.data;
   const zoneById = new Map(zones.map((z) => [z.id, z]));
   const items = stalls.map((s) => ({
     ...s,
@@ -56,6 +56,8 @@ export function MarketMapPage() {
           <StallMap
             stalls={items}
             zones={zones}
+            background={background}
+            features={features}
             selectedId={selectedId}
             onSelect={(s) => setSelectedId(s.id)}
             describe={(s) =>

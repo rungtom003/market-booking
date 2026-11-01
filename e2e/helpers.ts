@@ -1,4 +1,5 @@
 import { type APIRequestContext, type Page, expect } from '@playwright/test';
+import type { AdminMapLayout } from '@market-booking/shared';
 import { deflateSync } from 'node:zlib';
 import Redis from 'ioredis';
 import { API_URL, E2E_ADMIN, E2E_REDIS_URL, WEB_URL } from './env';
@@ -131,6 +132,38 @@ export async function adminRequest(request: APIRequestContext) {
         expect(paid.ok(), await paid.text()).toBeTruthy();
       }
       return bookingId;
+    },
+    /** ผังทั้งชุดของ Map Editor (`GET /admin/stalls/layout`) */
+    async layout() {
+      const res = await request.get(`${API_URL}/admin/stalls/layout`, { headers });
+      expect(res.ok(), await res.text()).toBeTruthy();
+      return (await res.json()).data as AdminMapLayout;
+    },
+    /** คืนผังให้เหมือน `snapshot` (ตำแหน่งล็อค, สัญลักษณ์, พื้นหลัง) — ใช้ล้างหลัง test ของ Map Editor */
+    async restoreLayout(snapshot: AdminMapLayout) {
+      const current = await this.layout();
+      const res = await request.put(`${API_URL}/admin/stalls/layout`, {
+        headers,
+        data: {
+          version: current.version,
+          stalls: snapshot.stalls.map(({ id, posX, posY, shapeW, shapeH, rot }) => ({
+            id,
+            posX,
+            posY,
+            shapeW,
+            shapeH,
+            rot,
+          })),
+          newStalls: [],
+          features: snapshot.features.map(({ id, ...f }) => ({ id, ...f })),
+          background: snapshot.background && {
+            key: snapshot.background.key,
+            width: snapshot.background.width,
+            height: snapshot.background.height,
+          },
+        },
+      });
+      expect(res.ok(), await res.text()).toBeTruthy();
     },
     async cancelRound(id: string) {
       await request.post(`${API_URL}/admin/rounds/${id}/cancel`, { headers });

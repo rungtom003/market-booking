@@ -4,6 +4,7 @@ import type {
   AdminBookingListQuery,
   AdminCreateBookingInput,
   AdminMarketDayOption,
+  AdminMapLayout,
   AdminMarketDayStalls,
   AdminPayment,
   AdminPaymentListQuery,
@@ -35,6 +36,7 @@ import type {
   RevenueReport,
   RevenueReportQuery,
   Round,
+  SaveMapLayoutInput,
   RoundDetail,
   SetStallDayOverrideInput,
   Settings,
@@ -48,6 +50,7 @@ import type {
   UpdateSettingsInput,
   UpdateStallInput,
   UpdateZoneInput,
+  UploadTicket,
   VendorReport,
   VendorReportQuery,
   VendorStatusCounts,
@@ -140,6 +143,17 @@ export const adminApi = {
     update: (id: string, input: UpdateStallInput) =>
       unwrap(apiClient.patch<ApiResponse<Stall>>(`/admin/stalls/${id}`, input)),
     remove: (id: string) => apiClient.delete(`/admin/stalls/${id}`),
+    /** Map Editor (9.1) */
+    layout: () => unwrap(apiClient.get<ApiResponse<AdminMapLayout>>('/admin/stalls/layout')),
+    saveLayout: (input: SaveMapLayoutInput) =>
+      unwrap(apiClient.put<ApiResponse<AdminMapLayout>>('/admin/stalls/layout', input)),
+    backgroundUpload: (input: {
+      contentType: 'image/jpeg' | 'image/png' | 'image/webp';
+      size: number;
+    }) =>
+      unwrap(
+        apiClient.post<ApiResponse<UploadTicket>>('/admin/stalls/layout/background-upload', input),
+      ),
   },
 
   rounds: {

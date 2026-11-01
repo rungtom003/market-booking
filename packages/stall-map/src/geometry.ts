@@ -13,14 +13,22 @@ export interface StallShape {
   rot: number;
 }
 
-/** กรอบที่ครอบล็อคทุกตัว (เผื่อการหมุนด้วยรัศมีวงกลมล้อมรอบ) + ขอบ `padding` */
-export function fitViewBox(stalls: StallShape[], padding = 20): ViewBox {
-  if (stalls.length === 0) return { x: 0, y: 0, w: 400, h: 300 };
+/**
+ * กรอบที่ครอบล็อคทุกตัว (เผื่อการหมุนด้วยรัศมีวงกลมล้อมรอบ) + ขอบ `padding`
+ * `extra` = กล่องอื่นที่ต้องอยู่ในกรอบด้วย (พื้นหลัง, สัญลักษณ์)
+ */
+export function fitViewBox(
+  stalls: StallShape[],
+  padding = 20,
+  extra: readonly StallShape[] = [],
+): ViewBox {
+  const shapes = extra.length > 0 ? [...stalls, ...extra] : stalls;
+  if (shapes.length === 0) return { x: 0, y: 0, w: 400, h: 300 };
   let minX = Infinity;
   let minY = Infinity;
   let maxX = -Infinity;
   let maxY = -Infinity;
-  for (const s of stalls) {
+  for (const s of shapes) {
     const cx = s.posX + s.shapeW / 2;
     const cy = s.posY + s.shapeH / 2;
     // ไม่หมุน = ใช้กรอบจริง; หมุน = ใช้รัศมีที่ครอบได้ทุกมุม

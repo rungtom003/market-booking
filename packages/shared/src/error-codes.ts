@@ -26,6 +26,7 @@ export const ErrorCode = {
   // ตั้งค่าตลาด
   /** รหัสล็อคซ้ำในตลาด — `details.codes` */
   STALL_CODE_TAKEN: 'STALL_CODE_TAKEN',
+  LAYOUT_OUTDATED: 'LAYOUT_OUTDATED',
   /** ลบไม่ได้เพราะมีข้อมูลอื่นอ้างถึง (เช่น ล็อคที่มีประวัติการจอง) — `details` บอกจำนวนที่อ้างถึง */
   RESOURCE_IN_USE: 'RESOURCE_IN_USE',
 

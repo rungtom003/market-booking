@@ -38,6 +38,7 @@ export const ERROR_MESSAGES_TH: Record<ErrorCode, string | ((details: Details) =
     const shown = codes.slice(0, 5).join(', ');
     return `รหัสล็อคซ้ำกับที่มีอยู่แล้ว: ${shown}${codes.length > 5 ? ` และอีก ${codes.length - 5} รายการ` : ''}`;
   },
+  LAYOUT_OUTDATED: 'มีผู้อื่นบันทึกผังตลาดไปก่อนแล้ว กรุณาโหลดผังล่าสุดแล้วแก้ใหม่',
   RESOURCE_IN_USE: 'ลบไม่ได้เพราะมีข้อมูลที่ใช้งานอยู่',
   MARKET_DATE_TAKEN: (d) => {
     const dates = Array.isArray(d?.dates) ? (d.dates as string[]) : [];

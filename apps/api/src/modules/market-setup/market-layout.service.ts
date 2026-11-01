@@ -12,6 +12,7 @@ import {
 import { AppException } from '../../common/exceptions/app.exception';
 import { PrismaService } from '../../prisma/prisma.service';
 import { isLapsed } from '../booking/booking-mapper';
+import { MapLayoutService } from './map-layout.service';
 import { compareStalls, toMapStall } from './stall-mapper';
 
 const GEOMETRY = {
@@ -32,14 +33,19 @@ const GEOMETRY = {
 /** ข้อมูลวาดผังตลาดฝั่งผู้ค้า — เฉพาะล็อคที่เปิดใช้งาน */
 @Injectable()
 export class MarketLayoutService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly map: MapLayoutService,
+  ) {}
 
   async layout(marketId: string): Promise<MarketLayout> {
-    const [zones, stalls] = await Promise.all([
+    const [zones, stalls, decorations] = await Promise.all([
       this.zones(marketId),
       this.prisma.stall.findMany({ where: { marketId, isActive: true }, select: GEOMETRY }),
+      this.map.decorations(marketId),
     ]);
     return {
+      ...decorations,
       zones,
       stalls: stalls
         .sort(compareStalls)
@@ -78,7 +84,7 @@ export class MarketLayoutService {
     });
     if (!day) throw new AppException(ErrorCode.NOT_FOUND, 'Market day not found');
 
-    const [zones, stalls, bookings] = await Promise.all([
+    const [zones, stalls, bookings, decorations] = await Promise.all([
       this.zones(marketId),
       this.prisma.stall.findMany({
         where: { marketId, isActive: true },
@@ -101,6 +107,7 @@ export class MarketLayoutService {
           paymentDueAt: true,
         },
       }),
+      this.map.decorations(marketId),
     ]);
     // หมดเวลาแล้วแต่ worker ยังไม่เปลี่ยนสถานะ = ว่าง (จองทับได้ — BookingService expire ให้ตอนจอง)
     const bookingOf = new Map(bookings.filter((b) => !isLapsed(b, now)).map((b) => [b.stallId, b]));
@@ -122,6 +129,7 @@ export class MarketLayoutService {
         closeAt: day.round.closeAt.toISOString(),
         maxStallsPerVendor: day.round.maxStallsPerVendor,
       },
+      ...decorations,
       // ให้หน้าเว็บหา offset นาฬิกา (Countdown เปิดจอง/hold) จาก request นี้ได้เลย
       serverTime: new Date().toISOString(),
       zones,

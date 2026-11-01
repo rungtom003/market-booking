@@ -8,6 +8,7 @@ import { AuditLogPage } from './pages/AuditLogPage';
 import { BookingsPage } from './pages/BookingsPage';
 import { HomePage } from './pages/HomePage';
 import { LoginPage } from './pages/LoginPage';
+import { MapEditorPage } from './pages/MapEditorPage';
 import { MarketDayPage } from './pages/MarketDayPage';
 import { PaymentsPage } from './pages/PaymentsPage';
 import { ReportsPage } from './pages/ReportsPage';
@@ -101,6 +102,14 @@ export function App() {
             element={
               <Protected permission={Permission.MARKET_LAYOUT_MANAGE}>
                 <StallsPage />
+              </Protected>
+            }
+          />
+          <Route
+            path="/stalls/editor"
+            element={
+              <Protected permission={Permission.MARKET_LAYOUT_MANAGE}>
+                <MapEditorPage />
               </Protected>
             }
           />

@@ -186,6 +186,8 @@ export function BookingsPage() {
                   <StallMap
                     stalls={mapItems}
                     zones={day.data.zones}
+                    background={day.data.background}
+                    features={day.data.features}
                     selectedId={selected?.id ?? null}
                     onSelect={(s) =>
                       setSelected(day.data.stalls.find((x) => x.id === s.id) ?? null)

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CSSProperties, KeyboardEvent, PointerEvent } from 'react';
+import type { MapBackground, MapFeature } from '@market-booking/shared';
+import { FeatureShape } from './FeatureShape';
 import { type StallShape, type ViewBox, fitViewBox, zoomAt } from './geometry';
 import { STALL_STATUS_LABEL_TH, type StallMapStatus, stallColors } from './status';
 
@@ -30,6 +32,10 @@ export interface StallMapProps {
   describe?: (stall: StallMapItem) => string;
   /** บรรทัดที่สองใต้รหัสล็อค (เช่น ชื่อผู้จองฝั่ง admin) — ยาวเกินถูกตัดด้วย … */
   subLabel?: (stall: StallMapItem) => string | undefined;
+  /** รูปแปลนตลาด วางที่ (0,0) ใต้ทุกอย่าง (Map Editor 9.1) */
+  background?: MapBackground | null;
+  /** ทางเดิน/สัญลักษณ์/ข้อความ — วาดใต้ล็อค */
+  features?: readonly MapFeature[];
   /** ไม่ระบุ = สูงตามสัดส่วนของผัง (อย่างน้อย 220px ไม่เกิน 70vh) */
   height?: CSSProperties['height'];
   ariaLabel?: string;
@@ -64,9 +70,22 @@ export function StallMap({
   subLabel,
   height,
   ariaLabel = 'ผังตลาด',
+  background,
+  features = [],
 }: StallMapProps) {
   const svgRef = useRef<SVGSVGElement>(null);
-  const fit = fitViewBox(stalls);
+  const fit = fitViewBox(stalls, 20, [
+    ...features.map((f) => ({
+      posX: f.posX,
+      posY: f.posY,
+      shapeW: f.width,
+      shapeH: f.height,
+      rot: f.rot,
+    })),
+    ...(background
+      ? [{ posX: 0, posY: 0, shapeW: background.width, shapeH: background.height, rot: 0 }]
+      : []),
+  ]);
   const fitKey = `${fit.x},${fit.y},${fit.w},${fit.h}`;
   const [view, setView] = useState({ key: fitKey, fit, vb: fit });
   // ล็อคเปลี่ยน (เพิ่ม/ย้าย) → กลับไปดูทั้งผัง (ปรับ state ระหว่าง render ตามแนวทางของ React)
@@ -203,6 +222,22 @@ export function StallMap({
         onPointerCancel={onPointerEnd}
         onPointerLeave={onPointerEnd}
       >
+        {background && (
+          <image
+            href={background.url}
+            x={0}
+            y={0}
+            width={background.width}
+            height={background.height}
+            opacity={0.55}
+            preserveAspectRatio="none"
+            data-map-background
+            style={{ pointerEvents: 'none' }}
+          />
+        )}
+        {features.map((f) => (
+          <FeatureShape key={f.id} feature={f} />
+        ))}
         {stalls.map((s) => {
           const selected = s.id === selectedId;
           const highlighted = highlightIds?.has(s.id) ?? false;

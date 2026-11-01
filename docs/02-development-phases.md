@@ -70,8 +70,8 @@
 | 6 | MVP Deployment 🚀 | 🟨 IN PROGRESS | 2026-11-01 | |
 | 7 | Notifications (LINE OA / SMS) | ✅ DONE | 2026-11-01 | 2026-11-01 |
 | 8 | Reports & Dashboard | ✅ DONE | 2026-11-01 | 2026-11-01 |
-| 9 | Advanced Booking | ⬜ TODO | | |
-| 9.1 | ↳ Map Editor (ลากวาง) | ⬜ TODO | | |
+| 9 | Advanced Booking | 🟨 IN PROGRESS | 2026-11-01 | |
+| 9.1 | ↳ Map Editor (ลากวาง) | ✅ DONE | 2026-11-01 | 2026-11-01 |
 | 9.2 | ↳ Waitlist | ⬜ TODO | | |
 | 9.3 | ↳ Announcements | ⬜ TODO | | |
 | 10 | Check-in & No-show | ⬜ TODO | | |
@@ -719,18 +719,26 @@
 ---
 
 ## Phase 9 — Advanced Booking
-**สถานะ:** ⬜ TODO · **Dependencies:** Phase 7
+**สถานะ:** 🟨 IN PROGRESS · **Dependencies:** Phase 7
 
 ### 9.1 Map Editor (ลากวาง)
-**สถานะ:** ⬜ TODO · **Dependencies:** 7 · **เริ่ม:** – · **เสร็จ:** –
+**สถานะ:** ✅ DONE · **Dependencies:** 7 · **เริ่ม:** 2026-11-01 · **เสร็จ:** 2026-11-01
 
 **Tasks**
-- [ ] react-konva editor: ลาก/ย่อ-ขยาย/หมุนล็อค, snap to grid, เลือกหลายอัน, copy/paste, undo/redo
-- [ ] รูปพื้นหลัง (แปลนตลาด) + วาดทางเดิน/สัญลักษณ์ (ห้องน้ำ, ทางเข้า)
-- [ ] `PUT /admin/stalls/layout` บันทึกเป็นชุดใน transaction
-- [ ] `StallMap` ฝั่ง vendor แสดง background และสัญลักษณ์ได้
+- [x] react-konva editor: ลาก/ย่อ-ขยาย/หมุนล็อค, snap to grid, เลือกหลายอัน, copy/paste, undo/redo
+- [x] รูปพื้นหลัง (แปลนตลาด) + วาดทางเดิน/สัญลักษณ์ (ห้องน้ำ, ทางเข้า)
+- [x] `PUT /admin/stalls/layout` บันทึกเป็นชุดใน transaction
+- [x] `StallMap` ฝั่ง vendor แสดง background และสัญลักษณ์ได้
 
-**Agent Notes:** –
+**Agent Notes:**
+- ✅ E2E `admin-map-editor.spec.ts` (canvas จริง): คลิกเลือก A1 → ลาก +43,+18 → ดูดเข้ากริด 10 (ช่อง X/Y ตรง) → เพิ่ม "ห้องน้ำ" + ป้าย → Ctrl+C/V = 2 ชิ้น → Ctrl+Z/Ctrl+Y/ปุ่มย้อน → บันทึก → API ได้ตำแหน่งใหม่ + version +1 → ผู้ค้าเห็นสัญลักษณ์ "ห้องน้ำ: ห้องน้ำรวม" และ A1 ตำแหน่งใหม่บน `/map`; บันทึกจาก version เก่า → แจ้ง + ปุ่มโหลดผังล่าสุด; อัปโหลดรูปแปลน → ปรับความกว้าง (สูงตามสัดส่วน) → บันทึก — ทุก test คืนผังเดิมหลังจบ (`restoreLayout`)
+- API: `MapLayoutService` (`modules/market-setup/map-layout.service.ts`) — `GET/PUT /admin/stalls/layout`, `POST …/background-upload` (`MARKET_LAYOUT_MANAGE`); PUT = transaction เดียว: เพิ่ม `layout_version` แบบมีเงื่อนไข → ย้ายล็อคเฉพาะที่เปลี่ยน → สร้างล็อคใหม่ → แทนสัญลักษณ์ทั้งชุด → ตั้งพื้นหลัง (ตรวจว่าเป็นไฟล์ของตลาดนี้และเป็นรูปจริง) → audit `market_layout.update`; รูปพื้นหลังเดิมลบจาก MinIO หลังบันทึก; error code ใหม่ `LAYOUT_OUTDATED` (409)
+- ผู้ค้า: `GET /market/layout` และ `GET /market-days/:id/stalls` (+ ผังวันขายของ admin) มี `background` (presigned URL) + `features`; `StallMap` วาดรูปแปลน (โปร่ง 55%) และสัญลักษณ์ใต้ล็อค, กรอบผังรวมพื้นหลัง/สัญลักษณ์ด้วย
+- Admin: หน้า `/stalls/editor` (ปุ่ม "แก้ไขผัง (ลากวาง)" ในหน้าล็อค) — `MapCanvas` (Konva: เลือก/Shift/ลากกรอบ, ลากหลายชิ้น, Transformer ย่อ-ขยาย/หมุน, ล้อเมาส์ซูม, Space ลากเลื่อนผัง, กริด) + แผงคุณสมบัติ (X/Y/กว้าง/สูง/หมุน, ป้ายสัญลักษณ์, รหัส/โซน/ราคาของล็อคใหม่, พื้นหลัง) + แถบเครื่องมือ (เพิ่มสัญลักษณ์ 6 แบบ, undo/redo, กริด 5–50, ซูม) + คีย์ลัด (Ctrl+Z/Y/C/V/A, Delete, ลูกศร, Esc) + เตือนก่อนปิดแท็บเมื่อยังไม่บันทึก
+- คัดลอกล็อคได้รหัสถัดไปที่ว่าง (A10 → A11) เป็นล็อคใหม่ที่บันทึกพร้อมผัง; ลบล็อคเดิมในผังไม่ได้ (ไปหน้าตาราง — กติกาประวัติการจองเดิม)
+- ข้อจำกัด: editor ใช้เมาส์/คีย์บอร์ด (desktop) — บนจอสัมผัสเลือก/ลากได้แต่ไม่มี pinch zoom; ทางเดินเป็นแถบสี่เหลี่ยม (หมุนได้) ยังไม่มีเส้นโค้ง/polyline; พื้นหลังตลาดละ 1 รูป ≤ 5 MB
+- E2E ครั้งแรกหลังเพิ่ม dependency ใหม่ Vite dev server optimize deps ระหว่างรันทำให้ test หนึ่งล้ม 1 ครั้ง ("can't detect preamble") — รันซ้ำผ่านทั้งชุด (CI มี retry 1 ครั้ง)
+- ทดสอบ: unit 214, integration 261 (+7 `map-layout.int-spec.ts`), E2E 31 (+3)
 
 ### 9.2 Waitlist
 **สถานะ:** ⬜ TODO · **Dependencies:** 7 · **เริ่ม:** – · **เสร็จ:** –
@@ -837,3 +845,5 @@
 | 2026-11-01 | 7 | ✅ DONE | queue `notification` (retry 8 ครั้ง ~1 ชม., dedupe, recover), LINE Flex + SMS แทนเมื่อ LINE ส่งไม่ได้, ThaiBulkSMS adapter, 10 template, แจ้งกลุ่ม LINE เจ้าหน้าที่ + webhook ตอบ group ID, เตือนก่อนรอบเปิด/ก่อนหมดเวลาชำระ; แก้ bug รับเงินสดตอนรอชำระ — unit 210 / integration 242 / E2E 27 — ถัดไป: Phase 8 Reports & Dashboard (Phase 6 ยังรอ deploy บน VPS จริง) |
 | 2026-11-01 | 8 | 🟨 IN PROGRESS | เริ่ม Reports & Dashboard: dashboard, รายงานรายได้/การใช้ล็อค/ผู้ค้า + export, หน้า audit log, benchmark ข้อมูล 1 ปี |
 | 2026-11-01 | 8 | ✅ DONE | Dashboard, รายงาน 3 แบบ (SQL aggregate) + export xlsx/csv (ปิดเบอร์ตามสิทธิ์ `VENDOR_PHONE_VIEW`), หน้า audit log, benchmark 1 ปีทุกรายงาน ≤ 35 ms + index `audit_logs(action, created_at)` — unit 214 / integration 254 / E2E 28 — ถัดไป: Phase 9.1 Map Editor (Phase 6 ยังรอ deploy บน VPS จริง) |
+| 2026-11-01 | 9.1 | 🟨 IN PROGRESS | เริ่ม Map Editor: react-konva editor, รูปแปลน + สัญลักษณ์, PUT /admin/stalls/layout แบบ transaction, StallMap ฝั่งผู้ค้าแสดงพื้นหลัง/สัญลักษณ์ |
+| 2026-11-01 | 9.1 | ✅ DONE | Map Editor (ลาก/ย่อ-ขยาย/หมุนหลายชิ้น, snap กริด, copy/paste, undo/redo, สัญลักษณ์ 6 แบบ, รูปแปลน) + `GET/PUT /admin/stalls/layout` (transaction + optimistic lock `layout_version`) + ผู้ค้าเห็นพื้นหลัง/สัญลักษณ์ — unit 214 / integration 261 / E2E 31 — ถัดไป: 9.2 Waitlist |

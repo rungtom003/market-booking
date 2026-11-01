@@ -172,6 +172,8 @@ export function DayMapPage() {
       <StallMap
         stalls={mapItems}
         zones={data.zones}
+        background={data.background}
+        features={data.features}
         selectedId={selectedId}
         highlightIds={highlightIds}
         onSelect={(s) => setSelectedId(s.id)}

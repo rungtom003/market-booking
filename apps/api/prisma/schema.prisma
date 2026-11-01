@@ -63,13 +63,19 @@ enum WaitlistStatus {
 // ───────────────────────────── Market ─────────────────────────────
 
 model Market {
-  id        String   @id @default(uuid(7)) @db.Uuid
-  name      String   @db.VarChar(200)
-  address   String
-  timezone  String   @default("Asia/Bangkok") @db.VarChar(50)
-  isActive  Boolean  @default(true) @map("is_active")
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id               String   @id @default(uuid(7)) @db.Uuid
+  name             String   @db.VarChar(200)
+  address          String
+  timezone         String   @default("Asia/Bangkok") @db.VarChar(50)
+  isActive         Boolean  @default(true) @map("is_active")
+  /// รูปแปลนตลาดใต้ผัง (key ใน MinIO) วางที่ (0,0) ขนาดตาม w/h (px ของ canvas) — Map Editor 9.1
+  mapBackgroundKey String?  @map("map_background_key") @db.VarChar(300)
+  mapBackgroundW   Int?     @map("map_background_w")
+  mapBackgroundH   Int?     @map("map_background_h")
+  /// เพิ่มทุกครั้งที่บันทึกผังจาก Map Editor — คนที่แก้จากข้อมูลเก่าบันทึกทับไม่ได้ (LAYOUT_OUTDATED)
+  layoutVersion    Int      @default(0) @map("layout_version")
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   vendors           Vendor[]
   adminUsers        AdminUser[]
@@ -81,6 +87,7 @@ model Market {
   bookings          Booking[]
   systemSettings    SystemSetting[]
   announcements     Announcement[]
+  mapFeatures       MapFeature[]
 
   @@map("markets")
 }
@@ -150,6 +157,29 @@ model Stall {
   @@unique([marketId, code])
   @@index([zoneId])
   @@map("stalls")
+}
+
+/// ทางเดิน/สัญลักษณ์/ข้อความบนผังตลาด (Map Editor 9.1) — ตำแหน่งหน่วยเดียวกับล็อค
+model MapFeature {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  marketId  String   @map("market_id") @db.Uuid
+  /// WALKWAY | TOILET | ENTRANCE | EXIT | PARKING | LABEL (ดู MapFeatureKind ใน packages/shared)
+  kind      String   @db.VarChar(20)
+  label     String?  @db.VarChar(100)
+  posX      Decimal  @map("pos_x") @db.Decimal(10, 2)
+  posY      Decimal  @map("pos_y") @db.Decimal(10, 2)
+  width     Decimal  @db.Decimal(10, 2)
+  height    Decimal  @db.Decimal(10, 2)
+  rot       Decimal  @default(0) @db.Decimal(6, 2)
+  /// ลำดับการวาด (น้อย = อยู่ล่าง)
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  market Market @relation(fields: [marketId], references: [id])
+
+  @@index([marketId, sortOrder])
+  @@map("map_features")
 }
 
 // ───────────────────────────── People ─────────────────────────────

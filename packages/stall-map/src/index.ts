@@ -4,5 +4,8 @@ export { StallMapLegend } from './StallMapLegend';
 export type { StallMapLegendProps } from './StallMapLegend';
 export { STALL_STATUS_LABEL_TH, stallColors } from './status';
 export type { StallColors, StallMapStatus } from './status';
+export { FeatureShape } from './FeatureShape';
+export { FEATURE_STYLE, featureFontSize } from './features';
+export type { FeatureStyle } from './features';
 export { fitViewBox, zoomAt } from './geometry';
 export type { StallShape, ViewBox } from './geometry';

@@ -1,3 +1,4 @@
+import { Link } from 'react-router';
 import { forwardRef, useMemo, useState } from 'react';
 import type { ComponentProps } from 'react';
 import { Controller, useForm, useWatch } from 'react-hook-form';
@@ -130,6 +131,9 @@ export function StallsPage() {
           ล็อคและผังตลาด
         </Typography>
         <Stack direction="row" spacing={1}>
+          <Button component={Link} to="/stalls/editor" variant="outlined">
+            แก้ไขผัง (ลากวาง)
+          </Button>
           <Button variant="outlined" disabled={noZones} onClick={() => setBulkOpen(true)}>
             สร้างหลายล็อค
           </Button>

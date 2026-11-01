@@ -97,7 +97,7 @@
 | Language | TypeScript (ทั้งระบบ) |
 | Frontend User | React 18 + Vite + Tailwind CSS + TanStack Query + React Hook Form + Zod |
 | Frontend Admin | React 18 + Vite + MUI (+ MUI X DataGrid) + TanStack Query + React Hook Form + Zod |
-| ผังตลาด | SVG (แสดงผล/เลือกล็อค) → react-konva (Map Editor ใน Phase หลัง) |
+| ผังตลาด | SVG (`packages/stall-map` แสดงผล/เลือกล็อค + พื้นหลัง/สัญลักษณ์) · react-konva 18 + konva 9 (Map Editor ฝั่ง admin, Phase 9.1) |
 | Backend | NestJS 10 |
 | Realtime | Socket.IO + `@socket.io/redis-adapter` |
 | ORM / DB | Prisma + PostgreSQL 16 |
@@ -256,6 +256,8 @@ modules/booking/
 | address | text | |
 | timezone | varchar(50) | default `Asia/Bangkok` |
 | is_active | boolean | |
+| map_background_key, map_background_w, map_background_h | varchar(300) / int / int null | รูปแปลนตลาดใต้ผัง (MinIO) วางที่ (0,0) ขนาด w×h px ของ canvas |
+| layout_version | int default 0 | +1 ทุกครั้งที่บันทึกจาก Map Editor (กันบันทึกทับ — `LAYOUT_OUTDATED`) |
 
 **`vendors`** — ผู้ค้า
 | Column | Type | หมายเหตุ |
@@ -333,6 +335,8 @@ modules/booking/
 | is_cancelled | boolean | |
 
 **`stall_day_overrides`** (optional) — stall_id, market_day_id, price_override, is_closed
+
+**`map_features`** (Phase 9.1) — market_id, kind (`WALKWAY` ทางเดิน · `TOILET` · `ENTRANCE` · `EXIT` · `PARKING` · `LABEL` ข้อความ), label null, pos_x, pos_y, width, height, rot, sort_order (ลำดับการวาด) — หน่วยเดียวกับล็อค วาดใต้ล็อค
 > ใช้ปิดล็อคหรือเปลี่ยนราคาเฉพาะวัน — ตั้งค่าว่างทั้งคู่ (`price_override` null + `is_closed` false) = ลบแถว
 
 **`bookings`**
@@ -628,7 +632,8 @@ Vendor กด "ยืนยันการจอง" → POST /bookings/:id/conf
 | GET / PUT | `/admin/settings` |
 | CRUD | `/admin/zones`, `/admin/stalls`, `/admin/product-categories` (GET คืนทั้งหมดไม่แบ่งหน้า, DELETE → 204) |
 | POST | `/admin/stalls/bulk` (prefix + ช่วงเลข เช่น A1–A20 ≤ 200 ล็อค, วางเป็นตาราง; รหัสซ้ำตัวเดียว = ไม่สร้างเลย) |
-| PUT | `/admin/stalls/layout` (บันทึกตำแหน่งจาก Map Editor ทั้งชุด) |
+| GET | `/admin/stalls/layout` (ทุกล็อครวมปิดใช้งาน + โซน + สัญลักษณ์ + พื้นหลัง + `version`) |
+| PUT | `/admin/stalls/layout` (`{ version, stalls[geometry], newStalls[], features[], background }` — บันทึกทั้งชุดใน transaction เดียว; version เก่า → `LAYOUT_OUTDATED`) · POST `/admin/stalls/layout/background-upload` (presigned PUT รูปแปลน) |
 | CRUD | `/admin/rounds` (GET คืนทั้งหมด ใหม่สุดก่อน; GET `:id` รวมวันขาย; DELETE เฉพาะ DRAFT → 204) |
 | POST | `/admin/rounds/:id/publish` · `/cancel` (200 + รอบ) |
 | POST | `/admin/rounds/:id/market-days` (`{ dates: [YYYY-MM-DD] }` ≤ 62 วัน — วันที่เคยยกเลิกในรอบนี้ถูกคืนสถานะ) |
@@ -659,7 +664,7 @@ Code ของ Auth (เพิ่มใน Phase 1.3–1.4): `INVALID_CREDENTIAL
 
 Code ของผู้ค้า (เพิ่มใน Phase 2.1): `PHONE_ALREADY_REGISTERED` (สมัครซ้ำ → ให้ยืนยัน OTP เพื่อ login), `UPLOAD_INVALID` (`details.field`)
 
-Code ของการตั้งค่าตลาด (เพิ่มใน Phase 3.1): `STALL_CODE_TAKEN` (`details.codes`), `RESOURCE_IN_USE` (ลบไม่ได้เพราะมีข้อมูลอ้างถึง — `details` เป็นจำนวน เช่น `{ bookings, waitlists }`)
+Code ของการตั้งค่าตลาด (เพิ่มใน Phase 3.1): `STALL_CODE_TAKEN` (`details.codes`), `LAYOUT_OUTDATED` (Phase 9.1 — มีคนบันทึกผังก่อน, `details.version` ล่าสุด), `RESOURCE_IN_USE` (ลบไม่ได้เพราะมีข้อมูลอ้างถึง — `details` เป็นจำนวน เช่น `{ bookings, waitlists }`)
 
 Code ของการชำระเงิน (เพิ่มใน Phase 5.1): `PAYMENT_DUE_PASSED` (ส่งสลิปหลังเลย `payment_due_at` — การจองเป็น EXPIRED); สลิปผิด → `UPLOAD_INVALID` (`details.field = slipImageKey`)
 
@@ -675,7 +680,7 @@ Code ของรอบการจอง (เพิ่มใน Phase 3.2): `MA
 | 401 | `UNAUTHORIZED` (token หาย/ผิด/หมดอายุ → client ลอง refresh), `INVALID_CREDENTIALS` |
 | 403 | `FORBIDDEN`, `VENDOR_NOT_APPROVED`, `VENDOR_SUSPENDED` |
 | 404 | `NOT_FOUND` |
-| 409 | `CONFLICT`, `USERNAME_TAKEN`, `LINE_ALREADY_LINKED`, `PHONE_ALREADY_REGISTERED`, `STALL_CODE_TAKEN`, `RESOURCE_IN_USE`, `MARKET_DATE_TAKEN`, `ROUND_ALREADY_OPENED`, `PAYMENT_DUE_PASSED`, `ROUND_NOT_OPEN`, `STALL_TAKEN`, `STALL_UNAVAILABLE`, `QUOTA_EXCEEDED`, `HOLD_EXPIRED`, `INVALID_STATE_TRANSITION`, `CANCEL_WINDOW_PASSED` |
+| 409 | `CONFLICT`, `USERNAME_TAKEN`, `LINE_ALREADY_LINKED`, `PHONE_ALREADY_REGISTERED`, `STALL_CODE_TAKEN`, `LAYOUT_OUTDATED`, `RESOURCE_IN_USE`, `MARKET_DATE_TAKEN`, `ROUND_ALREADY_OPENED`, `PAYMENT_DUE_PASSED`, `ROUND_NOT_OPEN`, `STALL_TAKEN`, `STALL_UNAVAILABLE`, `QUOTA_EXCEEDED`, `HOLD_EXPIRED`, `INVALID_STATE_TRANSITION`, `CANCEL_WINDOW_PASSED` |
 | 422 | `CATEGORY_NOT_ALLOWED` |
 | 429 | `RATE_LIMITED`, `ACCOUNT_LOCKED` |
 | 500 | `INTERNAL_ERROR` (ไม่ส่งข้อความจริงออกไป — ดูใน log ด้วย `x-request-id`) |
@@ -922,6 +927,12 @@ VITE_LINE_LIFF_ID=        (ฝั่ง web — ว่าง = ซ่อนป�
 | 2026-11-01 | ไฟล์รายงาน: xlsx (exceljs, หัวตรึง + แถวรวม) และ CSV UTF-8 + BOM, ค่าที่ขึ้นต้น `= + - @` ใส่ `'` นำหน้า | Excel เปิด CSV ภาษาไทยไม่เพี้ยน; กัน CSV/formula injection จากชื่อผู้ค้า/ร้านที่ผู้ใช้กรอกเอง |
 | 2026-11-01 | index `audit_logs(action, created_at)` | benchmark: กรอง action ที่เกิดไม่บ่อยตลอดปีเดิม Parallel Seq Scan ทั้งตาราง (โตตามจำนวน log) → Bitmap Index Scan 0.04 ms; รายงานอื่นใช้ index เดิม (`bookings(market_day_id,status)`, `payments(booking_id)`) ได้เมื่อช่วงวันที่แคบ |
 | 2026-11-01 | Audit log ไม่มี `market_id` — หน้าค้นแสดงทุกตลาด (เฉพาะ SUPER_ADMIN/ADMIN) | MVP ตลาดเดียว; เพิ่มคอลัมน์ได้เมื่อเปิดหลายตลาด (Open Question) |
+| 2026-11-01 | Map Editor ใช้ **react-konva 18.2.16 + konva 9.3.22** (pin) | react-konva 19 ต้องใช้ React 19 (โปรเจกต์ใช้ React 18); canvas ลาก/ย่อ-ขยาย/หมุนหลายชิ้นด้วย Transformer ได้ทันที — ฝั่งแสดงผลยังเป็น SVG (`StallMap`) เหมือนเดิม |
+| 2026-11-01 | สัญลักษณ์/ทางเดินเก็บในตาราง `map_features` + รูปแปลนเป็นคอลัมน์ของ `markets` (ไม่ใช่ JSON ก้อนเดียว) | validate ทีละ field ด้วย schema เดียวกับฝั่ง admin, ลำดับการวาดด้วย sort_order; แปลนมีได้ตลาดละ 1 รูป |
+| 2026-11-01 | บันทึกผังทั้งชุด (`PUT /admin/stalls/layout`) ใน transaction เดียว + optimistic lock ด้วย `markets.layout_version` (`UPDATE … WHERE layout_version = $v`); สัญลักษณ์แทนทั้งชุด, ล็อคอัปเดตเฉพาะที่ย้ายจริง; ล็อคใหม่จากการวาง/คัดลอกในผังสร้างใน transaction เดียวกัน | ผิดตรงไหน (ล็อคตลาดอื่น, รหัสซ้ำ) ย้อนทั้งชุด; สองคนแก้พร้อมกันไม่ทับงานกันเงียบๆ — คนที่สองได้ `LAYOUT_OUTDATED` + ปุ่มโหลดผังล่าสุด |
+| 2026-11-01 | Editor เก็บผังทั้งชุดเป็นก้อนเดียว (undo/redo 100 ขั้น — 1 ขั้นต่อการปล่อยเมาส์/แก้ช่อง), snap ทั้งตำแหน่งและขนาดตามกริดตอนปล่อย, หมุนดูดที่ทุก 45°; ลบได้เฉพาะสัญลักษณ์และล็อคที่ยังไม่บันทึก | ล็อคเดิมมีประวัติการจอง — ลบ/ปิดใช้งานที่หน้าตารางตามกติกาเดิม (`RESOURCE_IN_USE`) |
+| 2026-11-01 | `packages/stall-map` ขึ้นกับ `@market-booking/shared` (type ของสัญลักษณ์/พื้นหลัง) และ export `FEATURE_STYLE` ให้ editor ใช้สี/ตัวอักษรเดียวกัน | กติกา "enum ใช้จาก shared ห้ามประกาศซ้ำ"; หน้าตาใน editor ตรงกับที่ผู้ค้าเห็น |
+| 2026-11-01 | หา node ของ Konva ด้วย `findOne((n) => n.id() === key)` ไม่ใช่ selector `#id` | UUID ขึ้นต้นด้วยตัวเลข — selector ต้อง escape แบบ CSS ซึ่ง Konva ไม่รองรับ (เจอใน E2E: ลากแล้วไม่บันทึก/ไม่มี Transformer) |
 
 ### Open Questions
 - [ ] ใช้กับตลาดเดียวหรือหลายตลาด (ตอนนี้ schema รองรับแล้ว แต่ UI ยังเป็นตลาดเดียว)
