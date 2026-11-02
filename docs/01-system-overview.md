@@ -73,6 +73,7 @@
 | Check-in ผู้ค้าหน้างาน | ✅ | ✅ | ✅ | ❌ |
 | เห็นเบอร์โทรผู้ค้าเต็มในรายงาน/ไฟล์ export (`VENDOR_PHONE_VIEW` — ไม่มีสิทธิ์เห็น 081-xxx-5678) | ✅ | ✅ | ✅ | ❌ |
 | ดู Audit Log | ✅ | ✅ | ❌ | ❌ |
+| ลบข้อมูลส่วนบุคคลของผู้ค้าตามคำขอ (`VENDOR_DATA_ERASE` — PDPA) | ✅ | ✅ | ❌ | ❌ |
 
 ---
 
@@ -280,6 +281,7 @@ modules/booking/
 | reject_reason | text null | |
 | suspended_until | timestamptz null | ใช้กับระบบ No-show |
 | noshow_count | int default 0 | |
+| deleted_at | timestamptz null | ลบข้อมูลส่วนบุคคลแล้ว (PDPA, Phase 11.3) — ชื่อ = "ผู้ใช้ที่ลบข้อมูลแล้ว", เบอร์ = `del-<สุ่ม>` (เบอร์เดิมสมัครใหม่ได้), ที่อยู่ `-`, รูปและ LINE ถูกลบ |
 
 **`admin_users`**
 | Column | Type | หมายเหตุ |
@@ -323,6 +325,7 @@ modules/booking/
 | name | varchar(200) | เช่น "รอบเดือนธันวาคม 2026" |
 | open_at, close_at | timestamptz | ช่วงเวลาเปิดจอง |
 | max_stalls_per_vendor | int | ต่อ 1 วันขาย |
+| waiting_room_capacity | int null | Waiting Room: จำนวนผู้ค้าในหน้าจองพร้อมกัน — null = ไม่ใช้ (Phase 11.1; แก้ได้ตลอดแม้รอบเปิดแล้ว) |
 | status | RoundStatus | |
 | created_by | uuid FK admin_users | |
 
@@ -378,6 +381,9 @@ CREATE INDEX ix_bookings_pay_due    ON bookings (payment_due_at)  WHERE status =
 | method | varchar(20) | `PROMPTPAY_SLIP`, `CASH` |
 | amount | decimal(10,2) | |
 | slip_image_key | varchar null | |
+| slip_hash | char(64) null | sha256 ของรูปสลิป — ตรวจรูปซ้ำ (Phase 11.2) |
+| slip_trans_ref | varchar(40) unique null | เลขอ้างอิงธุรกรรมจากผู้ให้บริการตรวจสลิป (SlipOK) — กันสลิปเดียวใช้ 2 ครั้ง |
+| slip_check | varchar(20) null | ผลตรวจอัตโนมัติ (`SlipCheck`: VALID, DUPLICATE, AMOUNT_MISMATCH, RECEIVER_MISMATCH, NOT_FOUND, UNREADABLE, BANK_DELAY, ERROR) — null = ไม่ได้ตรวจ |
 | status | PaymentStatus | |
 | verified_by | uuid FK admin_users null | |
 | verified_at | timestamptz null | |
@@ -520,6 +526,7 @@ Vendor กด "ยืนยันการจอง" → POST /bookings/:id/conf
 3. FINANCE ตรวจทีละใบในคิว (รูปสลิปคู่ยอดที่ต้องได้รับ, คีย์ลัด A/R) อนุมัติ → `CONFIRMED` + สร้าง `checkin_token` / ปฏิเสธ → `PENDING_PAYMENT` พร้อมเหตุผล — ผู้ค้าเห็นผลทันทีผ่าน `booking:changed`
 4. ยังไม่ส่งสลิปเมื่อเลย `payment_due_at` → `EXPIRED` → ล็อคว่าง → แจ้ง Waitlist
 5. Admin บันทึกรับเงินสดหน้างานได้ (method = `CASH`)
+6. ตรวจสลิปอัตโนมัติ (Phase 11.2) ตอนส่งสลิป: (ก) รูปเดียวกับสลิปที่เคย **อนุมัติแล้ว** (sha256, การจองใดก็ได้) → ไม่ผ่านทันที "สลิปนี้เคยใช้ชำระแล้ว" — ทำเสมอแม้ไม่มีผู้ให้บริการ; (ข) `SLIP_VERIFIER=slipok`: ส่งรูป + `log: true` + `amount` ให้ SlipOK — ถูกต้อง (ยอดตรงอีกชั้นฝั่งเรา) → บันทึก `slip_trans_ref` (unique ซ้ำ = ไม่ผ่าน) แล้วอนุมัติเอง (SYSTEM); สลิปซ้ำ/ยอดไม่ตรง/โอนผิดบัญชี/ไม่มีรายการจริง → ไม่ผ่านพร้อมเหตุผล; อ่าน QR ไม่ได้/ธนาคารยังไม่อัปเดต/ขัดข้อง/โควตาหมด → รอเจ้าหน้าที่ (`slip_check` บอกเหตุ); (ค) หน้าตรวจสลิปเตือน "รูปสลิปนี้เคยส่งมาแล้วกับล็อค … " เมื่อรูปซ้ำกับการชำระอื่นที่ยังไม่อนุมัติ/ถูกปฏิเสธ
 
 ### 9.6 ยกเลิกการจอง
 - ผู้ค้ายกเลิกเองได้ถ้าเหลือเวลาก่อนวันขาย ≥ `cancel_before_hours`
@@ -553,6 +560,14 @@ Vendor กด "ยืนยันการจอง" → POST /bookings/:id/conf
 
 ---
 
+### 9.9 Waiting Room (Phase 11.1)
+- เปิดต่อรอบด้วย `waiting_room_capacity` (หน้ารอบการจอง) — คิวอยู่ใน Redis ต่อรอบ: `wr:{roundId}:q` (ลำดับ), `:in` (คนที่อยู่ในหน้าจอง + เวลาหมดสิทธิ์), `:seen` (ถามสถานะล่าสุด)
+- ผู้ค้าเปิดหน้าผังวันขายของรอบนั้น → เข้าคิวอัตโนมัติ (`POST /rounds/:id/waiting-room`) แล้วถามสถานะทุก 5 วินาที; เข้าคิว **ก่อนรอบเปิด** ได้ลำดับสุ่มภายใน 1 นาทีก่อนเวลาเปิด (มาก่อนเปิดได้ก่อนคนที่มาหลังเปิดเสมอ — ไม่ต้องแข่งกดตอนเปิด)
+- worker `waiting-room` (ทุก 3 วินาที, รอบที่เปิดจองอยู่): ลบคนที่หมดเวลา → ปล่อยจากหัวคิวเท่าที่ว่าง (`capacity − คนในหน้าจอง`) ให้อยู่ได้ `waiting_room_session_minutes` → socket `waiting-room:admitted`; คนที่ไม่ได้ถามสถานะเกิน 45 วินาที (ปิดหน้าไปแล้ว) ถูกตัดออกตอนถึงคิว
+- `POST /bookings/hold` ของรอบนั้นต้องอยู่ในหน้าจองและยังไม่หมดเวลา ไม่งั้น `WAITING_ROOM_REQUIRED`; ยืนยัน HOLD ที่มีอยู่แล้วไม่ต้องมีสิทธิ์ (หมดเวลาในหน้าจองระหว่าง HOLD ก็ยืนยันได้)
+- หน้าเว็บ: รอบเปิดแล้วแต่ยังไม่ได้เข้า → แสดงลำดับคิวแทนผัง; ได้เข้า → ผัง + เวลาที่เหลือ; หมดเวลา → ปุ่ม "เข้าคิวใหม่"; ออกจากคิว `DELETE /rounds/:id/waiting-room` คืนที่ให้คนถัดไป
+- ข้อจำกัด: `GET /market-days/:id/stalls` (ดูผัง) ไม่ถูกกั้น — กั้นที่หน้าเว็บและที่การจอง (จุดที่เขียน DB)
+
 ## 10. Realtime Design
 
 ### 10.1 Socket.IO
@@ -575,6 +590,7 @@ Vendor กด "ยืนยันการจอง" → POST /bookings/:id/conf
 | S → C | `round:changed` | `{ roundId, openAt, closeAt, status }` |
 | S → C | `booking:changed` | `{ bookingId, marketDayId, stallId, status, holdExpiresAt, paymentDueAt }` (เฉพาะห้อง vendor ของเจ้าของ) |
 | S → C | `waitlist:offer` | `{ waitlistId, bookingId, marketDayId, stallCode, expiresAt }` (ห้อง `vendor:{id}` — มาพร้อม `booking:changed` ของ HOLD ใหม่) |
+| S → C | `waiting-room:admitted` | `{ roundId, admittedUntil }` (ห้อง `vendor:{id}` — ได้เข้าหน้าจองแล้ว) |
 | S → C | `checkin:updated` | `{ bookingId, marketDayId, stallId, checkedInAt }` (ห้อง `admin:{marketId}` + `vendor:{id}` เจ้าของ — ผัง/หน้าเช็คอินของ admin และหน้า QR ผู้ค้าโหลดใหม่) |
 | S → C | `server:time` | `{ now }` (ส่งตอน connect) |
 | S → C (admin) | `vendor:registered` (`{ vendorId }` เมื่อมีผู้ค้ารออนุมัติ — ไม่มีข้อมูลส่วนตัว), `payment:submitted` (`{ paymentId, bookingId }` เมื่อผู้ค้าส่งสลิป) | สำหรับ badge แจ้งเตือน |
@@ -624,8 +640,11 @@ Vendor กด "ยืนยันการจอง" → POST /bookings/:id/conf
 | POST | `/vendors/register` | public — ใช้ `registrationToken` จาก OTP/LINE |
 | GET | `/vendors/me/options` | ตัวเลือกของฟอร์มแก้โปรไฟล์ |
 | GET / PATCH | `/vendors/me` | แก้ไขข้อมูล (REJECTED → ส่งใหม่เป็น PENDING) |
+| GET | `/vendors/me/export` | สำเนาข้อมูลส่วนบุคคลทั้งหมด (JSON — โปรไฟล์, การจอง+การชำระ, คิว, ประวัติแจ้งเตือน, ลิงก์รูป 5 นาที) — ผู้ค้าทุกสถานะ, audit `vendor.data_export` (Phase 11.3) |
+| DELETE | `/vendors/me` | `{ confirmPhone }` ลบบัญชีและข้อมูลส่วนบุคคล → 204 + logout ทุกเครื่อง; ยังมีการจองที่ยังไม่ถึงวันขาย → `ACCOUNT_HAS_ACTIVE_BOOKINGS` (Phase 11.3) |
 | POST | `/vendors/me/images` | presigned upload — ได้ `{ key, url, headers }` แล้ว PUT ไฟล์ตรงไป MinIO แล้วส่ง `key` ไปกับ `PATCH /vendors/me` |
 | GET | `/market/layout` | ผังตลาด (โซน + ล็อคที่เปิดใช้งาน) — ดูได้ก่อนเปิดรอบ (ผู้ค้า APPROVED) |
+| POST / GET / DELETE | `/rounds/:id/waiting-room` | เข้าคิว (ซ้ำได้) / สถานะ `{ state: NOT_REQUIRED|NOT_JOINED|WAITING|ADMITTED, position, waiting, admittedUntil, opensAt }` / ออกจากคิว — ผู้ค้า APPROVED (Phase 11.1) |
 | GET | `/rounds/current` | ผู้ค้า APPROVED — `{ serverTime, round }`: รอบที่เปิดอยู่ (ปิดก่อนขึ้นก่อน) หรือรอบถัดไปที่ใกล้ที่สุด, `round: null` ถ้าไม่มี; `serverTime` ใช้หา offset ให้ Countdown |
 | GET | `/market-days/:id/stalls` | snapshot ผัง + `round` (`phase`, `openAt`, `closeAt`, `maxStallsPerVendor`) + `serverTime`: ราคาของวัน (รวม override) + `status` `AVAILABLE`/`HOLD`/`BOOKED`/`CLOSED` + `mine` และ `bookingId` (เฉพาะของตัวเอง); hold/รอชำระที่หมดเวลาแล้วนับเป็นว่าง |
 | POST | `/bookings/hold` | `{ stallId, marketDayId }` → 201 การจอง HOLD (`amount` = ราคาของวันนั้น, `holdExpiresAt` = now + `hold_minutes`); ชน → `STALL_TAKEN` (`details.mine`) |
@@ -676,6 +695,12 @@ Vendor กด "ยืนยันการจอง" → POST /bookings/:id/conf
 | GET / POST | `/admin/announcements` (ทุกรายการพร้อม `state` = SCHEDULED/ACTIVE/EXPIRED, `broadcastedAt`) · PATCH / DELETE `/admin/announcements/:id` — สิทธิ์ `ANNOUNCEMENTS_MANAGE`, audit `announcement.create|update|delete` |
 | GET | `/admin/audit-logs` (`actorType`, `actorId`, `action` — ลงท้าย `.` = ทั้งกลุ่ม, `entityType`, `entityId`, `from`/`to` เวลาตลาด, แบ่งหน้า) · `/admin/audit-logs/actions` |
 
+### Monitoring (Phase 11.4 — ใช้จากใน docker network เท่านั้น, nginx ตอบ 404)
+| Method | Path | |
+|---|---|---|
+| GET | `/metrics` | Prometheus — `Authorization: Bearer <METRICS_TOKEN>` (ไม่ตั้ง = 404): `http_request_duration_seconds{method,route,status}` (route เป็นรูปแบบ เช่น `/api/v1/bookings/:id/confirm`), `market_socket_connections`, `market_queue_jobs{queue,state}`, `market_notifications_failed_last_hour`, `market_alert_webhooks_total`, default metrics ของ Node |
+| POST | `/internal/alerts` | Alertmanager webhook — `Bearer <ALERT_WEBHOOK_TOKEN>` → template `admin.alert` ถึง LINE กลุ่มเจ้าหน้าที่ของทุกตลาด (dedupe ตาม fingerprint + startsAt + status) |
+
 ### Error Codes หลัก
 `ROUND_NOT_OPEN`, `STALL_TAKEN`, `STALL_UNAVAILABLE`, `QUOTA_EXCEEDED`, `CATEGORY_NOT_ALLOWED`, `VENDOR_NOT_APPROVED`, `VENDOR_SUSPENDED`, `HOLD_EXPIRED`, `INVALID_STATE_TRANSITION`, `CANCEL_WINDOW_PASSED`, `OTP_INVALID`, `RATE_LIMITED`
 
@@ -686,6 +711,10 @@ Code ของ Auth (เพิ่มใน Phase 1.3–1.4): `INVALID_CREDENTIAL
 Code ของผู้ค้า (เพิ่มใน Phase 2.1): `PHONE_ALREADY_REGISTERED` (สมัครซ้ำ → ให้ยืนยัน OTP เพื่อ login), `UPLOAD_INVALID` (`details.field`)
 
 Code ของการตั้งค่าตลาด (เพิ่มใน Phase 3.1): `STALL_CODE_TAKEN` (`details.codes`), `LAYOUT_OUTDATED` (Phase 9.1 — มีคนบันทึกผังก่อน, `details.version` ล่าสุด), `RESOURCE_IN_USE` (ลบไม่ได้เพราะมีข้อมูลอ้างถึง — `details` เป็นจำนวน เช่น `{ bookings, waitlists }`)
+
+Code ของ PDPA (Phase 11.3): `ACCOUNT_HAS_ACTIVE_BOOKINGS` (409 — `details.count`)
+
+Code ของ Waiting Room (Phase 11.1): `WAITING_ROOM_REQUIRED` (409 — `details.roundId`)
 
 Code ของ check-in (Phase 10): `CHECKIN_INVALID` (404 — `details.status` ถ้าการจองถูกยกเลิก), `CHECKIN_WRONG_DAY` (`details.marketDate`), `CHECKIN_NOT_OPEN` (`details.openAt`), `CHECKIN_CLOSED` (`details.closeAt`)
 
@@ -705,7 +734,7 @@ Code ของรอบการจอง (เพิ่มใน Phase 3.2): `MA
 | 401 | `UNAUTHORIZED` (token หาย/ผิด/หมดอายุ → client ลอง refresh), `INVALID_CREDENTIALS` |
 | 403 | `FORBIDDEN`, `VENDOR_NOT_APPROVED`, `VENDOR_SUSPENDED` |
 | 404 | `NOT_FOUND`, `CHECKIN_INVALID` |
-| 409 | `CONFLICT`, `USERNAME_TAKEN`, `LINE_ALREADY_LINKED`, `PHONE_ALREADY_REGISTERED`, `STALL_CODE_TAKEN`, `LAYOUT_OUTDATED`, `WAITLIST_NOT_NEEDED`, `WAITLIST_ALREADY_JOINED`, `WAITLIST_LIMIT_REACHED`, `RESOURCE_IN_USE`, `MARKET_DATE_TAKEN`, `ROUND_ALREADY_OPENED`, `PAYMENT_DUE_PASSED`, `ROUND_NOT_OPEN`, `STALL_TAKEN`, `STALL_UNAVAILABLE`, `QUOTA_EXCEEDED`, `HOLD_EXPIRED`, `INVALID_STATE_TRANSITION`, `CANCEL_WINDOW_PASSED`, `CHECKIN_WRONG_DAY`, `CHECKIN_NOT_OPEN`, `CHECKIN_CLOSED` |
+| 409 | `CONFLICT`, `USERNAME_TAKEN`, `LINE_ALREADY_LINKED`, `PHONE_ALREADY_REGISTERED`, `STALL_CODE_TAKEN`, `LAYOUT_OUTDATED`, `WAITLIST_NOT_NEEDED`, `WAITLIST_ALREADY_JOINED`, `WAITLIST_LIMIT_REACHED`, `RESOURCE_IN_USE`, `MARKET_DATE_TAKEN`, `ROUND_ALREADY_OPENED`, `PAYMENT_DUE_PASSED`, `ROUND_NOT_OPEN`, `STALL_TAKEN`, `STALL_UNAVAILABLE`, `QUOTA_EXCEEDED`, `HOLD_EXPIRED`, `INVALID_STATE_TRANSITION`, `CANCEL_WINDOW_PASSED`, `CHECKIN_WRONG_DAY`, `CHECKIN_NOT_OPEN`, `CHECKIN_CLOSED`, `WAITING_ROOM_REQUIRED`, `ACCOUNT_HAS_ACTIVE_BOOKINGS` |
 | 422 | `CATEGORY_NOT_ALLOWED` |
 | 429 | `RATE_LIMITED`, `ACCOUNT_LOCKED` |
 | 500 | `INTERNAL_ERROR` (ไม่ส่งข้อความจริงออกไป — ดูใน log ด้วย `x-request-id`) |
@@ -737,6 +766,7 @@ Code ของรอบการจอง (เพิ่มใน Phase 3.2): `MA
 | `noshow_suspend_days` | int | 30 | 1–365 | |
 | `notify_before_round_open_minutes` | int | 60 | 0–10080 (0 = ไม่แจ้ง) | แจ้งผู้ค้าที่อนุมัติแล้วก่อนรอบเปิด |
 | `notify_before_payment_due_minutes` | int | 60 | 0–1440 (0 = ไม่แจ้ง) | เตือนผู้ค้าที่ยังไม่ชำระ (ไม่เตือนถ้า `payment_deadline_minutes` ≤ ค่านี้) |
+| `waiting_room_session_minutes` | int | 10 | 2–60 | Waiting Room: เวลาในหน้าจองหลังได้เข้า — หมดแล้วต้องเข้าคิวใหม่ (ต่อท้าย) |
 | `line_admin_group_id` | string \| null | null | `C` + hex 32 ตัว | LINE กลุ่มเจ้าหน้าที่ — รับแจ้งผู้ค้าสมัครใหม่/สลิปใหม่ (บอทตอบ ID เมื่อถูกเชิญเข้ากลุ่ม) |
 
 - Schema ของทุก key อยู่ที่ `packages/shared/src/settings.ts` (`settingFields`, `SETTING_DEFAULTS`) — API และหน้า admin ใช้ตัวเดียวกัน
@@ -752,7 +782,9 @@ Code ของรอบการจอง (เพิ่มใน Phase 3.2): `MA
 - Refresh token ใน httpOnly + Secure + SameSite cookie, หมุนใหม่ทุกครั้งที่ refresh
 - Validate input ทุก endpoint ด้วย Zod/class-validator
 - ไฟล์อัปโหลด: ตรวจ MIME/ขนาด (≤ 5 MB), เก็บ private bucket, เข้าถึงผ่าน presigned URL อายุสั้น
-- PDPA: เก็บเวลายินยอม, มีหน้าขอลบข้อมูล, mask เลขโทรศัพท์ในรายงานที่ export ตามสิทธิ์
+- PDPA: เก็บเวลายินยอม, mask เลขโทรศัพท์ในรายงานที่ export ตามสิทธิ์; สิทธิ์ของเจ้าของข้อมูล (Phase 11.3): ผู้ค้าดาวน์โหลดสำเนาข้อมูล (JSON) และลบบัญชีเองที่หน้า "ข้อมูลของฉัน" (ยืนยันด้วยเบอร์), เจ้าหน้าที่ลบแทนได้ (`POST /admin/vendors/:id/erase` + เหตุผล, สิทธิ์ `VENDOR_DATA_ERASE`)
+  - การลบ = ทำให้ระบุตัวไม่ได้: ชื่อ/เบอร์/ที่อยู่/ร้านเป็นค่าแทน, ลบรูปบัตร/ร้าน/สลิปใน MinIO, ตัด LINE, ผู้รับ/ข้อความในประวัติแจ้งเตือนเป็น `-`, ยกเลิกคิวรอ, revoke session; **เก็บ** แถวการจอง/การชำระ (ยอด วันที่ ล็อค `slip_hash`) เป็นบัญชีของตลาด; audit `vendor.erase` (ไม่มีข้อมูลส่วนบุคคล)
+  - ระยะเวลาเก็บ (`RETENTION_DAYS` ใน shared, worker `retention` ทุกวัน 03:00 เวลาไทย): ประวัติแจ้งเตือนที่จบแล้ว 180 วัน · รูปสลิป 365 วันนับจากวันขาย · ผู้ค้าที่ถูกปฏิเสธและไม่ได้ส่งใหม่ 180 วัน (ไม่มีการจอง) → ลบข้อมูลส่วนบุคคล — หน้า `/privacy` แจ้งนโยบายนี้
 - ห้ามบันทึก OTP/password/token ลง log
 
 ### Non-functional
@@ -967,8 +999,22 @@ VITE_LINE_LIFF_ID=        (ฝั่ง web — ว่าง = ซ่อนป�
 | 2026-11-01 | ไม่ตั้งเวลา check-in = ทั้งวันขาย (00:00–24:00 เวลาไทย) แทน null = ไม่เปิด | ใช้งานได้ทันทีโดยไม่ต้องตั้งทุกวัน; No-show นับหลังจบวันขาย |
 | 2026-11-01 | No-show นับครั้งเดียวต่อวันขายต่อผู้ค้า, ระงับเมื่อครบทุก `noshow_threshold` ครั้ง (count % threshold) ไม่รีเซ็ตตัวนับ, ย้อนนับไม่เกิน 3 วัน | จองหลายล็อคแล้วไม่มาไม่ควรถูกระงับในวันเดียว; ตัวนับสะสมใช้ในรายงาน ส่วนการระงับรอบถัดไปต้องไม่มาอีก threshold ครั้ง; เปิดใช้ครั้งแรกไม่ลงโทษข้อมูลเก่าที่ไม่มีระบบ check-in |
 | 2026-11-01 | อ่าน QR ฝั่ง admin ด้วย `jsqr` (กล้องผ่าน `getUserMedia` + อ่านเฟรมเอง, รูปผ่าน canvas) แทน `html5-qrcode` และโหลดแบบ lazy | ทดสอบ token สุ่ม 150 ตัว: html5-qrcode 2.3.8 อ่าน QR ที่สร้างถูกต้องไม่ได้ 3–8% ส่วน jsQR 0/453; ตัวอ่าน 130 kB โหลดเฉพาะตอนสแกน (bundle หลัก +23 kB) |
+| 2026-11-02 | Waiting Room แบบจำกัดจำนวนคนในหน้าจองพร้อมกัน (capacity + เวลาต่อคน) ใน Redis sorted set, worker เดียวปล่อยคิว (BullMQ scheduler) แทนการปล่อยเป็นชุดตามเวลา | จำนวนคนที่แย่งจองพร้อมกันคุมได้ตรงๆ ไม่ขึ้นกับความเร็วของแต่ละคน; คนออกเร็วคิวเดินเร็ว; ไม่ต้องล็อคข้าม instance |
+| 2026-11-02 | เข้าคิวก่อนรอบเปิด = ลำดับสุ่ม (ภายใน 1 นาทีก่อนเปิด) | ไม่ได้เปรียบคนที่กดตรงเวลาที่สุด/เน็ตเร็วที่สุด (ใกล้ Lottery โดยไม่ต้องมีขั้นตอนลงชื่อ) — ผู้ใช้เลือกไม่ทำ Lottery |
+| 2026-11-02 | E2E global setup ลบ key ของ Redis ยกเว้น `bull:*` แทน `FLUSHDB` | API เปิดก่อน global setup และตั้ง job scheduler ไว้แล้ว — FLUSHDB ทำให้ worker ตามเวลาทุกตัว (booking-expiry, no-show, waiting room) ไม่ทำงานตลอดการรัน E2E (พบตอนทำ 11.1) |
+| 2026-11-02 | ตรวจสลิปด้วย SlipOK (`SLIP_VERIFIER=slipok`, ส่งรูปแบบ multipart `files` + `log: true` + `amount`) และตรวจซ้ำฝั่งเรา 2 ชั้น: sha256 ของรูป + `slip_trans_ref` unique | ผู้ใช้เลือก SlipOK; ไม่พึ่งผู้ให้บริการอย่างเดียว — รูปซ้ำจับได้แม้ตรวจด้วยมือ/ไม่มีโควตา, เลขอ้างอิงจับสลิปเดียวกันที่ถ่ายใหม่ (รูปไม่เหมือนกัน) |
+| 2026-11-02 | SlipOK ตอบ "อ่าน QR ไม่ได้/ไม่ใช่สลิป" (1005–1008), รอธนาคาร (1010) หรือขัดข้อง → ไม่ปฏิเสธเอง ให้เจ้าหน้าที่ตรวจ; ปฏิเสธเองเฉพาะผลที่แน่นอน (1011–1014) | รูปถ่ายเอียง/เบลอคนยังอ่านได้ — ไม่ควรทำให้ผู้ค้าต้องส่งใหม่เพราะเครื่องอ่านไม่ออก |
+| 2026-11-02 | สลิปรูปเดียวกับที่ **อนุมัติแล้ว** ปฏิเสธเองเสมอ; รูปซ้ำกับที่ยังรอตรวจ/ถูกปฏิเสธ → แค่เตือน | ส่งรูปเดิมซ้ำหลังถูกปฏิเสธ (เช่น ยอดไม่ตรงแต่โอนเพิ่มแล้ว) อาจเกิดได้ — ให้คนตัดสิน |
+| 2026-11-02 | ลบบัญชีผู้ค้า = ทำให้ระบุตัวไม่ได้ (anonymize) แทนการลบแถว, ห้ามลบขณะมีการจองที่ยังไม่ถึงวันขาย | การจอง/การชำระต้องเก็บเป็นบัญชีของตลาด (FK, รายงานรายได้); ผู้ค้าที่ยังมีล็อคในอนาคตต้องยกเลิกก่อน (คืนล็อคให้คนอื่นตามกติกาเดิม) |
+| 2026-11-02 | ผู้ค้าลบบัญชีเองได้ทันที (ยืนยันด้วยเบอร์) ไม่ต้องรอเจ้าหน้าที่อนุมัติ | PDPA ให้ทำตามคำขอโดยไม่ชักช้า; ย้อนกลับไม่ได้จึงกันกดพลาดด้วยการพิมพ์เบอร์ |
+| 2026-11-02 | ระยะเวลาเก็บ: แจ้งเตือน 180 วัน, รูปสลิป 365 วัน, ผู้สมัครที่ไม่ผ่าน 180 วัน (ค่าเริ่มต้นในโค้ด `RETENTION_DAYS`) | ข้อมูลที่ไม่จำเป็นแล้วไม่ควรเก็บต่อ — **เจ้าของตลาด/ฝ่ายกฎหมายต้องยืนยันตัวเลขก่อนใช้จริง** (เปลี่ยนได้ที่ shared ที่เดียว) |
+| 2026-11-02 | Monitoring: `prom-client` ใน API + Prometheus/Alertmanager/Grafana ใน compose profile `monitoring` (Grafana ที่ localhost ผ่าน SSH tunnel) | ผู้ใช้เลือก Prometheus + Grafana; profile เดียวกับ Uptime Kuma — ไม่บังคับ ไม่เปิด port ออก internet |
+| 2026-11-02 | Alert ส่งผ่าน API → LINE กลุ่มเจ้าหน้าที่ (webhook ของ Alertmanager + token) แทน email/LINE Notify | ใช้ LINE OA ที่ตั้งไว้แล้ว (LINE Notify ปิดบริการแล้ว); ข้อจำกัด: API ล่มทั้งตัวส่งไม่ได้ — Uptime Kuma (ช่องทางของตัวเอง) ครอบส่วนนี้ |
+| 2026-11-02 | label `route` ของ metrics ใช้รูปแบบ path ที่ match (`req.route.path`) ไม่ใช่ URL จริง, ไม่นับ `/metrics` และ `/health` | id ในพาธทำให้ series บวมไม่จำกัด; scrape/health ถี่ทำให้กราฟเพี้ยน |
+| 2026-11-02 | แก้ช่องโหว่ dependency ทางอ้อมด้วย pnpm `overrides` (major เดิม) + CI `pnpm audit --prod --audit-level high`; ที่เหลือบันทึกเหตุผลใน `docs/security-review.md` | ยังอัปเกรด NestJS 11 ไม่ได้ (Decision เดิม) — override เฉพาะตัวที่อยู่ใน runtime, ไม่ติดตั้งเวอร์ชันที่เพิ่งออก (minimum release age) |
+| 2026-11-02 | CSP เริ่มแบบ Report-Only + Permissions-Policy (กล้องเฉพาะ origin ตัวเอง) ที่ nginx | CSP ผิดทำให้ทั้งเว็บใช้ไม่ได้ และทดสอบกับ nginx/LIFF จริงในเครื่อง dev ไม่ได้ — ตรวจ console บน production แล้วค่อยบังคับ (security-review "ที่ต้องทำต่อ") |
 
 ### Open Questions
-- [ ] ใช้กับตลาดเดียวหรือหลายตลาด (ตอนนี้ schema รองรับแล้ว แต่ UI ยังเป็นตลาดเดียว)
+- [x] ใช้กับตลาดเดียวหรือหลายตลาด → **ตลาดเดียวไปก่อน** (ตัดสินใจ 2026-11-02, Phase 11 — schema มี `market_id` พร้อม ทำ UI หลายตลาดเมื่อมีตลาดที่ 2 จริง)
 - [x] ผู้ให้บริการ SMS ที่จะใช้ → **ThaiBulkSMS** (ตัดสินใจ 2026-11-01, Phase 7)
-- [ ] ต้องการระบบ Lottery/Waiting Room ตั้งแต่ต้นหรือไม่ (ขึ้นกับจำนวนผู้ค้าที่คาด)
+- [x] ต้องการระบบ Lottery/Waiting Room ตั้งแต่ต้นหรือไม่ → **Waiting Room (เปิด/ปิดต่อรอบ) ไม่ทำ Lottery** (ตัดสินใจ 2026-11-02, Phase 11)

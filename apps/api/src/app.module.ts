@@ -12,6 +12,9 @@ import { AppConfigModule } from './config/config.module';
 import { AdminUserModule } from './modules/admin-user/admin-user.module';
 import { AnnouncementModule } from './modules/announcement/announcement.module';
 import { CheckinModule } from './modules/checkin/checkin.module';
+import { WaitingRoomModule } from './modules/waiting-room/waiting-room.module';
+import { PrivacyModule } from './modules/privacy/privacy.module';
+import { MetricsModule } from './modules/metrics/metrics.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { BookingModule } from './modules/booking/booking.module';
@@ -64,6 +67,9 @@ import { REDIS, RedisModule } from './redis/redis.module';
     WaitlistModule,
     AnnouncementModule,
     CheckinModule,
+    WaitingRoomModule,
+    PrivacyModule,
+    MetricsModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

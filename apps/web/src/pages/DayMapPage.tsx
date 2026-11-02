@@ -7,11 +7,18 @@ import { StallMap, StallMapLegend } from '@market-booking/stall-map';
 import { MY_BOOKINGS_KEY, bookingApi, useMyBookings } from '../api/booking';
 import { WAITLIST_KEY, findOpenEntry, useMyWaitlists, waitlistApi } from '../api/waitlist';
 import { type MarketDayStallsData, marketDayKey, useMarketDayStalls } from '../api/market';
+import { useWaitingRoom } from '../api/waiting-room';
 import { Layout } from '../components/Layout';
+import { AdmittedBanner, PreOpenQueueNote, WaitingRoomPanel } from '../components/WaitingRoom';
 import { Alert, Button, Spinner } from '../components/ui';
 import { errorCode, errorMessage } from '../lib/errors';
 import { formatBaht, formatThaiDateTime, toMapStatus } from '../lib/format';
-import { useMarketDaySocket, useSocketConnected, useWaitlistOffer } from '../lib/realtime';
+import {
+  useMarketDaySocket,
+  useSocketConnected,
+  useWaitingRoomAdmitted,
+  useWaitlistOffer,
+} from '../lib/realtime';
 import { formatCountdown, useCountdown } from '../lib/server-clock';
 
 type Notice = { tone: 'error' | 'success' | 'info' | 'warning'; text: string } | null;
@@ -39,6 +46,14 @@ export function DayMapPage() {
   const myBookings = useMyBookings();
   const connected = useSocketConnected();
   useMarketDaySocket(marketDayId);
+  // Waiting Room (Phase 11.1): รอบที่เปิดใช้ — เข้าคิวเมื่อเปิดหน้า (ก่อนเปิดจองก็เข้าได้ ลำดับสุ่มตอนเปิด)
+  const round = day.data?.round;
+  const queueOn =
+    Boolean(round?.waitingRoom) &&
+    (round?.phase === 'UPCOMING' || round?.phase === 'OPEN') &&
+    !day.data?.marketDay.isCancelled;
+  const waitingRoom = useWaitingRoom(round?.id ?? '', queueOn);
+  useWaitingRoomAdmitted(queueOn ? (round?.id ?? null) : null);
 
   const [zoneFilter, setZoneFilter] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -137,10 +152,30 @@ export function DayMapPage() {
   const selected = data.stalls.find((s) => s.id === selectedId) ?? null;
   const activeHold =
     myBookings.data?.find((b) => b.marketDay.id === marketDayId && b.status === 'HOLD') ?? null;
+  const queue = waitingRoom.status;
+  const admitted = queue?.state === 'ADMITTED' ? queue.admittedUntil : null;
+  // รอบเปิดแล้วแต่ยังไม่ได้เข้า → แสดงหน้าคิวแทนผัง (มี HOLD ค้างอยู่ให้ยืนยันได้เสมอ)
+  if (queueOn && data.round.phase === 'OPEN' && !admitted && !activeHold) {
+    return (
+      <Layout title={`วัน${formatIsoDateTh(data.marketDay.marketDate, true)}`}>
+        <RoundStatus data={data} onDue={day.refetch} />
+        <WaitingRoomPanel
+          status={queue}
+          onRejoin={waitingRoom.rejoin}
+          rejoining={waitingRoom.join.isPending}
+          error={waitingRoom.join.isError ? errorMessage(waitingRoom.join.error) : null}
+        />
+      </Layout>
+    );
+  }
 
   return (
     <Layout title={`วัน${formatIsoDateTh(data.marketDay.marketDate, true)}`}>
       <RoundStatus data={data} onDue={day.refetch} />
+      {queueOn && data.round.phase === 'UPCOMING' && queue?.state === 'WAITING' && (
+        <PreOpenQueueNote />
+      )}
+      {admitted && <AdmittedBanner until={admitted} offsetMs={data.clockOffsetMs} />}
       {!connected && (
         <p role="status" className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900">
           กำลังเชื่อมต่อใหม่… ผังอาจยังไม่อัปเดต

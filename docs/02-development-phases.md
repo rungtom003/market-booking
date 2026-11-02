@@ -75,7 +75,12 @@
 | 9.2 | ↳ Waitlist | ✅ DONE | 2026-11-01 | 2026-11-01 |
 | 9.3 | ↳ Announcements | ✅ DONE | 2026-11-01 | 2026-11-01 |
 | 10 | Check-in & No-show | ✅ DONE | 2026-11-01 | 2026-11-01 |
-| 11 | Hardening & Scale | ⬜ TODO | | |
+| 11 | Hardening & Scale | ✅ DONE | 2026-11-02 | 2026-11-02 |
+| 11.1 | ↳ Waiting Room | ✅ DONE | 2026-11-02 | 2026-11-02 |
+| 11.2 | ↳ SlipOK + ตรวจสลิปซ้ำ | ✅ DONE | 2026-11-02 | 2026-11-02 |
+| 11.3 | ↳ PDPA (ขอลบ/ส่งออกข้อมูล) | ✅ DONE | 2026-11-02 | 2026-11-02 |
+| 11.4 | ↳ Monitoring (Prometheus/Grafana) | ✅ DONE | 2026-11-02 | 2026-11-02 |
+| 11.5 | ↳ Security review + dependency audit | ✅ DONE | 2026-11-02 | 2026-11-02 |
 
 **Milestone MVP** = Phase 0 – 6 (สมัคร → อนุมัติ → ตั้งค่าตลาด → จอง Realtime → ชำระเงิน → ขึ้นระบบจริง)
 
@@ -807,18 +812,50 @@
 ---
 
 ## Phase 11 — Hardening & Scale
-**สถานะ:** ⬜ TODO · **Dependencies:** Phase 10 · **เริ่ม:** – · **เสร็จ:** –
+**สถานะ:** ✅ DONE · **Dependencies:** Phase 10 · **เริ่ม:** 2026-11-02 · **เสร็จ:** 2026-11-02
+
+> ผู้ใช้ตัดสินใจ (2026-11-02): ไม่ทำ Multi-market UI และ Lottery ในรอบนี้; ตรวจสลิปใช้ **SlipOK**; Monitoring ใช้ **Prometheus + Grafana** — แบ่งงานเป็น 11.1–11.5
 
 **Tasks**
-- [ ] Waiting Room (Redis queue ปล่อยคนเข้าหน้าจองเป็นชุด) — เปิด/ปิดได้ต่อรอบ
-- [ ] (ทางเลือก) โหมด Lottery: ลงชื่อ → สุ่มลำดับสิทธิ์เลือกล็อค
-- [ ] SlipVerifier จริง (เช่น SlipOK) + ตรวจสลิปซ้ำ
-- [ ] PDPA: ขอลบ/ส่งออกข้อมูลส่วนตัว, นโยบายเก็บข้อมูล
-- [ ] Security review (OWASP checklist), dependency audit
-- [ ] Multi-market UI (ถ้าตัดสินใจใช้หลายตลาด)
-- [ ] Monitoring: Prometheus/Grafana หรือเทียบเท่า, alert เมื่อ error rate สูง
+- [x] Waiting Room (Redis queue ปล่อยคนเข้าหน้าจองเป็นชุด) — เปิด/ปิดได้ต่อรอบ (11.1)
+- [ ] ~~(ทางเลือก) โหมด Lottery: ลงชื่อ → สุ่มลำดับสิทธิ์เลือกล็อค~~ — ผู้ใช้เลือกไม่ทำ (2026-11-02); Waiting Room สุ่มลำดับคนที่เข้าคิวก่อนเปิดแทน
+- [x] SlipVerifier จริง (เช่น SlipOK) + ตรวจสลิปซ้ำ (11.2)
+- [x] PDPA: ขอลบ/ส่งออกข้อมูลส่วนตัว, นโยบายเก็บข้อมูล (11.3)
+- [x] Security review (OWASP checklist), dependency audit (11.5 — `docs/security-review.md`)
+- [ ] ~~Multi-market UI (ถ้าตัดสินใจใช้หลายตลาด)~~ — ผู้ใช้เลือกตลาดเดียวไปก่อน (2026-11-02)
+- [x] Monitoring: Prometheus/Grafana หรือเทียบเท่า, alert เมื่อ error rate สูง (11.4)
 
-**Agent Notes:** –
+**Agent Notes:**
+- **11.1 Waiting Room ✅ (2026-11-02)** — integration `waiting-room.int-spec.ts` (4): เข้าคิวตามลำดับ/เข้าซ้ำไม่เสียลำดับ → จองก่อนได้เข้า 409 `WAITING_ROOM_REQUIRED` → ปล่อยเท่าที่ว่าง (capacity 2) → จองได้ → ออกแล้วคนถัดไปได้เข้า + สถิติของ admin; หมดเวลาในหน้าจอง → จองไม่ได้/เข้าใหม่ต่อท้าย, คนที่ปิดหน้าไป (ไม่ถามสถานะ > 45 วินาที) ไม่ได้รับที่; เข้าคิวก่อนเปิดได้ก่อนคนมาหลังเปิด และไม่ปล่อยก่อนเวลาเปิด; รอบที่ไม่เปิดใช้ = `NOT_REQUIRED` จองได้เลย, เปิดใช้ภายหลังผ่าน PATCH แล้วผู้ค้าเห็น `waitingRoom: true` — E2E `waiting-room.spec.ts`: capacity 1 → คนแรกได้เข้า (เห็นเวลาที่เหลือ + ผัง) → คนที่สองเห็น "ลำดับที่ 1" ไม่เห็นผัง → admin เพิ่มเป็น 2 → คนที่สองได้เข้าเองไม่ต้องรีเฟรช (socket) → จอง B2 ได้
+  - API: `modules/waiting-room/` (`WaitingRoomService` บน Redis sorted set, `WaitingRoomProcessor` queue `waiting-room` ทุก 3 วินาที, `POST/GET/DELETE /rounds/:id/waiting-room`, `GET /admin/rounds/:id/waiting-room`), ตรวจสิทธิ์ใน `BookingService.hold`; migration `booking_rounds.waiting_room_capacity`; setting `waiting_room_session_minutes`; socket `waiting-room:admitted`; `CurrentRound.waitingRoom` / `MarketDayStalls.round.waitingRoom`
+  - เว็บผู้ค้า: `useWaitingRoom` (เข้าคิวเมื่อเปิดหน้า, ถามทุก 5 วินาที) + หน้าคิว/แถบเวลาที่เหลือ/ข้อความก่อนเปิด/เข้าคิวใหม่; admin: ช่อง "Waiting Room" ในฟอร์มรอบ + ตัวเลขสดในหน้ารอบ (ในหน้าจอง/รอคิว)
+  - พบระหว่างทำ: E2E global setup `FLUSHDB` หลัง API เปิด → job scheduler ทุกตัวหาย (worker ตามเวลาไม่เคยทำงานใน E2E) — แก้เป็นลบเฉพาะ key ที่ไม่ใช่ `bull:*`; E2E ทั้งชุดยังผ่านเมื่อ worker ทำงานจริง
+  - ข้อจำกัด: ดูผัง (`GET /market-days/:id/stalls`) ไม่ถูกกั้นฝั่ง API; ยังไม่ได้ load test แบบมีคิว (สคริปต์ `pnpm test:load` เดิมใช้รอบที่ไม่เปิดคิว)
+  - ทดสอบ: integration 280 (+4), E2E 35 (+1)
+- **11.2 SlipOK + ตรวจสลิปซ้ำ ✅ (2026-11-02)** — unit `slipok.verifier.spec.ts` (12, ตัวอย่างคำตอบจากเอกสาร SlipOK v1.8): ส่ง `files`/`log`/`amount` + header `x-authorization` ไป `/api/line/apikey/<branch>`, ยอดไม่ตรงฝั่งเรา, map code 1004–1014, เครือข่ายล้ม/ไม่ใช่ JSON = UNVERIFIED; integration (+3 ใน `payments.int-spec.ts`): รูปเดียวกับที่อนุมัติแล้ว → ไม่ผ่านเอง `DUPLICATE` (แม้ตรวจด้วยมือ) + admin เห็น `duplicateOf`; รูปซ้ำที่ยังรอตรวจ → เตือนแต่ไม่ปฏิเสธ; VALID แต่ `transRef` เคยใช้ → ไม่ผ่าน; UNVERIFIED เก็บ `BANK_DELAY` ให้เจ้าหน้าที่เห็น; env `SLIP_VERIFIER=slipok` ต้องมี branch id + API key
+  - API: `SlipOkVerifier` (`payment/slipok.verifier.ts`, timeout 15 วินาที, ไม่ log ข้อความเต็มที่อาจมีชื่อผู้โอน), `SLIP_VERIFIER` เลือกจาก env; `PaymentService` อ่านรูปทั้งไฟล์ (`StorageService.read`) → sha256 → ตรวจซ้ำ → ผู้ให้บริการ; migration `payments.slip_hash`/`slip_trans_ref` (unique)/`slip_check`; `AdminPayment.slipCheck`/`duplicateOf`
+  - Admin: หน้าตรวจสลิปแสดง "รูปสลิปนี้เคยส่งมาแล้วกับล็อค …" (แดง) และผลตรวจของระบบ; runbook §4.5 ตั้งค่า SlipOK (ผูกบัญชีรับเงินใน LIFF)
+  - test เดิมใช้รูปสลิปเดียวกันทุกครั้ง → เปลี่ยนเป็นรูปไม่ซ้ำ (byte สุ่มต่อท้าย / สีสุ่มใน E2E) ไม่งั้นถูกปฏิเสธว่าซ้ำ
+  - ข้อจำกัด: ยังไม่ได้ทดสอบกับบัญชี SlipOK จริง (ทดสอบด้วยคำตอบตามเอกสาร) — ต้องสมัครแพ็กเกจ + ผูกบัญชีใน LIFF ก่อนเปิด; ยังไม่เทียบชื่อ/บัญชีผู้รับกับ `promptpay_id` ฝั่งเรา (SlipOK ปิดบังเลขบัญชี — ใช้ `log: true` ให้ SlipOK ตรวจ)
+  - ทดสอบ: unit 233 (+13), integration 283 (+3)
+- **11.3 PDPA ✅ (2026-11-02)** — integration `privacy.int-spec.ts` (4): สำเนาข้อมูล (โปรไฟล์/การจอง+ชำระ+ลิงก์สลิป/แจ้งเตือน + audit); ลบเอง: เบอร์ยืนยันผิด 400, มีการจองในอนาคต 409 `ACCOUNT_HAS_ACTIVE_BOOKINGS`, ลบแล้วชื่อ/เบอร์/ที่อยู่/LINE/รูปหาย, เบอร์เดิมว่าง, ยอดการชำระยังอยู่แต่ไม่มีรูปสลิป, ผู้รับในประวัติแจ้งเตือนเป็น `-`, refresh token ใช้ไม่ได้ + access token เดิมโดน 401; admin ลบแทน (STAFF 403, ต้องมีเหตุผล, audit ADMIN); retention ลบแจ้งเตือนเก่า/รูปสลิปเกิน 1 ปี/ผู้สมัครที่ไม่ผ่านเกิน 180 วัน (SYSTEM) แต่ไม่แตะของใหม่ — E2E `pdpa.spec.ts`: ดาวน์โหลด JSON ที่มีข้อมูลถูกต้อง → ลบบัญชี (เบอร์ผิดแจ้งที่ช่อง) → กลับหน้า login พร้อมข้อความ → เบอร์เดิมเริ่มสมัครใหม่ได้
+  - API: `modules/privacy/` — `PrivacyService` (export, eraseSelf, eraseByAdmin, erase), `RetentionService` + `RetentionProcessor` (queue `retention`, cron `0 20 * * *` UTC); `VendorApprovedGuard` ปฏิเสธผู้ค้าที่ลบแล้ว; migration `vendors.deleted_at`; สิทธิ์ใหม่ `VENDOR_DATA_ERASE`; error code `ACCOUNT_HAS_ACTIVE_BOOKINGS`
+  - เว็บผู้ค้า: การ์ด "ข้อมูลส่วนบุคคลของฉัน" ในหน้าโปรไฟล์ (ดาวน์โหลด JSON / ลบบัญชีพร้อมยืนยันเบอร์) — ข้อความหลังลบส่งผ่าน `session.signOut(notice)` เพราะ redirect ของ `RequireAuth` ทับ `location.state` (และอ่าน flash ใน initializer ไม่ได้เพราะ StrictMode เรียก 2 ครั้ง); หน้า `/privacy` เพิ่มระยะเวลาเก็บและสิทธิ์ที่ทำเองได้
+  - Admin: drawer ผู้ค้ามีปุ่ม "ลบข้อมูลตามคำขอ (PDPA)" (ต้องกรอกช่องทาง/เวลาที่ได้รับคำขอ) + แจ้งว่าลบแล้ว (ซ่อนปุ่มอนุมัติ/ระงับ); รายการผู้ค้าแสดง "ลบข้อมูลแล้ว"
+  - ข้อจำกัด: ตัวเลขระยะเวลาเก็บเป็นค่าเริ่มต้นที่ต้องให้เจ้าของตลาด/ฝ่ายกฎหมายยืนยัน; audit log เก่าที่มีชื่อใน before/after (เช่น การแก้โปรไฟล์) ยังไม่ถูกลบตาม; backup ที่ทำไว้ก่อนลบยังมีข้อมูลจนกว่าจะหมดอายุ (`BACKUP_KEEP_DAYS`); access token ที่ออกก่อนลบใช้ `GET /vendors/me` ได้อีกไม่เกิน 15 นาที (เห็นค่าที่ถูกลบแล้ว)
+  - ทดสอบ: integration 287 (+4), E2E 36 (+1)
+- **11.4 Monitoring ✅ (2026-11-02)** — integration `metrics.int-spec.ts` (2): ไม่มี/ผิด token 401; metrics มีเวลาตอบตามรูปแบบ route (`/api/v1/bookings/:id/payment` ไม่มี id จริง, ไม่นับ `/metrics`), `market_queue_jobs`, socket, แจ้งเตือนล้มเหลว, process/event loop; Alertmanager webhook ต้องมี token → LINE กลุ่มเจ้าหน้าที่ (firing ส่งซ้ำ = ไม่ส่ง LINE ซ้ำ, resolved ส่งแยก) + นับ `market_alert_webhooks_total`
+  - API: `modules/metrics/` (`MetricsService` บน `prom-client` 15.1.3, `MetricsMiddleware`, `MetricsController` — token เทียบแบบเวลาคงที่, ไม่ตั้ง token = 404); gateway ลงทะเบียนตัวนับ socket; template `admin.alert`; env `METRICS_TOKEN` / `ALERT_WEBHOOK_TOKEN` (≥ 16 ตัว)
+  - Docker: `docker/monitoring/` — `prometheus.yml` (scrape `api:3000/api/v1/metrics` ด้วย Bearer จากไฟล์), `alerts.yml` (ApiDown, HighErrorRate, SlowResponses, EventLoopBlocked, QueueBacklog, NotificationsFailing), `alertmanager.yml` (webhook → API), Grafana provisioning + dashboard "Market Booking" 10 panel; compose profile `monitoring` เพิ่ม prometheus v3.5.0 / alertmanager v0.28.1 / grafana 12.1.1 (localhost:3002), volume `prometheus-data`/`grafana-data`; nginx ตอบ 404 ที่ `/api/v1/metrics` และ `/api/v1/internal/`; runbook §8
+  - ตรวจแล้ว: YAML ทุกไฟล์ parse ได้, `docker compose --profile monitoring config` ผ่าน — **ยังไม่ได้รัน container จริง/`promtool check`** (ไม่ได้ดึง image ในเครื่อง dev — ทำบน VPS ตาม runbook §8 ข้อ 3)
+  - ข้อจำกัด: ไม่มี node-exporter (CPU/ดิสก์ของเครื่อง) และ metrics ของ PostgreSQL/Redis — ใช้ Uptime Kuma + `df -h`; metrics เป็นของ instance เดียว (ถ้าเพิ่ม instance ต้องเพิ่ม target)
+  - ทดสอบ: unit 235 (+2 template/env), integration 289 (+2)
+- **11.5 Security review + dependency audit ✅ (2026-11-02)** — `docs/security-review.md`: ไล่ OWASP Top 10 (2021) กับโค้ดจริงทีละหมวด (access control/ownership filter, crypto, injection, rate limit, header, component, auth, integrity, logging, SSRF)
+  - `pnpm audit` 38 → 15 (production high 0): `overrides` ใน `pnpm-workspace.yaml` — body-parser 1.20.9, qs 6.17.1, multer 2.5.0, lodash 4.18.1, js-yaml 4.3.2; ที่เหลือบันทึกเหตุผล (เช่น `@nestjs/core` advisory เป็นเรื่อง SSE ที่ระบบไม่ได้ใช้ — แก้เฉพาะ Nest 11)
+  - nginx: เพิ่ม `Permissions-Policy` และ `Content-Security-Policy-Report-Only` (เปลี่ยนเป็นบังคับหลังตรวจ console บน production)
+  - CI: `pnpm audit --prod --audit-level high`; ตรวจ compose แบบ `--profile monitoring`, `promtool check config`, `amtool check-config`, dashboard JSON
+  - ทดสอบหลังแก้ทั้งหมด: lint/format/typecheck ผ่าน, unit 235, integration 289, build web/admin, E2E 36 ผ่านทั้งชุด
+- **สรุป Phase 11**: ครบ 5 งานย่อย; ไม่ทำ Multi-market UI และ Lottery ตามที่ผู้ใช้เลือก — สิ่งที่ยังต้องทำบนเครื่องจริง: สมัคร SlipOK + ผูกบัญชีใน LIFF, เปิด monitoring profile + ตั้ง token/Grafana, บังคับ CSP, ยืนยันระยะเวลาเก็บข้อมูลกับฝ่ายกฎหมาย, ทดสอบ Waiting Room ด้วย load test
 
 ---
 
@@ -878,3 +915,14 @@
 | 2026-11-01 | 9.3 | ✅ DONE | ประกาศ: API ผู้ค้า + admin CRUD (audit, สิทธิ์ `ANNOUNCEMENTS_MANAGE`), ส่ง LINE ถึงผู้ค้าที่เชื่อม LINE ผ่านคิวแจ้งเตือน (ครั้งเดียว, รอเมื่อยังไม่ตั้ง LINE OA), การ์ดหน้าแรกผู้ค้า, หน้า admin — unit 218 / integration 272 / E2E 33 — Phase 9 ✅ ถัดไป: Phase 10 Check-in & No-show (Phase 6 ยังรอ deploy บน VPS จริง) |
 | 2026-11-01 | 10 | 🟨 IN PROGRESS | เริ่ม Check-in & No-show: QR check-in ของผู้ค้า, หน้าสแกน/ค้นหาของเจ้าหน้าที่ (มือถือ), เวลา check-in ต่อวันขาย, worker นับ No-show + ระงับอัตโนมัติ, ผังแสดงล็อคที่ check-in แล้ว |
 | 2026-11-01 | 10 | ✅ DONE | QR check-in (token สุ่มใน DB) + หน้าเช็คอินของเจ้าหน้าที่บนมือถือ (กล้อง/รูป/ค้นหา, jsQR), เวลาเช็คอินต่อวันขาย, worker No-show (ครั้งเดียวต่อวัน, ระงับเมื่อครบเกณฑ์, แจ้งเตือน), `checkin:updated` realtime + ผังแสดงเช็คอินแล้ว; AC สแกนซ้ำไม่นับซ้ำ/QR วันอื่นถูกปฏิเสธ — unit 220 / integration 276 / E2E 34 — ถัดไป: Phase 11 Hardening & Scale (Phase 6 ยังรอ deploy บน VPS จริง) |
+| 2026-11-02 | 11 | 🟨 IN PROGRESS | เริ่ม Hardening & Scale (11.1 Waiting Room → 11.2 SlipOK/สลิปซ้ำ → 11.3 PDPA → 11.4 Prometheus/Grafana → 11.5 Security review) — ไม่ทำ Multi-market UI และ Lottery ตามที่ผู้ใช้เลือก |
+| 2026-11-02 | 11.1 | ✅ DONE | Waiting Room ต่อรอบ (capacity + เวลาต่อคน, Redis + worker ทุก 3 วินาที, เข้าก่อนเปิด = สุ่ม, จองต้องได้เข้าก่อน, socket แจ้งได้เข้า) + แก้ E2E ที่ล้าง job scheduler ทิ้ง — integration 280 / E2E 35 |
+| 2026-11-02 | 11.2 | 🟨 IN PROGRESS | เริ่ม SlipOK adapter + ตรวจสลิปซ้ำ |
+| 2026-11-02 | 11.2 | ✅ DONE | SlipOK adapter (env `SLIP_VERIFIER`) + ตรวจสลิปซ้ำฝั่งเรา (sha256 รูป + `slip_trans_ref` unique) + เตือนรูปซ้ำในหน้าตรวจสลิป — unit 233 / integration 283 |
+| 2026-11-02 | 11.3 | 🟨 IN PROGRESS | เริ่ม PDPA: ผู้ค้าส่งออกข้อมูลของตัวเอง/ขอลบบัญชี, นโยบายเก็บข้อมูล |
+| 2026-11-02 | 11.3 | ✅ DONE | PDPA: สำเนาข้อมูล JSON + ลบบัญชีเอง/เจ้าหน้าที่ลบแทน (anonymize, เก็บยอดการชำระ) + นโยบายเก็บข้อมูล (worker รายวัน) + หน้า /privacy — integration 287 / E2E 36 |
+| 2026-11-02 | 11.4 | 🟨 IN PROGRESS | เริ่ม Monitoring: /metrics (prom-client) + Prometheus/Grafana/Alertmanager ใน docker compose production |
+| 2026-11-02 | 11.4 | ✅ DONE | Monitoring: `/api/v1/metrics` (prom-client) + Prometheus/Alertmanager/Grafana (profile monitoring) + alert 6 กฎ → LINE กลุ่มเจ้าหน้าที่ผ่าน API + dashboard — integration 289 |
+| 2026-11-02 | 11.5 | 🟨 IN PROGRESS | เริ่ม Security review (OWASP Top 10) + dependency audit |
+| 2026-11-02 | 11.5 | ✅ DONE | Security review OWASP Top 10 (`docs/security-review.md`) + dependency audit 38 → 15 (production high 0, overrides) + Permissions-Policy/CSP Report-Only + CI audit/ตรวจคอนฟิก monitoring |
+| 2026-11-02 | 11 | ✅ DONE | Hardening & Scale ครบ: Waiting Room, SlipOK + สลิปซ้ำ, PDPA, Prometheus/Grafana, Security review — unit 235 / integration 289 / E2E 36 (Phase 6 ยังรอ deploy บน VPS จริง) |

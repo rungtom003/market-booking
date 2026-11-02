@@ -72,6 +72,9 @@ export const ERROR_MESSAGES_TH: Record<ErrorCode, string | ((details: Details) =
     d?.status
       ? 'การจองนี้ถูกยกเลิกแล้ว check-in ไม่ได้'
       : 'ไม่พบ QR นี้ในระบบ (QR ไม่ถูกต้องหรือเป็นของตลาดอื่น)',
+  ACCOUNT_HAS_ACTIVE_BOOKINGS: (d) =>
+    `ยังมีการจอง ${typeof d?.count === 'number' ? `${d.count} รายการ` : ''}ที่ยังไม่ถึงวันขาย — ยกเลิกหรือรอให้ผ่านวันขายก่อนลบบัญชี`,
+  WAITING_ROOM_REQUIRED: 'รอบนี้ต้องเข้าคิวก่อนจอง (หรือหมดเวลาในหน้าจองแล้ว) — กรุณาเข้าคิวใหม่',
   CHECKIN_WRONG_DAY: (d) =>
     typeof d?.marketDate === 'string'
       ? `QR นี้เป็นของวันขาย ${formatIsoDateTh(d.marketDate)} ไม่ใช่วันนี้`

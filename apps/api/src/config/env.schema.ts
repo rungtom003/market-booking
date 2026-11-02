@@ -75,6 +75,16 @@ export const envSchema = z
     /** ประเภทเครดิตของ ThaiBulkSMS — ไม่ตั้ง = ค่าเริ่มต้นของบัญชี */
     SMS_CREDIT_TYPE: z.enum(['standard', 'corporate']).optional(),
 
+    /** ตรวจสลิปอัตโนมัติ: manual = เจ้าหน้าที่ตรวจทุกใบ; slipok = SlipOK API (Phase 11.2) */
+    SLIP_VERIFIER: z.enum(['manual', 'slipok']).default('manual'),
+    SLIPOK_BRANCH_ID: z.string().optional(),
+    SLIPOK_API_KEY: z.string().optional(),
+
+    /** Monitoring (Phase 11.4): token ของ Prometheus scrape `/api/v1/metrics` — ไม่ตั้ง = ปิด endpoint */
+    METRICS_TOKEN: z.string().min(16).optional(),
+    /** token ที่ Alertmanager ใช้ส่ง alert มา `/api/v1/internal/alerts` (ส่งต่อ LINE กลุ่มเจ้าหน้าที่) */
+    ALERT_WEBHOOK_TOKEN: z.string().min(16).optional(),
+
     WEB_ORIGIN: z.url(),
     ADMIN_ORIGIN: z.url(),
   })
@@ -86,6 +96,13 @@ export const envSchema = z
     {
       message: 'SMS_PROVIDER=thaibulksms requires SMS_API_KEY, SMS_API_SECRET and SMS_SENDER',
       path: ['SMS_PROVIDER'],
+    },
+  )
+  .refine(
+    (env) => env.SLIP_VERIFIER !== 'slipok' || Boolean(env.SLIPOK_BRANCH_ID && env.SLIPOK_API_KEY),
+    {
+      message: 'SLIP_VERIFIER=slipok requires SLIPOK_BRANCH_ID and SLIPOK_API_KEY',
+      path: ['SLIP_VERIFIER'],
     },
   );
 

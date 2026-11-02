@@ -7,6 +7,7 @@ import {
   PaymentMethod,
   PaymentStatus,
   RecordCashPaymentInput,
+  SlipCheck,
 } from '@market-booking/shared';
 import { Prisma } from '../../generated/prisma/client';
 import { AppException } from '../../common/exceptions/app.exception';
@@ -31,6 +32,8 @@ const PAYMENT_FIELDS = {
   amount: true,
   status: true,
   slipImageKey: true,
+  slipHash: true,
+  slipCheck: true,
   rejectReason: true,
   createdAt: true,
   verifiedAt: true,
@@ -281,6 +284,36 @@ export class PaymentReviewService {
       : { actorType: 'SYSTEM' as const, actorId: null };
   }
 
+  /** รูปสลิปเดียวกันที่เคยส่งมากับการชำระอื่น (ล่าสุด) — เตือนเจ้าหน้าที่ก่อนอนุมัติ */
+  private async duplicateOf(
+    paymentId: string,
+    slipHash: string,
+  ): Promise<AdminPayment['duplicateOf']> {
+    const twin = await this.prisma.payment.findFirst({
+      where: { slipHash, id: { not: paymentId } },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        status: true,
+        booking: {
+          select: {
+            stall: { select: { code: true } },
+            marketDay: { select: { marketDate: true } },
+            vendor: { select: { firstName: true, lastName: true } },
+          },
+        },
+      },
+    });
+    if (!twin) return null;
+    return {
+      paymentId: twin.id,
+      status: twin.status,
+      stallCode: twin.booking.stall.code,
+      marketDate: twin.booking.marketDay.marketDate.toISOString().slice(0, 10),
+      vendorName: `${twin.booking.vendor.firstName} ${twin.booking.vendor.lastName}`,
+    };
+  }
+
   private async toDto(row: PaymentRow): Promise<AdminPayment> {
     const v = row.booking.vendor;
     return {
@@ -292,6 +325,8 @@ export class PaymentReviewService {
       createdAt: row.createdAt.toISOString(),
       verifiedAt: row.verifiedAt?.toISOString() ?? null,
       slipUrl: row.slipImageKey ? await this.storage.createDownloadUrl(row.slipImageKey) : null,
+      slipCheck: (row.slipCheck as SlipCheck | null) ?? null,
+      duplicateOf: row.slipHash ? await this.duplicateOf(row.id, row.slipHash) : null,
       verifiedByName: row.verifiedBy?.displayName ?? null,
       booking: {
         id: row.booking.id,

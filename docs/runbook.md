@@ -44,7 +44,7 @@ Internet ──► :80/:443  nginx ─┬─ https://WEB_DOMAIN    static apps/w
 | `docker/backups/` | ไฟล์ backup (`market_booking-<UTC>.dump`) |
 | `docker/deploy-history.log` | ประวัติ deploy/rollback (tag = git commit) |
 
-Volume ของ Docker: `postgres-data`, `redis-data`, `minio-data` (สลิป/รูป), `letsencrypt`, `certbot-www`, `uptime-kuma-data` — `docker compose down` ไม่ลบ volume (**ห้ามใช้ `down -v`**)
+Volume ของ Docker: `postgres-data`, `redis-data`, `minio-data` (สลิป/รูป), `letsencrypt`, `certbot-www`, `uptime-kuma-data`, `prometheus-data`, `grafana-data` — `docker compose down` ไม่ลบ volume (**ห้ามใช้ `down -v`**)
 
 ตั้ง alias ไว้พิมพ์สั้นลง (ใช้ในเอกสารนี้):
 ```bash
@@ -187,6 +187,23 @@ curl -sI http://$WEB_DOMAIN | head -1                     # 301 → https
 
 > SMS ภาษาไทย 1 เครดิตต่อ 70 ตัวอักษร — ข้อความแจ้งเตือนเขียนให้สั้น (มีลิงก์ไปหน้าที่เกี่ยวข้อง)
 
+### 4.5 ตรวจสลิปอัตโนมัติ — SlipOK (ไม่บังคับ)
+
+ไม่ตั้ง = เจ้าหน้าที่การเงินตรวจทุกใบ (ระบบยังเตือน "รูปสลิปซ้ำ" ให้เสมอ)
+
+1. สมัครแพ็กเกจที่ [slipok.com](https://slipok.com/) → สร้างสาขา (branch) → ได้ **Branch ID** และ **API Key**
+2. ใน LINE LIFF ของ SlipOK **ผูกบัญชีรับเงินของตลาด** (บัญชีเดียวกับ PromptPay ที่ตั้งในระบบ) — ระบบส่ง `log: true` ให้ SlipOK ตรวจบัญชีปลายทางและสลิปซ้ำด้วย
+3. ใส่ค่าใน `docker/.env`:
+   ```
+   SLIP_VERIFIER=slipok
+   SLIPOK_BRANCH_ID=<Branch ID>
+   SLIPOK_API_KEY=<API Key>
+   ```
+   ตั้ง `slipok` แต่ค่าไม่ครบ → api ไม่ start (`dc logs api`)
+4. `dc up -d api` แล้วตรวจ: ผู้ค้าส่งสลิปจริง → การจองเป็น "ยืนยันแล้ว" ทันที (ระบบอนุมัติเอง)
+5. ผล: ถูกต้อง → อนุมัติเอง; สลิปซ้ำ/ยอดไม่ตรง/โอนผิดบัญชี/ไม่มีรายการจริง → ไม่ผ่านพร้อมเหตุผล (ผู้ค้าส่งใหม่ได้); อ่าน QR ไม่ได้/ธนาคารยังไม่อัปเดต/SlipOK ขัดข้องหรือโควตาหมด → รอเจ้าหน้าที่ตรวจตามปกติ (หน้า "ตรวจสลิป" บอกผลตรวจของระบบ)
+6. ดูโควตาที่เหลือในเว็บ SlipOK — โควตาหมด: ทุกใบกลับไปรอเจ้าหน้าที่ (`dc logs api | grep SlipOK` เห็น code 1004)
+
 ---
 
 ## 5. Deploy เวอร์ชันใหม่
@@ -276,6 +293,29 @@ Monitor ที่ควรตั้ง:
 2. **HTTP(s)** `https://ADMIN_DOMAIN/` — เปิด "Certificate Expiry Notification" (แจ้งก่อน cert หมดอายุ)
 3. **Push** (backup) — Heartbeat Interval 26 ชั่วโมง → ใส่ URL ที่ได้เป็น `BACKUP_PUSH_URL` ใน `docker/.env` แล้ว `dc up -d backup` (ไม่ได้รับ push = backup ไม่ทำงาน)
 4. ช่องทางแจ้งเตือน (Settings → Notifications): LINE Messaging API / Telegram / Email ตามที่ทีมใช้
+
+### Prometheus + Grafana + แจ้งเตือนทาง LINE (Phase 11.4)
+1. ตั้งค่าใน `docker/.env` (สร้าง token ด้วย `openssl rand -hex 24`):
+   ```
+   METRICS_TOKEN=<token สุ่ม>
+   ALERT_WEBHOOK_TOKEN=<token สุ่ม อีกค่า>
+   GRAFANA_ADMIN_PASSWORD=<รหัสผ่านยาวๆ>
+   ```
+2. `dc up -d api` (ให้ api รู้ token) แล้ว `dc --profile monitoring up -d prometheus alertmanager grafana`
+3. ตรวจ config (ครั้งแรก/เมื่อแก้กฎ): `dc --profile monitoring run --rm --entrypoint promtool prometheus check config /etc/prometheus/prometheus.yml`
+4. เปิด Grafana: `ssh -L 3002:localhost:3002 deploy@VPS` → `http://localhost:3002` (user `admin` / `GRAFANA_ADMIN_PASSWORD`) → โฟลเดอร์ **Market Booking** → dashboard "Market Booking" (requests/วินาที, error rate, เวลาตอบ p50/p95/p99, route ที่ช้าที่สุด, socket, งานใน queue, แจ้งเตือนที่ส่งไม่สำเร็จ, event loop, หน่วยความจำ, CPU)
+5. แจ้งเตือน: Alertmanager ส่ง alert ให้ API แล้ว API ส่งต่อ **LINE กลุ่มเจ้าหน้าที่** (ต้องตั้ง LINE OA + group ID ตาม §4.2–4.3) ทั้งตอนเกิดและตอนหาย
+   | Alert | เงื่อนไข |
+   |---|---|
+   | ApiDown | Prometheus อ่าน metrics จาก API ไม่ได้ 2 นาที |
+   | HighErrorRate | 5xx เกิน 5% นาน 5 นาที (มี traffic) |
+   | SlowResponses | p95 เกิน 1 วินาที นาน 10 นาที |
+   | EventLoopBlocked | event loop lag p99 เกิน 0.5 วินาที นาน 5 นาที |
+   | QueueBacklog | งานรอใน queue ใดเกิน 200 นาน 10 นาที |
+   | NotificationsFailing | แจ้งเตือน LINE/SMS ล้มเหลวเกิน 10 ข้อความใน 1 ชั่วโมง |
+   > **API ล่มทั้งตัว** ข้อความ LINE ผ่าน API ส่งไม่ได้ — ยังต้องมี Uptime Kuma (หัวข้อด้านบน) ที่แจ้งผ่านช่องทางของมันเอง
+6. แก้กฎที่ `docker/monitoring/alerts.yml` แล้ว `dc --profile monitoring restart prometheus`; เก็บข้อมูลย้อนหลัง 30 วัน (volume `prometheus-data`)
+- `/api/v1/metrics` และ `/api/v1/internal/*` **ไม่เปิดออก internet** (nginx ตอบ 404) และต้องมี token — ไม่ตั้ง token = API ปิด endpoint เอง
 
 ### Log
 - ทุก container เขียน log แบบ json-file หมุนไฟล์ **10 MB × 5 ไฟล์** ต่อ container (ไม่ทำให้ดิสก์เต็ม)

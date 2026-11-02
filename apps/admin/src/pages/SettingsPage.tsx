@@ -70,6 +70,11 @@ const META: Record<SettingKey, FieldMeta> = {
     unit: 'นาที',
     help: '0 = ไม่เตือน',
   },
+  waiting_room_session_minutes: {
+    label: 'Waiting Room: เวลาในหน้าจองหลังได้เข้า',
+    unit: 'นาที',
+    help: '2–60 — หมดแล้วต้องเข้าคิวใหม่ (ใช้กับรอบที่เปิด Waiting Room)',
+  },
   line_admin_group_id: {
     label: 'LINE กลุ่มเจ้าหน้าที่ (group ID)',
     help: 'เชิญบอทของ LINE OA เข้ากลุ่ม แล้วบอทจะตอบ group ID — เว้นว่าง = ไม่แจ้งกลุ่ม',
@@ -83,7 +88,12 @@ const GROUPS: { title: string; keys: SettingKey[] }[] = [
   },
   {
     title: 'การจอง',
-    keys: ['hold_minutes', 'max_stalls_per_vendor_default', 'cancel_before_hours'],
+    keys: [
+      'hold_minutes',
+      'max_stalls_per_vendor_default',
+      'cancel_before_hours',
+      'waiting_room_session_minutes',
+    ],
   },
   { title: 'การชำระเงิน', keys: ['payment_required', 'payment_deadline_minutes', 'promptpay_id'] },
   {

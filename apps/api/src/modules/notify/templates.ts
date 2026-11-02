@@ -40,6 +40,16 @@ export type NotificationTemplate =
   | { template: 'announcement'; params: { title: string; body: string } }
   | { template: 'admin.vendor_registered'; params: { vendorName: string } }
   | {
+      template: 'admin.alert';
+      /** จาก Alertmanager (Phase 11.4) */
+      params: {
+        status: 'firing' | 'resolved';
+        name: string;
+        summary: string;
+        description: string | null;
+      };
+    }
+  | {
       template: 'admin.payment_submitted';
       params: { vendorName: string; stallCode: string; marketDate: string; amount: number };
     };
@@ -200,6 +210,15 @@ export function renderTemplate(n: NotificationTemplate, ctx: RenderContext): Ren
         link: { label: 'ตรวจผู้ค้า', url: admin('/vendors') },
         sms: `ผู้ค้าสมัครใหม่: ${n.params.vendorName}`,
       };
+    case 'admin.alert': {
+      const fired = n.params.status === 'firing';
+      return {
+        title: fired ? `⚠️ ระบบมีปัญหา: ${n.params.summary}` : `✅ กลับมาปกติ: ${n.params.summary}`,
+        lines: [...(n.params.description ? [n.params.description] : []), `alert: ${n.params.name}`],
+        link: { label: 'เปิดระบบหลังบ้าน', url: admin('/') },
+        sms: `${fired ? 'ระบบมีปัญหา' : 'กลับมาปกติ'}: ${n.params.summary}`,
+      };
+    }
     case 'admin.payment_submitted':
       return {
         title: 'มีสลิปใหม่รอตรวจ',

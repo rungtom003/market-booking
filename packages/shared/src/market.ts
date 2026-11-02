@@ -411,6 +411,8 @@ export interface MarketDayStalls {
     openAt: string;
     closeAt: string;
     maxStallsPerVendor: number;
+    /** ต้องเข้าคิว Waiting Room ก่อนจอง (Phase 11.1) */
+    waitingRoom: boolean;
   };
   /** เวลา server ตอนตอบ — หา offset ให้ Countdown */
   serverTime: string;

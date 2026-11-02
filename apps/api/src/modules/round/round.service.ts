@@ -46,6 +46,7 @@ export const ROUND_FIELDS = {
   openAt: true,
   closeAt: true,
   maxStallsPerVendor: true,
+  waitingRoomCapacity: true,
   status: true,
   createdAt: true,
   marketDays: { select: DAY_FIELDS, orderBy: { marketDate: 'asc' } },
@@ -64,6 +65,7 @@ export function toRoundDetail(row: RoundRow, now: Date): RoundDetail {
     openAt: row.openAt.toISOString(),
     closeAt: row.closeAt.toISOString(),
     maxStallsPerVendor: row.maxStallsPerVendor,
+    waitingRoomCapacity: row.waitingRoomCapacity,
     status: row.status,
     phase: roundPhase(row, now),
     marketDayCount: active.length,
@@ -90,6 +92,7 @@ function snapshot(row: RoundRow) {
     openAt: row.openAt.toISOString(),
     closeAt: row.closeAt.toISOString(),
     maxStallsPerVendor: row.maxStallsPerVendor,
+    waitingRoomCapacity: row.waitingRoomCapacity,
     status: row.status,
   };
 }
@@ -149,6 +152,7 @@ export class RoundService {
             openAt: true,
             closeAt: true,
             maxStallsPerVendor: true,
+            waitingRoomCapacity: true,
           },
         },
       },
@@ -182,6 +186,7 @@ export class RoundService {
         openAt: true,
         closeAt: true,
         maxStallsPerVendor: true,
+        waitingRoomCapacity: true,
         marketDays: {
           where: { isCancelled: false },
           select: { id: true, marketDate: true },
@@ -204,6 +209,7 @@ export class RoundService {
             openAt: round.openAt.toISOString(),
             closeAt: round.closeAt.toISOString(),
             maxStallsPerVendor: round.maxStallsPerVendor,
+            waitingRoom: round.waitingRoomCapacity !== null,
             phase: open ? RoundPhase.OPEN : RoundPhase.UPCOMING,
             marketDays: round.marketDays.map((d) => ({
               id: d.id,
@@ -249,6 +255,7 @@ export class RoundService {
           openAt: new Date(input.openAt),
           closeAt: new Date(input.closeAt),
           maxStallsPerVendor,
+          waitingRoomCapacity: input.waitingRoomCapacity,
           createdById: admin.id,
         },
         select: ROUND_FIELDS,
@@ -306,6 +313,8 @@ export class RoundService {
           openAt,
           closeAt,
           maxStallsPerVendor: input.maxStallsPerVendor,
+          // เปิด/ปิด/ปรับจำนวนได้ตลอด (แม้รอบเปิดแล้ว) — มีผลกับการปล่อยคิวรอบถัดไปทันที
+          waitingRoomCapacity: input.waitingRoomCapacity,
         },
         select: ROUND_FIELDS,
       });

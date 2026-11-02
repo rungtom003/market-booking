@@ -588,6 +588,7 @@ describe('Market setup: categories, zones, stalls, layout (integration)', () => 
         openAt: '2026-11-20T00:00:00.000Z',
         closeAt: '2026-11-25T00:00:00.000Z',
         maxStallsPerVendor: 2,
+        waitingRoom: false,
       });
       expect(Math.abs(Date.parse(body.serverTime) - Date.now())).toBeLessThan(5_000);
       const byId = new Map(body.stalls.map((s) => [s.id, s]));

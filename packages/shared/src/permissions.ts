@@ -14,6 +14,7 @@ export const Permission = {
   VENDOR_PHONE_VIEW: 'VENDOR_PHONE_VIEW',
   ANNOUNCEMENTS_MANAGE: 'ANNOUNCEMENTS_MANAGE',
   AUDIT_LOG_VIEW: 'AUDIT_LOG_VIEW',
+  VENDOR_DATA_ERASE: 'VENDOR_DATA_ERASE',
 } as const;
 export type Permission = (typeof Permission)[keyof typeof Permission];
 
@@ -35,6 +36,8 @@ export const PERMISSION_ROLES: Record<Permission, readonly AdminRole[]> = {
   /** สร้าง/แก้/ลบประกาศ + ส่ง LINE ถึงผู้ค้าทุกคน (Phase 9.3) */
   ANNOUNCEMENTS_MANAGE: [SUPER_ADMIN, ADMIN],
   AUDIT_LOG_VIEW: [SUPER_ADMIN, ADMIN],
+  /** ลบข้อมูลส่วนบุคคลของผู้ค้าตามคำขอ (PDPA, Phase 11.3) — ย้อนกลับไม่ได้ */
+  VENDOR_DATA_ERASE: [SUPER_ADMIN, ADMIN],
 };
 
 export function hasPermission(role: AdminRole, permission: Permission): boolean {

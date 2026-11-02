@@ -23,12 +23,16 @@ const roundFormSchema = z
     openAt: z.string().transform(fromBangkokInput),
     closeAt: z.string().transform(fromBangkokInput),
     maxStallsPerVendor: z.number().optional(),
+    waitingRoomCapacity: z.number().nullable().optional(),
   })
   .pipe(createRoundSchema);
 type RoundForm = z.input<typeof roundFormSchema>;
 
 const toNumber = (v: unknown) =>
   v === '' || v === null || v === undefined ? undefined : Number(v);
+/** ช่องว่าง = ไม่ใช้ Waiting Room */
+const toNullableNumber = (v: unknown) =>
+  v === '' || v === null || v === undefined ? null : Number(v);
 
 /** สร้าง/แก้รอบ — รอบที่เปิดจองแล้วแก้เวลาเปิดไม่ได้ (§8.3) */
 export function RoundDialog({
@@ -49,6 +53,7 @@ export function RoundDialog({
       openAt: round ? toBangkokInput(round.openAt) : '',
       closeAt: round ? toBangkokInput(round.closeAt) : '',
       maxStallsPerVendor: round?.maxStallsPerVendor,
+      waitingRoomCapacity: round?.waitingRoomCapacity ?? null,
     },
   });
   const { errors, dirtyFields } = form.formState;
@@ -64,6 +69,7 @@ export function RoundDialog({
       if (dirtyFields.maxStallsPerVendor && input.maxStallsPerVendor !== undefined) {
         patch.maxStallsPerVendor = input.maxStallsPerVendor;
       }
+      if (dirtyFields.waitingRoomCapacity) patch.waitingRoomCapacity = input.waitingRoomCapacity;
       return Object.keys(patch).length > 0
         ? adminApi.rounds.update(round.id, patch)
         : Promise.resolve(round);
@@ -117,6 +123,18 @@ export function RoundDialog({
               (round ? undefined : 'ไม่ระบุ = ใช้ค่าจากตั้งค่าระบบ')
             }
             {...form.register('maxStallsPerVendor', { setValueAs: toNumber })}
+          />
+          <TextField
+            label="Waiting Room: จำนวนคนในหน้าจองพร้อมกัน"
+            type="number"
+            fullWidth
+            margin="normal"
+            error={Boolean(errors.waitingRoomCapacity)}
+            helperText={
+              errors.waitingRoomCapacity?.message ??
+              'เว้นว่าง = ไม่ใช้คิว · ใส่ตัวเลขเมื่อคาดว่าคนจองพร้อมกันมาก (เช่น 100) — คนที่เหลือรอคิวและเข้าเป็นชุด'
+            }
+            {...form.register('waitingRoomCapacity', { setValueAs: toNullableNumber })}
           />
           {error && <Alert severity="error">{error}</Alert>}
         </DialogContent>

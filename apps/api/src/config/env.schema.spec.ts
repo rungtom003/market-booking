@@ -60,6 +60,13 @@ describe('validateEnv', () => {
     expect(() => validateEnv({ ...validEnv, SMS_PROVIDER: 'twilio' })).toThrow(/SMS_PROVIDER/);
   });
 
+  it('requires branch id and API key for SLIP_VERIFIER=slipok (default manual)', () => {
+    expect(validateEnv(validEnv).SLIP_VERIFIER).toBe('manual');
+    const slip = { SLIP_VERIFIER: 'slipok', SLIPOK_BRANCH_ID: '123' };
+    expect(() => validateEnv({ ...validEnv, ...slip })).toThrow(/SLIP_VERIFIER/);
+    expect(validateEnv({ ...validEnv, ...slip, SLIPOK_API_KEY: 'k' }).SLIP_VERIFIER).toBe('slipok');
+  });
+
   it('treats empty strings as unset', () => {
     expect(validateEnv(validEnv).LINE_LIFF_ID).toBeUndefined();
   });

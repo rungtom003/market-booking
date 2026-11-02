@@ -20,6 +20,7 @@ import type { AdminPrincipal, VendorPrincipal } from '../auth/principal';
 import { MarketService } from '../market/market.service';
 import { RoundService } from '../round/round.service';
 import { SettingsService } from '../settings/settings.service';
+import { WaitingRoomService } from '../waiting-room/waiting-room.service';
 import { BookingEvents } from './booking-events';
 import {
   BOOKING_FIELDS,
@@ -59,6 +60,7 @@ export class BookingService {
     private readonly state: BookingStateService,
     private readonly events: BookingEvents,
     @Inject(REDIS) private readonly redis: Redis,
+    private readonly waitingRoom: WaitingRoomService,
   ) {}
 
   /**
@@ -86,6 +88,8 @@ export class BookingService {
           now,
           db: tx,
         });
+        // รอบที่เปิด Waiting Room: ต้องได้เข้าหน้าจองแล้ว (Phase 11.1)
+        await this.waitingRoom.assertAdmitted(day.round, vendor.id, now);
         const stall = await tx.stall.findFirst({
           where: { id: stallId, marketId: vendor.marketId },
           select: {

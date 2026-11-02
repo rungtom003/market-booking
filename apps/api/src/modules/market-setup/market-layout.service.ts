@@ -78,6 +78,7 @@ export class MarketLayoutService {
             openAt: true,
             closeAt: true,
             maxStallsPerVendor: true,
+            waitingRoomCapacity: true,
           },
         },
       },
@@ -128,6 +129,7 @@ export class MarketLayoutService {
         openAt: day.round.openAt.toISOString(),
         closeAt: day.round.closeAt.toISOString(),
         maxStallsPerVendor: day.round.maxStallsPerVendor,
+        waitingRoom: day.round.waitingRoomCapacity !== null,
       },
       ...decorations,
       // ให้หน้าเว็บหา offset นาฬิกา (Countdown เปิดจอง/hold) จาก request นี้ได้เลย

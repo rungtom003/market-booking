@@ -10,6 +10,8 @@ export type SessionState =
   | { status: 'authenticated'; accessToken: string };
 
 let state: SessionState = { status: 'loading' };
+/** ข้อความแจ้งครั้งเดียวที่หน้า login (เช่น ลบบัญชีแล้ว) — redirect ของ RequireAuth ทับ location.state */
+let flash: string | null = null;
 const listeners = new Set<() => void>();
 
 function set(next: SessionState) {
@@ -21,7 +23,14 @@ export const session = {
   get: () => state,
   accessToken: () => (state.status === 'authenticated' ? state.accessToken : null),
   signIn: (accessToken: string) => set({ status: 'authenticated', accessToken }),
-  signOut: () => set({ status: 'anonymous' }),
+  signOut: (notice?: string) => {
+    flash = notice ?? null;
+    set({ status: 'anonymous' });
+  },
+  flash: () => flash,
+  clearFlash: () => {
+    flash = null;
+  },
   subscribe: (listener: () => void) => {
     listeners.add(listener);
     return () => listeners.delete(listener);

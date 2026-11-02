@@ -5,6 +5,7 @@ import {
   BOOKING_STATUS_TH,
   PAYMENT_METHOD_TH,
   PAYMENT_STATUS_TH,
+  SLIP_CHECK_TH,
   formatIsoDateTh,
 } from '@market-booking/shared';
 import type { AdminPayment, PaymentStatus } from '@market-booking/shared';
@@ -201,6 +202,19 @@ function ReviewQueue() {
                   {BOOKING_STATUS_TH[current.booking.status]}
                 </Typography>
               </Box>
+              {current.duplicateOf && (
+                <Alert severity="error" aria-label="รูปสลิปซ้ำ">
+                  รูปสลิปนี้เคยส่งมาแล้วกับล็อค {current.duplicateOf.stallCode} วัน
+                  {formatIsoDateTh(current.duplicateOf.marketDate)} (
+                  {current.duplicateOf.vendorName}, {PAYMENT_STATUS_TH[current.duplicateOf.status]})
+                  — ตรวจให้แน่ใจก่อนอนุมัติ
+                </Alert>
+              )}
+              {current.slipCheck && (
+                <Alert severity={current.slipCheck === 'VALID' ? 'success' : 'info'}>
+                  {SLIP_CHECK_TH[current.slipCheck]}
+                </Alert>
+              )}
               {current.booking.status !== 'PENDING_VERIFY' && (
                 <Alert severity="warning">
                   การจองนี้ไม่ได้รอตรวจแล้ว ({BOOKING_STATUS_TH[current.booking.status]}) — กด

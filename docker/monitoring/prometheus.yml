@@ -1,0 +1,28 @@
+# Prometheus (Phase 11.4) — เก็บ metrics ของ API ทุก 15 วินาที, เก็บย้อนหลังตาม --storage.tsdb.retention.time
+# เปิดด้วย: docker compose --profile monitoring up -d (docs/runbook.md §8)
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['alertmanager:9093']
+
+scrape_configs:
+  # API ภายใน docker network (nginx ไม่เปิด /api/v1/metrics ออกภายนอก)
+  - job_name: api
+    metrics_path: /api/v1/metrics
+    authorization:
+      type: Bearer
+      # entrypoint เขียนจาก env METRICS_TOKEN ตอน start
+      credentials_file: /tmp/metrics-token
+    static_configs:
+      - targets: ['api:3000']
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ['localhost:9090']

@@ -23,6 +23,9 @@ export function LoginPage() {
   const location = useLocation();
   const [params] = useSearchParams();
   const from = (location.state as { from?: string } | null)?.from ?? '/';
+  // อ่านตอน render แรก แล้วลบหลัง mount (StrictMode เรียก initializer 2 ครั้ง — ห้ามลบใน initializer)
+  const [notice] = useState(session.flash);
+  useEffect(() => session.clearFlash(), []);
   // มาจากหน้าสมัครทาง LINE: ยืนยันเบอร์เดิมแล้วผูก LINE เข้าบัญชีเก่า
   const linkLine = params.get('link') === 'line';
 
@@ -62,6 +65,7 @@ export function LoginPage() {
 
   return (
     <Layout title="เข้าสู่ระบบ / สมัครสมาชิก">
+      {notice && <Alert tone="success">{notice}</Alert>}
       {linkLine && (
         <Alert tone="info">
           ยืนยันเบอร์โทรที่เคยสมัครไว้ เพื่อเชื่อมบัญชี LINE เข้ากับบัญชีเดิม

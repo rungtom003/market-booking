@@ -71,6 +71,7 @@ export async function adminRequest(request: APIRequestContext) {
       closeAt: Date;
       dates: string[];
       maxStallsPerVendor?: number;
+      waitingRoomCapacity?: number | null;
     }) {
       const created = await request.post(`${API_URL}/admin/rounds`, {
         headers,
@@ -79,9 +80,10 @@ export async function adminRequest(request: APIRequestContext) {
           openAt: input.openAt.toISOString(),
           closeAt: input.closeAt.toISOString(),
           maxStallsPerVendor: input.maxStallsPerVendor,
+          waitingRoomCapacity: input.waitingRoomCapacity,
         },
       });
-      expect(created.ok()).toBeTruthy();
+      expect(created.ok(), await created.text()).toBeTruthy();
       const id = (await created.json()).data.id as string;
       const days = await request.post(`${API_URL}/admin/rounds/${id}/market-days`, {
         headers,
@@ -189,6 +191,11 @@ export async function adminRequest(request: APIRequestContext) {
           },
         },
       });
+      expect(res.ok(), await res.text()).toBeTruthy();
+    },
+    /** แก้รอบ (PATCH แบบ partial) */
+    async updateRound(id: string, patch: Record<string, unknown>) {
+      const res = await request.patch(`${API_URL}/admin/rounds/${id}`, { headers, data: patch });
       expect(res.ok(), await res.text()).toBeTruthy();
     },
     async cancelRound(id: string) {

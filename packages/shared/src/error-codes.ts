@@ -65,6 +65,14 @@ export const ErrorCode = {
   CHECKIN_NOT_OPEN: 'CHECKIN_NOT_OPEN',
   /** ปิด check-in แล้ว — `details.closeAt` */
   CHECKIN_CLOSED: 'CHECKIN_CLOSED',
+
+  // Waiting Room (Phase 11.1)
+  /** รอบนี้ต้องเข้าคิวก่อนจอง และยังไม่ได้เข้า/หมดเวลาในหน้าจองแล้ว — `details.roundId` */
+  WAITING_ROOM_REQUIRED: 'WAITING_ROOM_REQUIRED',
+
+  // PDPA (Phase 11.3)
+  /** ลบบัญชีไม่ได้เพราะยังมีการจองที่ยังไม่ถึงวันขาย — `details.count` */
+  ACCOUNT_HAS_ACTIVE_BOOKINGS: 'ACCOUNT_HAS_ACTIVE_BOOKINGS',
 } as const;
 
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];

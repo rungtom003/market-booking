@@ -107,6 +107,15 @@ export class StorageService implements OnApplicationShutdown {
     return Buffer.from((await res.Body?.transformToByteArray()) ?? []);
   }
 
+  /** อ่านทั้งไฟล์ — ใช้กับไฟล์เล็กที่ตรวจขนาดแล้ว (เช่น สลิป ≤ 5 MB) */
+  async read(key: string): Promise<{ body: Buffer; contentType: string }> {
+    const res = await this.client.send(new GetObjectCommand({ Bucket: this.bucket, Key: key }));
+    return {
+      body: Buffer.from((await res.Body?.transformToByteArray()) ?? []),
+      contentType: res.ContentType ?? 'application/octet-stream',
+    };
+  }
+
   async delete(key: string): Promise<void> {
     await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: key }));
   }

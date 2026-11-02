@@ -3,6 +3,7 @@ import type {
   CheckinResult,
   CheckinScanInput,
   CheckinWindowInput,
+  WaitingRoomStats,
   AdminAnnouncement,
   CreateAnnouncementInput,
   UpdateAnnouncementInput,
@@ -109,6 +110,9 @@ export const adminApi = {
       ),
     suspend: (id: string, input: SuspendVendorInput) =>
       unwrap(apiClient.post<ApiResponse<AdminVendorDetail>>(`/admin/vendors/${id}/suspend`, input)),
+    /** ลบข้อมูลส่วนบุคคลตามคำขอ (PDPA) — ย้อนกลับไม่ได้ */
+    erase: (id: string, reason: string) =>
+      apiClient.post(`/admin/vendors/${id}/erase`, { reason }).then(() => undefined),
     unsuspend: (id: string) =>
       unwrap(apiClient.post<ApiResponse<AdminVendorDetail>>(`/admin/vendors/${id}/unsuspend`)),
     bulkApprove: (input: { ids: string[] } | { allPending: true }) =>
@@ -187,6 +191,8 @@ export const adminApi = {
       ),
     removeDay: (id: string, dayId: string) =>
       apiClient.delete(`/admin/rounds/${id}/market-days/${dayId}`),
+    waitingRoom: (id: string) =>
+      unwrap(apiClient.get<ApiResponse<WaitingRoomStats>>(`/admin/rounds/${id}/waiting-room`)),
     setCheckinWindow: (id: string, dayId: string, input: CheckinWindowInput) =>
       unwrap(
         apiClient.put<ApiResponse<RoundDetail>>(

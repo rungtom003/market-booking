@@ -16,7 +16,7 @@ describe('settings schema (Overview §12)', () => {
       promptpay_id: null,
       cancel_before_hours: 48,
     });
-    expect(SETTING_KEYS).toHaveLength(15);
+    expect(SETTING_KEYS).toHaveLength(16);
   });
 
   it('accepts a partial update', () => {

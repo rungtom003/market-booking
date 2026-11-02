@@ -45,6 +45,8 @@ export const ERROR_HTTP_STATUS: Record<ErrorCode, HttpStatus> = {
   CHECKIN_WRONG_DAY: HttpStatus.CONFLICT,
   CHECKIN_NOT_OPEN: HttpStatus.CONFLICT,
   CHECKIN_CLOSED: HttpStatus.CONFLICT,
+  WAITING_ROOM_REQUIRED: HttpStatus.CONFLICT,
+  ACCOUNT_HAS_ACTIVE_BOOKINGS: HttpStatus.CONFLICT,
 };
 
 /** ใช้กับ HttpException ทั่วไปที่ไม่ได้มาจาก AppException (เช่น 404 ของ router, 429 ของ throttler) */

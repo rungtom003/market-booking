@@ -2,6 +2,7 @@ import { useEffect, useSyncExternalStore } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { ErrorCode, SOCKET_NAMESPACE, SocketEvent } from '@market-booking/shared';
 import type {
+  WaitingRoomAdmittedPayload,
   CheckinUpdatedPayload,
   BookingChangedPayload,
   StallUpdatedPayload,
@@ -10,6 +11,7 @@ import type {
 import { type Socket, io } from 'socket.io-client';
 import { MY_BOOKINGS_KEY } from '../api/booking';
 import { checkinQrKey } from '../api/checkin';
+import { waitingRoomKey } from '../api/waiting-room';
 import { type MarketDayStallsData, marketDayKey } from '../api/market';
 import { paymentKey } from '../api/payment';
 import { WAITLIST_KEY } from '../api/waitlist';
@@ -188,4 +190,23 @@ export function useWaitlistOffer(onOffer: (offer: WaitlistOfferPayload) => void)
       s.off(SocketEvent.WAITLIST_OFFER, handler);
     };
   }, [queryClient, onOffer]);
+}
+
+/** ได้เข้าหน้าจองจาก Waiting Room (`waiting-room:admitted`) → โหลดสถานะคิวใหม่ทันที */
+export function useWaitingRoomAdmitted(roundId: string | null): void {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (!roundId) return;
+    const s = vendorSocket();
+    const onAdmitted = (p: WaitingRoomAdmittedPayload) => {
+      if (p.roundId === roundId) {
+        void queryClient.invalidateQueries({ queryKey: waitingRoomKey(roundId) });
+      }
+    };
+    s.on(SocketEvent.WAITING_ROOM_ADMITTED, onAdmitted);
+    return () => {
+      s.off(SocketEvent.WAITING_ROOM_ADMITTED, onAdmitted);
+    };
+  }, [roundId, queryClient]);
 }

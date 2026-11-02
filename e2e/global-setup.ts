@@ -3,7 +3,7 @@ import Redis from 'ioredis';
 import { Client } from 'pg';
 import { E2E_ADMIN, E2E_DATABASE_URL, E2E_REDIS_URL, ROOT, apiEnv } from './env';
 
-/** เตรียม DB ของ E2E (สร้าง + migrate + seed) และล้าง Redis db ของ E2E */
+/** เตรียม DB ของ E2E (สร้าง + migrate + seed) และล้าง Redis db ของ E2E (ยกเว้น queue) */
 export default async function globalSetup(): Promise<void> {
   const url = new URL(E2E_DATABASE_URL);
   const dbName = decodeURIComponent(url.pathname.slice(1));
@@ -50,9 +50,17 @@ export default async function globalSetup(): Promise<void> {
     await db.end();
   }
 
+  // ล้าง OTP / rate limit / mock SMS / คิว Waiting Room ของรอบก่อน — แต่ไม่แตะ BullMQ (`bull:*`):
+  // API เปิดก่อน global setup และตั้ง job scheduler (worker ตามเวลา) ไว้แล้ว ถ้า FLUSHDB จะหายจนจบการรัน
   const redis = new Redis(E2E_REDIS_URL);
   try {
-    await redis.flushdb();
+    let cursor = '0';
+    do {
+      const [next, found] = await redis.scan(cursor, 'COUNT', 500);
+      cursor = next;
+      const stale = found.filter((k) => !k.startsWith('bull:'));
+      if (stale.length > 0) await redis.del(...stale);
+    } while (cursor !== '0');
   } finally {
     redis.disconnect();
   }

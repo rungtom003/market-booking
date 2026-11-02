@@ -58,6 +58,15 @@ const samples = {
     template: 'admin.vendor_registered',
     params: { vendorName: 'สมชาย ใจดี' },
   },
+  'admin.alert': {
+    template: 'admin.alert',
+    params: {
+      status: 'firing',
+      name: 'HighErrorRate',
+      summary: 'API ตอบ error เกิน 5%',
+      description: '5xx 7.2% ใน 5 นาทีล่าสุด',
+    },
+  },
   'admin.payment_submitted': {
     template: 'admin.payment_submitted',
     params: { vendorName: 'สมชาย ใจดี', stallCode: 'A1', marketDate: '2026-11-21', amount: 150 },

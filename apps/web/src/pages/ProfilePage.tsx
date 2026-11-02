@@ -12,6 +12,7 @@ import { z } from 'zod';
 import { useMyProfile, useProfileOptions, useUpdateProfile, vendorApi } from '../api/vendor';
 import { ImageUpload } from '../components/ImageUpload';
 import { Layout } from '../components/Layout';
+import { PrivacyActions } from '../components/PrivacyActions';
 import { Alert, Button, Card, Select, Spinner, TextArea, TextField } from '../components/ui';
 import { applyFieldErrors, errorMessage } from '../lib/errors';
 import { formatPhone } from '../lib/format';
@@ -44,7 +45,10 @@ export function ProfilePage() {
       ) : profile.isError || options.isError ? (
         <Alert>{errorMessage(profile.error ?? options.error)}</Alert>
       ) : (
-        <ProfileForm profile={profile.data} options={options.data} />
+        <>
+          <ProfileForm profile={profile.data} options={options.data} />
+          <PrivacyActions />
+        </>
       )}
     </Layout>
   );

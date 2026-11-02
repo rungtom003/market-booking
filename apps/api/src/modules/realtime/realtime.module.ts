@@ -2,11 +2,12 @@ import { Module } from '@nestjs/common';
 import { BookingModule } from '../booking/booking.module';
 import { RoundModule } from '../round/round.module';
 import { VendorModule } from '../vendor/vendor.module';
+import { WaitingRoomModule } from '../waiting-room/waiting-room.module';
 import { RealtimeGateway } from './realtime.gateway';
 
 /** Socket.IO (Phase 4.3) — แปลง event ภายใน (booking/round/vendor) เป็น event ถึง client */
 @Module({
-  imports: [BookingModule, RoundModule, VendorModule],
+  imports: [BookingModule, RoundModule, VendorModule, WaitingRoomModule],
   providers: [RealtimeGateway],
 })
 export class RealtimeModule {}

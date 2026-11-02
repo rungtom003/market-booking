@@ -138,6 +138,12 @@ services:
       SMS_API_SECRET: ${SMS_API_SECRET:-}
       SMS_SENDER: ${SMS_SENDER:-}
       SMS_CREDIT_TYPE: ${SMS_CREDIT_TYPE:-}
+      SLIP_VERIFIER: ${SLIP_VERIFIER:-manual}
+      SLIPOK_BRANCH_ID: ${SLIPOK_BRANCH_ID:-}
+      SLIPOK_API_KEY: ${SLIPOK_API_KEY:-}
+      # Monitoring (runbook §8) — ว่าง = ปิด /api/v1/metrics และรับ alert ไม่ได้
+      METRICS_TOKEN: ${METRICS_TOKEN:-}
+      ALERT_WEBHOOK_TOKEN: ${ALERT_WEBHOOK_TOKEN:-}
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -226,6 +232,60 @@ services:
       - uptime-kuma-data:/app/data
     logging: *logging
 
+  # Prometheus + Alertmanager + Grafana (Phase 11.4, ไม่บังคับ): docker compose --profile monitoring up -d
+  # อยู่ใน network ภายในเท่านั้น — Grafana เปิดที่ localhost ของ VPS (SSH tunnel เหมือน Uptime Kuma)
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    profiles: ['monitoring']
+    restart: unless-stopped
+    environment:
+      METRICS_TOKEN: ${METRICS_TOKEN:?ตั้ง METRICS_TOKEN ใน docker/.env (runbook §8)}
+    # token เก็บเป็นไฟล์ (Prometheus อ่าน credentials จาก env ตรงๆ ไม่ได้)
+    entrypoint: ['/bin/sh', '-c']
+    command:
+      - >-
+        printf %s "$${METRICS_TOKEN}" > /tmp/metrics-token &&
+        exec /bin/prometheus --config.file=/etc/prometheus/prometheus.yml
+        --storage.tsdb.path=/prometheus --storage.tsdb.retention.time=30d
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus-data:/prometheus
+    logging: *logging
+
+  alertmanager:
+    image: prom/alertmanager:v0.28.1
+    profiles: ['monitoring']
+    restart: unless-stopped
+    environment:
+      ALERT_WEBHOOK_TOKEN: ${ALERT_WEBHOOK_TOKEN:?ตั้ง ALERT_WEBHOOK_TOKEN ใน docker/.env (runbook §8)}
+    entrypoint: ['/bin/sh', '-c']
+    command:
+      - >-
+        printf %s "$${ALERT_WEBHOOK_TOKEN}" > /tmp/alert-token &&
+        exec /bin/alertmanager --config.file=/etc/alertmanager/alertmanager.yml
+        --storage.path=/alertmanager
+    volumes:
+      - ./monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    logging: *logging
+
+  grafana:
+    image: grafana/grafana:12.1.1
+    profiles: ['monitoring']
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?ตั้ง GRAFANA_ADMIN_PASSWORD ใน docker/.env (runbook §8)}
+      GF_USERS_ALLOW_SIGN_UP: 'false'
+      GF_ANALYTICS_REPORTING_ENABLED: 'false'
+      GF_DATE_FORMATS_DEFAULT_TIMEZONE: Asia/Bangkok
+    ports:
+      - '127.0.0.1:3002:3000'
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    logging: *logging
+
 volumes:
   postgres-data:
   redis-data:
@@ -233,3 +293,5 @@ volumes:
   letsencrypt:
   certbot-www:
   uptime-kuma-data:
+  prometheus-data:
+  grafana-data:

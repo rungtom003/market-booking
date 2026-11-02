@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import {
   BookingPaymentInfo,
@@ -6,11 +6,13 @@ import {
   ErrorCode,
   PaymentMethod,
   PaymentStatus,
+  SlipCheck,
   SlipUploadRequestInput,
   SubmitSlipInput,
   UploadTicket,
   promptPayPayload,
 } from '@market-booking/shared';
+import { Prisma } from '../../generated/prisma/client';
 import { AppException } from '../../common/exceptions/app.exception';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
@@ -24,6 +26,9 @@ import { IMAGE_EXTENSION, checkUploadedImage } from '../storage/image-file';
 import { StorageService } from '../storage/storage.service';
 import { PaymentReviewService } from './payment-review.service';
 import { SLIP_VERIFIER, type SlipVerifier } from './slip-verifier';
+
+/** เหตุผลที่ผู้ค้าเห็นเมื่อสลิปซ้ำ */
+const DUPLICATE_SLIP = 'สลิปนี้เคยใช้ชำระแล้ว กรุณาส่งสลิปของการโอนครั้งนี้';
 
 const SLIP_KEY = /^vendors\/[0-9a-f-]{36}\/slips\/[0-9a-f-]{36}\/[0-9a-f-]{36}\.(jpg|png|webp)$/;
 
@@ -110,6 +115,8 @@ export class PaymentService {
     if (booking.status === BookingStatus.PENDING_PAYMENT) await this.expireIfDue(bookingId, now);
     this.assertAwaitingPayment(booking, now);
     await this.assertSlip(vendor, bookingId, input.slipImageKey);
+    const slip = await this.storage.read(input.slipImageKey);
+    const slipHash = createHash('sha256').update(slip.body).digest('hex');
 
     let paymentId: string;
     try {
@@ -129,6 +136,7 @@ export class PaymentService {
             method: PaymentMethod.PROMPTPAY_SLIP,
             amount: booking.amount,
             slipImageKey: input.slipImageKey,
+            slipHash,
             status: PaymentStatus.PENDING,
           },
           select: { id: true },
@@ -153,31 +161,70 @@ export class PaymentService {
     }
 
     await this.notify.paymentSubmitted({ paymentId, bookingId, marketId: vendor.marketId });
-    await this.autoVerify(vendor, paymentId, input.slipImageKey, Number(booking.amount));
+    await this.autoVerify(vendor, paymentId, {
+      key: input.slipImageKey,
+      image: slip.body,
+      contentType: slip.contentType,
+      hash: slipHash,
+      amount: Number(booking.amount),
+    });
     return this.info(vendor, bookingId);
   }
 
-  /** ตรวจสลิปอัตโนมัติ (ถ้ามี) — พังหรือไม่แน่ใจ = รอเจ้าหน้าที่ตรวจตามปกติ */
+  /**
+   * ตรวจสลิปอัตโนมัติ (Phase 11.2) — พังหรือไม่แน่ใจ = รอเจ้าหน้าที่ตรวจตามปกติ
+   * 1) รูปเดียวกันเคยอนุมัติแล้ว (การจองใดก็ได้) → ไม่ผ่านทันที ไม่ต้องถามผู้ให้บริการ
+   * 2) ผู้ให้บริการ (SlipOK) ตรวจ; VALID แล้วเลขอ้างอิงธุรกรรมซ้ำกับที่เคยใช้ (unique) → ไม่ผ่าน
+   */
   private async autoVerify(
     vendor: VendorPrincipal,
     paymentId: string,
-    slipImageKey: string,
-    amount: number,
+    slip: { key: string; image: Buffer; contentType: string; hash: string; amount: number },
   ): Promise<void> {
     try {
+      const reused = await this.prisma.payment.findFirst({
+        where: { slipHash: slip.hash, status: PaymentStatus.APPROVED, id: { not: paymentId } },
+        select: { id: true },
+      });
+      if (reused) return await this.rejectAuto(paymentId, SlipCheck.DUPLICATE, DUPLICATE_SLIP);
+
       const result = await this.verifier.verify({
         paymentId,
-        slipImageKey,
-        amount,
+        slipImageKey: slip.key,
+        image: slip.image,
+        contentType: slip.contentType,
+        amount: slip.amount,
         promptpayId: await this.settings.get(vendor.marketId, 'promptpay_id'),
       });
-      if (result.status === 'VALID') await this.review.approve({ type: 'SYSTEM' }, paymentId);
-      if (result.status === 'INVALID') {
-        await this.review.reject({ type: 'SYSTEM' }, paymentId, result.reason);
+      if (result.status === 'VALID') {
+        try {
+          await this.prisma.payment.update({
+            where: { id: paymentId },
+            data: { slipCheck: SlipCheck.VALID, slipTransRef: result.transRef ?? null },
+          });
+        } catch (error) {
+          if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+            return await this.rejectAuto(paymentId, SlipCheck.DUPLICATE, DUPLICATE_SLIP);
+          }
+          throw error;
+        }
+        await this.review.approve({ type: 'SYSTEM' }, paymentId);
+      } else if (result.status === 'INVALID') {
+        await this.rejectAuto(paymentId, result.check ?? null, result.reason);
+      } else if (result.check) {
+        await this.prisma.payment.update({
+          where: { id: paymentId },
+          data: { slipCheck: result.check },
+        });
       }
     } catch (error) {
       this.logger.warn(`Slip auto-verification failed for ${paymentId}: ${String(error)}`);
     }
+  }
+
+  private async rejectAuto(paymentId: string, check: SlipCheck | null, reason: string) {
+    await this.prisma.payment.update({ where: { id: paymentId }, data: { slipCheck: check } });
+    await this.review.reject({ type: 'SYSTEM' }, paymentId, reason);
   }
 
   private async findMine(vendor: VendorPrincipal, bookingId: string) {

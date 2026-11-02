@@ -18,6 +18,8 @@ export const SocketEvent = {
   WAITLIST_OFFER: 'waitlist:offer',
   /** ห้อง admin ของตลาด + ห้องผู้ค้าเจ้าของการจอง */
   CHECKIN_UPDATED: 'checkin:updated',
+  /** ห้อง `vendor:{id}` — ได้เข้าหน้าจองจาก Waiting Room */
+  WAITING_ROOM_ADMITTED: 'waiting-room:admitted',
   SERVER_TIME: 'server:time',
   // Server → Admin
   VENDOR_REGISTERED: 'vendor:registered',
@@ -101,4 +103,10 @@ export interface CheckinUpdatedPayload {
   marketDayId: string;
   stallId: string;
   checkedInAt: string;
+}
+
+/** `waiting-room:admitted` — เข้าหน้าจองได้ถึง `admittedUntil` */
+export interface WaitingRoomAdmittedPayload {
+  roundId: string;
+  admittedUntil: string;
 }

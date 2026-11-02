@@ -3,3 +3,7 @@ add_header Strict-Transport-Security "max-age=31536000" always;
 add_header X-Content-Type-Options "nosniff" always;
 add_header X-Frame-Options "DENY" always;
 add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+add_header Permissions-Policy "camera=(self), microphone=(), geolocation=(), payment=(), usb=()" always;
+# CSP (Phase 11.5) — เริ่มแบบ Report-Only: เปิดเว็บ/หลังบ้านจริงแล้วดู console ว่าไม่มี "violates" แล้วค่อยเปลี่ยนเป็น
+# Content-Security-Policy (docs/security-review.md) — รูป/อัปโหลดของ MinIO อยู่บนโดเมนเว็บ, LIFF คุยกับ *.line.me
+add_header Content-Security-Policy-Report-Only "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://${WEB_DOMAIN}${HTTPS_PORT_SUFFIX}; connect-src 'self' https://${WEB_DOMAIN}${HTTPS_PORT_SUFFIX} https://*.line.me; font-src 'self' data:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'" always;

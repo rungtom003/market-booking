@@ -63,6 +63,7 @@ export class VendorAdminService {
           status: true,
           createdAt: true,
           reviewedAt: true,
+          deletedAt: true,
           productCategory: { select: { name: true } },
         },
         // หน้า "รออนุมัติ" เรียงตามเวลาสมัคร เก่าสุดก่อน (§9.2 ข้อ 1); อย่างอื่นใหม่สุดก่อน
@@ -83,6 +84,7 @@ export class VendorAdminService {
         productCategoryName: r.productCategory?.name ?? null,
         createdAt: r.createdAt.toISOString(),
         reviewedAt: r.reviewedAt?.toISOString() ?? null,
+        deletedAt: r.deletedAt?.toISOString() ?? null,
       })),
       total,
       query,
@@ -114,6 +116,7 @@ export class VendorAdminService {
         reviewedAt: true,
         noshowCount: true,
         pdpaConsentAt: true,
+        deletedAt: true,
       },
     });
     return {
@@ -122,6 +125,7 @@ export class VendorAdminService {
       reviewedAt: row.reviewedAt?.toISOString() ?? null,
       noshowCount: row.noshowCount,
       pdpaConsentAt: row.pdpaConsentAt.toISOString(),
+      deletedAt: row.deletedAt?.toISOString() ?? null,
     };
   }
 

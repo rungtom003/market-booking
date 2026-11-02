@@ -1,0 +1,19 @@
+# Alertmanager (Phase 11.4) — ส่ง alert ทุกตัวให้ API แปลงเป็นข้อความ LINE ถึงกลุ่มเจ้าหน้าที่
+route:
+  receiver: line-admin-group
+  group_by: ['alertname']
+  group_wait: 30s
+  group_interval: 5m
+  # ยังไม่หาย = แจ้งซ้ำทุก 4 ชั่วโมง (API dedupe ตาม fingerprint + startsAt — ซ้ำแล้วไม่ส่ง LINE ซ้ำ)
+  repeat_interval: 4h
+
+receivers:
+  - name: line-admin-group
+    webhook_configs:
+      - url: http://api:3000/api/v1/internal/alerts
+        send_resolved: true
+        http_config:
+          authorization:
+            type: Bearer
+            # entrypoint เขียนจาก env ALERT_WEBHOOK_TOKEN ตอน start
+            credentials_file: /tmp/alert-token

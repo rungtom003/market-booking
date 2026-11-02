@@ -18,3 +18,5 @@ export * from './report.js';
 export * from './waitlist.js';
 export * from './announcement.js';
 export * from './checkin.js';
+export * from './waiting-room.js';
+export * from './privacy.js';

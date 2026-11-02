@@ -47,6 +47,8 @@ export const settingFields = {
   notify_before_round_open_minutes: int(0, 7 * 24 * 60),
   /** แจ้งผู้ค้าที่ยังไม่ชำระก่อนหมดเวลากี่นาที (0 = ไม่แจ้ง) */
   notify_before_payment_due_minutes: int(0, 24 * 60),
+  /** Waiting Room: เวลาในหน้าจองหลังได้เข้า (นาที) — หมดแล้วต้องเข้าคิวใหม่ */
+  waiting_room_session_minutes: int(2, 60),
   /** LINE group ของเจ้าหน้าที่ (บอทของ LINE OA ต้องอยู่ในกลุ่ม) — null = ไม่แจ้งกลุ่ม */
   line_admin_group_id: lineGroupIdSchema.nullable(),
 };
@@ -71,6 +73,7 @@ export const SETTING_DEFAULTS: Settings = {
   noshow_suspend_days: 30,
   notify_before_round_open_minutes: 60,
   notify_before_payment_due_minutes: 60,
+  waiting_room_session_minutes: 10,
   line_admin_group_id: null,
 };
 

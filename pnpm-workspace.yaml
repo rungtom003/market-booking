@@ -21,3 +21,17 @@ peerDependencyRules:
   # webpack มากับ @nestjs/cli 10 (เราใช้ tsc builder ไม่ได้ใช้ webpack)
   allowedVersions:
     webpack: '5'
+
+# Security review (Phase 11.5): บังคับเวอร์ชันที่แก้ช่องโหว่แล้วของ dependency ทางอ้อมที่อยู่ใน runtime
+# (pnpm audit) — major เดิมทั้งหมด; dev tooling (@nestjs/cli, jest, eslint) ดู docs/security-review.md
+overrides:
+  # express 4 → body-parser: DoS จาก body ที่บีบอัดแล้วมี byte ต่อท้าย
+  'body-parser@<1.20.9': '1.20.9'
+  # express/body-parser → qs: DoS / array-limit bypass
+  'qs@<6.16.1': '6.17.1'
+  # @nestjs/platform-express → multer (ไม่ได้ใช้ upload ผ่าน API แต่ถูก bundle มา): DoS หลายตัว
+  'multer@<2.5.0': '2.5.0'
+  # @nestjs/config, @nestjs/swagger → lodash: prototype pollution / template injection
+  'lodash@<4.17.24': '4.18.1'
+  # @nestjs/swagger → js-yaml: CPU DoS ใน merge key
+  'js-yaml@>=4.0.0 <4.3.2': '4.3.2'

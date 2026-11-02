@@ -156,6 +156,8 @@ export interface AdminVendorListItem {
   productCategoryName: string | null;
   createdAt: string;
   reviewedAt: string | null;
+  /** ลบข้อมูลส่วนบุคคลแล้ว (PDPA) */
+  deletedAt: string | null;
 }
 
 export interface AdminVendorDetail extends VendorProfile {
@@ -163,6 +165,8 @@ export interface AdminVendorDetail extends VendorProfile {
   reviewedAt: string | null;
   noshowCount: number;
   pdpaConsentAt: string;
+  /** ลบข้อมูลส่วนบุคคลแล้ว (PDPA) — ชื่อ/เบอร์เป็นค่าแทน */
+  deletedAt: string | null;
 }
 
 export type VendorStatusCounts = Record<VendorStatus, number>;

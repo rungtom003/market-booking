@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import {
@@ -165,7 +166,10 @@ describe('Payments: PromptPay slip + review + cash (integration)', () => {
   }
 
   /** ขอ URL แล้วอัปโหลดรูปสลิปจริงไป MinIO */
-  async function uploadSlip(vendor: Vendor, bookingId: string, body: Buffer = JPEG) {
+  /** ต่อท้ายด้วย byte สุ่ม = รูปไม่ซ้ำกัน (ระบบปฏิเสธรูปสลิปที่เคยอนุมัติแล้ว) */
+  const uniqueJpeg = () => Buffer.concat([JPEG, randomBytes(16)]);
+
+  async function uploadSlip(vendor: Vendor, bookingId: string, body: Buffer = uniqueJpeg()) {
     const res = await http()
       .post(`/api/v1/bookings/${bookingId}/payments/slip-upload`)
       .set(vendor.headers)
@@ -384,7 +388,11 @@ describe('Payments: PromptPay slip + review + cash (integration)', () => {
       booking: { status: 'PENDING_VERIFY', stallCode: b1.stall.code },
     });
     const image = await fetch(mine[0]!.slipUrl!);
-    expect(Buffer.from(await image.arrayBuffer()).equals(JPEG)).toBe(true);
+    expect(
+      Buffer.from(await image.arrayBuffer())
+        .subarray(0, JPEG.length)
+        .equals(JPEG),
+    ).toBe(true);
 
     await http().get('/api/v1/admin/payments').set(asAdmin(staff)).expect(403);
     const paymentId = mine[0]!.id;
@@ -526,5 +534,90 @@ describe('Payments: PromptPay slip + review + cash (integration)', () => {
       .send({ vendorId: vendor.id, stallId: await makeStall(), marketDayId })
       .expect(201);
     expect((await bookingRow(byAdmin.body.data.id)).checkinToken).not.toBeNull();
+  });
+
+  // ───────────── สลิปซ้ำ (Phase 11.2) ─────────────
+
+  it('รูปสลิปเดียวกับที่เคยอนุมัติแล้ว → ไม่ผ่านเอง (DUPLICATE) แม้ไม่มีผู้ให้บริการตรวจ', async () => {
+    const image = uniqueJpeg();
+    const v1 = await makeVendor();
+    const b1 = await pendingPayment(v1);
+    const first = (await submit(v1, b1.id, await uploadSlip(v1, b1.id, image)).expect(201)).body
+      .data as BookingPaymentInfo;
+    await http()
+      .post(`/api/v1/admin/payments/${first.payments[0]!.id}/approve`)
+      .set(asAdmin())
+      .expect(200);
+
+    const v2 = await makeVendor();
+    const b2 = await pendingPayment(v2);
+    const reused = (await submit(v2, b2.id, await uploadSlip(v2, b2.id, image)).expect(201)).body
+      .data as BookingPaymentInfo;
+    expect(reused.bookingStatus).toBe('PENDING_PAYMENT');
+    expect(reused.payments[0]).toMatchObject({
+      status: 'REJECTED',
+      rejectReason: expect.stringContaining('สลิปนี้เคยใช้ชำระแล้ว'),
+    });
+    const res = await http().get('/api/v1/admin/payments?status=REJECTED').set(asAdmin());
+    const row = (res.body.data as AdminPayment[]).find((p) => p.booking.id === b2.id);
+    expect(row).toMatchObject({
+      slipCheck: 'DUPLICATE',
+      duplicateOf: { status: 'APPROVED', stallCode: b1.stall.code },
+    });
+  });
+
+  it('รูปเดียวกันส่งมา 2 การจองที่ยังรอตรวจ → เตือนเจ้าหน้าที่ (duplicateOf) แต่ไม่ปฏิเสธเอง', async () => {
+    const image = uniqueJpeg();
+    const [v1, v2] = [await makeVendor(), await makeVendor()];
+    const [b1, b2] = [await pendingPayment(v1), await pendingPayment(v2)];
+    await submit(v1, b1.id, await uploadSlip(v1, b1.id, image)).expect(201);
+    const second = (await submit(v2, b2.id, await uploadSlip(v2, b2.id, image)).expect(201)).body
+      .data as BookingPaymentInfo;
+    expect(second.bookingStatus).toBe('PENDING_VERIFY');
+    const res = await http().get('/api/v1/admin/payments?status=PENDING').set(asAdmin());
+    const rows = res.body.data as AdminPayment[];
+    expect(rows.find((p) => p.booking.id === b2.id)).toMatchObject({
+      slipCheck: null,
+      duplicateOf: { status: 'PENDING', stallCode: b1.stall.code, vendorName: expect.any(String) },
+    });
+    // คนละรูป = ไม่เตือน
+    const v3 = await makeVendor();
+    const b3 = await pendingPayment(v3);
+    await submitOk(v3, b3.id);
+    const again = await http().get('/api/v1/admin/payments?status=PENDING').set(asAdmin());
+    expect(
+      (again.body.data as AdminPayment[]).find((p) => p.booking.id === b3.id)?.duplicateOf,
+    ).toBeNull();
+  });
+
+  it('ผู้ให้บริการตอบ VALID แต่เลขอ้างอิงธุรกรรมเคยใช้แล้ว → ไม่ผ่าน; UNVERIFIED เก็บเหตุให้เจ้าหน้าที่เห็น', async () => {
+    const verifier = app.get<SlipVerifier>(SLIP_VERIFIER);
+    const spy = jest.spyOn(verifier, 'verify');
+    const transRef = `T${Date.now()}`;
+
+    spy.mockResolvedValueOnce({ status: 'VALID', transRef });
+    const v1 = await makeVendor();
+    const b1 = await pendingPayment(v1);
+    expect((await submitOk(v1, b1.id)).bookingStatus).toBe('CONFIRMED');
+    expect(spy).toHaveBeenLastCalledWith(
+      expect.objectContaining({ contentType: 'image/jpeg', image: expect.any(Buffer) }),
+    );
+
+    spy.mockResolvedValueOnce({ status: 'VALID', transRef });
+    const v2 = await makeVendor();
+    const b2 = await pendingPayment(v2);
+    const dup = await submitOk(v2, b2.id);
+    expect(dup.bookingStatus).toBe('PENDING_PAYMENT');
+    expect(dup.payments[0]!.rejectReason).toContain('สลิปนี้เคยใช้ชำระแล้ว');
+
+    spy.mockResolvedValueOnce({ status: 'UNVERIFIED', check: 'BANK_DELAY' });
+    const v3 = await makeVendor();
+    const b3 = await pendingPayment(v3);
+    expect((await submitOk(v3, b3.id)).bookingStatus).toBe('PENDING_VERIFY');
+    const res = await http().get('/api/v1/admin/payments?status=PENDING').set(asAdmin());
+    expect((res.body.data as AdminPayment[]).find((p) => p.booking.id === b3.id)?.slipCheck).toBe(
+      'BANK_DELAY',
+    );
+    spy.mockRestore();
   });
 });

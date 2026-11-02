@@ -22,6 +22,7 @@ import {
 import type {
   BookingChangedPayload,
   CheckinUpdatedPayload,
+  WaitingRoomAdmittedPayload,
   PaymentSubmittedPayload,
   RoundChangedPayload,
   ServerTimePayload,
@@ -48,7 +49,12 @@ import {
   type WaitlistOfferedEvent,
 } from '../notify/notify.service';
 import { type RoundChangedEvent, RoundEvents } from '../round/round-events';
+import { MetricsService } from '../metrics/metrics.service';
 import { VendorStatusService } from '../vendor/vendor-status.service';
+import {
+  type WaitingRoomAdmittedEvent,
+  WaitingRoomService,
+} from '../waiting-room/waiting-room.service';
 
 interface SocketData {
   principal: Principal;
@@ -79,12 +85,15 @@ export class RealtimeGateway
     private readonly bookingEvents: BookingEvents,
     private readonly roundEvents: RoundEvents,
     private readonly notify: NotifyService,
+    private readonly waitingRoom: WaitingRoomService,
+    private readonly metrics: MetricsService,
   ) {}
 
   onModuleInit(): void {
     this.unsubscribe.push(
       this.bookingEvents.onChanged((e) => this.onBookingChanged(e)),
       this.bookingEvents.onCheckedIn((e) => this.onCheckedIn(e)),
+      this.waitingRoom.onAdmitted((e) => this.onWaitingRoomAdmitted(e)),
       this.roundEvents.onChanged((e) => this.onRoundChanged(e)),
       this.notify.onVendorStatusChanged((e) => this.onVendorStatusChanged(e)),
       this.notify.onPaymentSubmitted((e) => this.onPaymentSubmitted(e)),
@@ -98,6 +107,7 @@ export class RealtimeGateway
 
   /** ตรวจ access token จาก `handshake.auth.token` ก่อนรับการเชื่อมต่อ — ผิด = `connect_error` (message = code) */
   afterInit(server: Namespace): void {
+    this.metrics.setSocketCounter(() => server.sockets.size);
     server.use((socket, next) => {
       this.authenticate(socket as AppSocket).then(
         () => next(),
@@ -204,6 +214,14 @@ export class RealtimeGateway
     this.server
       .to([socketRoom.admin(event.marketId), socketRoom.vendor(event.vendorId)])
       .emit(SocketEvent.CHECKIN_UPDATED, payload);
+  }
+
+  /** ได้เข้าหน้าจองจาก Waiting Room → หน้าเว็บของผู้ค้าแสดงผังทันที (ไม่ต้องรอรอบถามสถานะ) */
+  onWaitingRoomAdmitted(event: WaitingRoomAdmittedEvent): void {
+    this.server.to(socketRoom.vendor(event.vendorId)).emit(SocketEvent.WAITING_ROOM_ADMITTED, {
+      roundId: event.roundId,
+      admittedUntil: event.admittedUntil.toISOString(),
+    } satisfies WaitingRoomAdmittedPayload);
   }
 
   onRoundChanged(event: RoundChangedEvent): void {

@@ -1,0 +1,63 @@
+# กฎแจ้งเตือน (Phase 11.4) — Alertmanager ส่งต่อ API → LINE กลุ่มเจ้าหน้าที่ (`line_admin_group_id`)
+# API ล่มทั้งตัวส่ง LINE ผ่าน API ไม่ได้ — ใช้ Uptime Kuma ตรวจ /api/v1/health/ready จากภายนอกด้วย (runbook §8)
+groups:
+  - name: market-booking
+    rules:
+      - alert: ApiDown
+        expr: up{job="api"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: 'Prometheus เก็บ metrics จาก API ไม่ได้ (API อาจล่ม)'
+          description: 'ไม่ได้ข้อมูลจาก api:3000 มา 2 นาที — ดู `dc ps` และ `dc logs --since 10m api`'
+
+      - alert: HighErrorRate
+        expr: |
+          sum(rate(http_request_duration_seconds_count{status=~"5.."}[5m]))
+            / sum(rate(http_request_duration_seconds_count[5m])) > 0.05
+          and sum(rate(http_request_duration_seconds_count[5m])) > 0.1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: 'API ตอบ error (5xx) เกิน 5%'
+          description: 'สัดส่วน 5xx ใน 5 นาทีล่าสุด {{ $value | humanizePercentage }} — ดู `dc logs --since 15m api`'
+
+      - alert: SlowResponses
+        expr: |
+          histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket[5m]))) > 1
+          and sum(rate(http_request_duration_seconds_count[5m])) > 0.1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: 'API ตอบช้า (p95 เกิน 1 วินาที)'
+          description: 'p95 = {{ $value | humanizeDuration }} — ดู CPU/DB และ dashboard "Market Booking"'
+
+      - alert: EventLoopBlocked
+        expr: nodejs_eventloop_lag_p99_seconds{job="api"} > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: 'Node.js event loop ค้าง (p99 เกิน 0.5 วินาที)'
+          description: 'lag = {{ $value | humanizeDuration }} — งานหนักใน process API (เช่น export รายงานใหญ่)'
+
+      - alert: QueueBacklog
+        expr: market_queue_jobs{state="waiting"} > 200
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: 'งานค้างใน queue {{ $labels.queue }} มาก'
+          description: 'รอ {{ $value }} งานนานเกิน 10 นาที — worker อาจหยุด (ดู `dc logs api | grep -i worker`)'
+
+      - alert: NotificationsFailing
+        expr: market_notifications_failed_last_hour > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: 'ส่งแจ้งเตือน (LINE/SMS) ไม่สำเร็จ {{ $value }} ข้อความใน 1 ชั่วโมง'
+          description: 'ตรวจเครดิต SMS / token LINE OA (runbook §4)'

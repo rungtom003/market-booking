@@ -51,13 +51,16 @@ const columns: GridColDef<AdminVendorListItem>[] = [
     field: 'status',
     headerName: 'สถานะ',
     width: 120,
-    renderCell: ({ value }) => (
-      <Chip
-        size="small"
-        label={VENDOR_STATUS_TH[value as VendorStatus]}
-        color={VENDOR_STATUS_COLOR[value as VendorStatus]}
-      />
-    ),
+    renderCell: ({ value, row }) =>
+      row.deletedAt ? (
+        <Chip size="small" variant="outlined" label="ลบข้อมูลแล้ว" />
+      ) : (
+        <Chip
+          size="small"
+          label={VENDOR_STATUS_TH[value as VendorStatus]}
+          color={VENDOR_STATUS_COLOR[value as VendorStatus]}
+        />
+      ),
   },
   {
     field: 'createdAt',

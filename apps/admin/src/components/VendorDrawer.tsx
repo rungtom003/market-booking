@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Permission, hasPermission } from '@market-booking/shared';
 import type { AdminVendorDetail } from '@market-booking/shared';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
@@ -18,8 +19,9 @@ import Typography from '@mui/material/Typography';
 import { adminApi } from '../api/admin';
 import { errorMessage } from '../lib/errors';
 import { VENDOR_STATUS_COLOR, VENDOR_STATUS_TH, formatDateTime, formatPhone } from '../lib/format';
+import { useAdmin } from '../lib/session';
 
-type DialogKind = 'reject' | 'suspend' | null;
+type DialogKind = 'reject' | 'suspend' | 'erase' | null;
 
 /** รายละเอียดผู้ค้า + รูป + ปุ่มอนุมัติ/ปฏิเสธ/ระงับ (ปุ่มที่แสดงตามสถานะปัจจุบัน — §8.1) */
 export function VendorDrawer({
@@ -32,6 +34,7 @@ export function VendorDrawer({
   onChanged: (message: string) => void;
 }) {
   const queryClient = useQueryClient();
+  const canErase = hasPermission(useAdmin().role, Permission.VENDOR_DATA_ERASE);
   const [dialog, setDialog] = useState<DialogKind>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -52,6 +55,20 @@ export function VendorDrawer({
       onChanged(`${vendor.firstName} ${vendor.lastName}: ${VENDOR_STATUS_TH[vendor.status]}`);
     },
     onError: (e) => setError(errorMessage(e)),
+  });
+  const erase = useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason: string }) =>
+      adminApi.vendors.erase(id, reason),
+    onSuccess: () => {
+      setDialog(null);
+      setError(null);
+      void queryClient.invalidateQueries({ queryKey: ['vendors'] });
+      onChanged('ลบข้อมูลส่วนบุคคลของผู้ค้าแล้ว');
+    },
+    onError: (e) => {
+      setDialog(null);
+      setError(errorMessage(e));
+    },
   });
 
   const v = detail.data;
@@ -96,6 +113,12 @@ export function VendorDrawer({
             {v.rejectReason && (
               <Alert severity="error">เหตุผลที่ไม่อนุมัติ: {v.rejectReason}</Alert>
             )}
+            {v.deletedAt && (
+              <Alert severity="info">
+                ลบข้อมูลส่วนบุคคลแล้วเมื่อ {formatDateTime(v.deletedAt)} (PDPA) —
+                เก็บไว้เฉพาะประวัติการจอง/ยอดชำระ
+              </Alert>
+            )}
             {v.suspendedUntil && (
               <Alert severity="warning">ระงับถึง {formatDateTime(v.suspendedUntil)}</Alert>
             )}
@@ -107,7 +130,7 @@ export function VendorDrawer({
 
             {error && <Alert severity="error">{error}</Alert>}
             <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
-              {v.status === 'PENDING' && (
+              {v.status === 'PENDING' && !v.deletedAt && (
                 <>
                   <Button
                     variant="contained"
@@ -121,12 +144,12 @@ export function VendorDrawer({
                   </Button>
                 </>
               )}
-              {v.status === 'APPROVED' && (
+              {v.status === 'APPROVED' && !v.deletedAt && (
                 <Button variant="outlined" color="warning" onClick={() => setDialog('suspend')}>
                   ระงับ
                 </Button>
               )}
-              {v.status === 'SUSPENDED' && (
+              {v.status === 'SUSPENDED' && !v.deletedAt && (
                 <Button
                   variant="contained"
                   loading={action.isPending}
@@ -135,8 +158,23 @@ export function VendorDrawer({
                   ยกเลิกการระงับ
                 </Button>
               )}
+              {canErase && !v.deletedAt && (
+                <Button color="error" onClick={() => setDialog('erase')}>
+                  ลบข้อมูลตามคำขอ (PDPA)
+                </Button>
+              )}
               <Button onClick={onClose}>ปิด</Button>
             </Stack>
+            <ReasonDialog
+              open={dialog === 'erase'}
+              title="ลบข้อมูลส่วนบุคคลของผู้ค้า"
+              submitLabel="ยืนยันลบ (ย้อนกลับไม่ได้)"
+              reasonLabel="ได้รับคำขอทางไหน / เมื่อไร"
+              reasonHelp="ชื่อ เบอร์ ที่อยู่ รูป และการผูก LINE จะถูกลบ — ลง audit log (ต้องไม่มีการจองที่ยังไม่ถึงวันขาย)"
+              loading={erase.isPending}
+              onClose={() => setDialog(null)}
+              onSubmit={({ reason }) => erase.mutate({ id: v.id, reason })}
+            />
 
             <ReasonDialog
               open={dialog === 'reject'}
@@ -214,6 +252,8 @@ function ReasonDialog({
   submitLabel,
   withUntil,
   reasonOptional,
+  reasonLabel,
+  reasonHelp,
   loading,
   onClose,
   onSubmit,
@@ -223,6 +263,8 @@ function ReasonDialog({
   submitLabel: string;
   withUntil?: boolean;
   reasonOptional?: boolean;
+  reasonLabel?: string;
+  reasonHelp?: string;
   loading: boolean;
   onClose: () => void;
   onSubmit: (values: { reason: string; until?: string }) => void;
@@ -251,14 +293,17 @@ function ReasonDialog({
           />
         )}
         <TextField
-          label={reasonOptional ? 'เหตุผล (ไม่บังคับ)' : 'เหตุผล'}
+          label={reasonLabel ?? (reasonOptional ? 'เหตุผล (ไม่บังคับ)' : 'เหตุผล')}
           fullWidth
           multiline
           minRows={3}
           margin="normal"
           value={reason}
           onChange={(e) => setReason(e.target.value)}
-          helperText={reasonOptional ? undefined : 'ผู้ค้าจะเห็นเหตุผลนี้ (อย่างน้อย 3 ตัวอักษร)'}
+          helperText={
+            reasonHelp ??
+            (reasonOptional ? undefined : 'ผู้ค้าจะเห็นเหตุผลนี้ (อย่างน้อย 3 ตัวอักษร)')
+          }
         />
       </DialogContent>
       <DialogActions>

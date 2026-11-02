@@ -143,6 +143,12 @@ export function RoundDetailPage() {
           <Typography component="dd" sx={{ m: 0 }}>
             {r.maxStallsPerVendor} ล็อค ต่อวันขาย
           </Typography>
+          <Typography component="dt" color="text.secondary">
+            Waiting Room
+          </Typography>
+          <Typography component="dd" sx={{ m: 0 }}>
+            {r.waitingRoomCapacity === null ? 'ไม่ใช้' : <WaitingRoomLive round={r} />}
+          </Typography>
         </Box>
         <Stack direction="row" spacing={1} sx={{ mt: 2, flexWrap: 'wrap', gap: 1 }}>
           {!cancelled && (
@@ -342,6 +348,28 @@ export function RoundDetailPage() {
         </Dialog>
       )}
     </Stack>
+  );
+}
+
+/** ในหน้าจองพร้อมกันได้ N คน + ตัวเลขสดระหว่างรอบเปิด (ถามทุก 5 วินาที) */
+function WaitingRoomLive({ round }: { round: RoundDetail }) {
+  const live = round.status === 'PUBLISHED' && round.phase !== 'CLOSED';
+  const stats = useQuery({
+    queryKey: ['round-waiting-room', round.id],
+    queryFn: () => adminApi.rounds.waitingRoom(round.id),
+    enabled: live,
+    refetchInterval: 5_000,
+  });
+  return (
+    <>
+      ในหน้าจองพร้อมกันได้ {round.waitingRoomCapacity?.toLocaleString('th-TH')} คน
+      {stats.data && (
+        <Box component="span" sx={{ color: 'text.secondary' }} aria-label="สถานะคิว">
+          {' '}
+          · ตอนนี้ในหน้าจอง {stats.data.admitted} · รอคิว {stats.data.waiting}
+        </Box>
+      )}
+    </>
   );
 }
 

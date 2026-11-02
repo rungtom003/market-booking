@@ -3,6 +3,7 @@ import { MarketSetupModule } from '../market-setup/market-setup.module';
 import { RoundModule } from '../round/round.module';
 import { SettingsModule } from '../settings/settings.module';
 import { VendorModule } from '../vendor/vendor.module';
+import { WaitingRoomModule } from '../waiting-room/waiting-room.module';
 import { BookingCoreModule } from './booking-core.module';
 import { BookingExpiryProcessor } from './booking-expiry.processor';
 import { BookingAdminController, BookingAdminDayController } from './booking-admin.controller';
@@ -12,7 +13,14 @@ import { BookingService } from './booking.service';
 
 /** การจองล็อค (4.1) + queue หมดเวลา (4.2) + จัดการการจองฝั่ง admin (4.5) — event อยู่ใน BookingCoreModule */
 @Module({
-  imports: [BookingCoreModule, MarketSetupModule, RoundModule, SettingsModule, VendorModule],
+  imports: [
+    BookingCoreModule,
+    MarketSetupModule,
+    RoundModule,
+    SettingsModule,
+    VendorModule,
+    WaitingRoomModule,
+  ],
   controllers: [BookingController, BookingAdminController, BookingAdminDayController],
   providers: [BookingService, BookingAdminService, BookingExpiryProcessor],
   exports: [BookingCoreModule],

@@ -206,6 +206,8 @@ model Vendor {
   /// ใช้กับระบบ No-show
   suspendedUntil    DateTime?    @map("suspended_until") @db.Timestamptz(6)
   noshowCount       Int          @default(0) @map("noshow_count")
+  /// ลบข้อมูลส่วนบุคคลแล้ว (PDPA, Phase 11.3) — ชื่อ/เบอร์/ที่อยู่เป็นค่าแทน, รูปถูกลบ
+  deletedAt         DateTime?    @map("deleted_at") @db.Timestamptz(6)
   createdAt         DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt         DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -249,18 +251,20 @@ model AdminUser {
 // ───────────────────────────── Rounds ─────────────────────────────
 
 model BookingRound {
-  id                 String      @id @default(uuid(7)) @db.Uuid
-  marketId           String      @map("market_id") @db.Uuid
-  name               String      @db.VarChar(200)
-  openAt             DateTime    @map("open_at") @db.Timestamptz(6)
-  closeAt            DateTime    @map("close_at") @db.Timestamptz(6)
+  id                  String      @id @default(uuid(7)) @db.Uuid
+  marketId            String      @map("market_id") @db.Uuid
+  name                String      @db.VarChar(200)
+  openAt              DateTime    @map("open_at") @db.Timestamptz(6)
+  closeAt             DateTime    @map("close_at") @db.Timestamptz(6)
   /// ต่อ 1 วันขาย
-  maxStallsPerVendor Int         @map("max_stalls_per_vendor")
+  maxStallsPerVendor  Int         @map("max_stalls_per_vendor")
+  /// Waiting Room: จำนวนผู้ค้าในหน้าจองพร้อมกัน — null = ไม่ใช้ (Phase 11.1)
+  waitingRoomCapacity Int?        @map("waiting_room_capacity")
   /// สถานะเปิด/ปิดจองไม่เก็บ — คำนวณจาก PUBLISHED + เวลา server (§7.1)
-  status             RoundStatus @default(DRAFT)
-  createdById        String      @map("created_by") @db.Uuid
-  createdAt          DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt          DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
+  status              RoundStatus @default(DRAFT)
+  createdById         String      @map("created_by") @db.Uuid
+  createdAt           DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   market     Market      @relation(fields: [marketId], references: [id])
   createdBy  AdminUser   @relation("RoundCreatedBy", fields: [createdById], references: [id])
@@ -373,6 +377,12 @@ model Payment {
   method       String        @db.VarChar(20)
   amount       Decimal       @db.Decimal(10, 2)
   slipImageKey String?       @map("slip_image_key") @db.VarChar(255)
+  /// sha256 ของรูปสลิป — ตรวจรูปซ้ำ (Phase 11.2)
+  slipHash     String?       @map("slip_hash") @db.Char(64)
+  /// เลขอ้างอิงธุรกรรมจากผู้ให้บริการตรวจสลิป — unique กันสลิปเดียวใช้ 2 ครั้ง
+  slipTransRef String?       @unique @map("slip_trans_ref") @db.VarChar(40)
+  /// ผลตรวจอัตโนมัติ (SlipCheck ใน packages/shared) — null = ไม่ได้ตรวจ
+  slipCheck    String?       @map("slip_check") @db.VarChar(20)
   status       PaymentStatus @default(PENDING)
   verifiedById String?       @map("verified_by") @db.Uuid
   verifiedAt   DateTime?     @map("verified_at") @db.Timestamptz(6)
@@ -385,6 +395,7 @@ model Payment {
 
   @@index([bookingId])
   @@index([status, createdAt])
+  @@index([slipHash])
   @@map("payments")
 }
 

@@ -70,7 +70,49 @@ export interface BookingPaymentInfo {
   payments: PaymentRecord[];
 }
 
+/**
+ * ผลตรวจสลิปอัตโนมัติ (Phase 11.2) — ระบบตรวจรูปซ้ำเองเสมอ, ที่เหลือมาจากผู้ให้บริการ (SlipOK)
+ * null = ยังไม่ได้ตรวจ/ไม่มีผู้ให้บริการ (เจ้าหน้าที่ตรวจเอง)
+ */
+export const SlipCheck = {
+  VALID: 'VALID',
+  /** รูปเดียวกันหรือเลขอ้างอิงธุรกรรมเดียวกันเคยใช้ชำระแล้ว */
+  DUPLICATE: 'DUPLICATE',
+  AMOUNT_MISMATCH: 'AMOUNT_MISMATCH',
+  RECEIVER_MISMATCH: 'RECEIVER_MISMATCH',
+  /** QR บนสลิปหมดอายุ/ไม่มีรายการจริง */
+  NOT_FOUND: 'NOT_FOUND',
+  /** อ่าน QR บนรูปไม่ได้ / ไม่ใช่สลิป — ให้เจ้าหน้าที่ดู */
+  UNREADABLE: 'UNREADABLE',
+  /** ธนาคารยังไม่อัปเดตรายการ — ให้เจ้าหน้าที่ดู */
+  BANK_DELAY: 'BANK_DELAY',
+  /** ผู้ให้บริการขัดข้อง/โควตาหมด — ให้เจ้าหน้าที่ดู */
+  ERROR: 'ERROR',
+} as const;
+export type SlipCheck = (typeof SlipCheck)[keyof typeof SlipCheck];
+
+export const SLIP_CHECK_TH: Record<SlipCheck, string> = {
+  VALID: 'ระบบตรวจแล้ว: ถูกต้อง',
+  DUPLICATE: 'สลิปซ้ำ — เคยใช้ชำระแล้ว',
+  AMOUNT_MISMATCH: 'ยอดเงินบนสลิปไม่ตรงกับยอดที่ต้องชำระ',
+  RECEIVER_MISMATCH: 'โอนเข้าบัญชีที่ไม่ใช่ของตลาด',
+  NOT_FOUND: 'ไม่พบรายการโอนนี้ในระบบธนาคาร',
+  UNREADABLE: 'ระบบอ่าน QR บนสลิปไม่ได้ — กรุณาตรวจเอง',
+  BANK_DELAY: 'ธนาคารยังไม่อัปเดตรายการ — กรุณาตรวจเอง',
+  ERROR: 'ระบบตรวจสลิปขัดข้อง — กรุณาตรวจเอง',
+};
+
 export interface AdminPayment extends PaymentRecord {
+  /** ผลตรวจอัตโนมัติ (Phase 11.2) */
+  slipCheck: SlipCheck | null;
+  /** รูปสลิปเดียวกันเคยส่งมากับการชำระอื่น (ล่าสุด) — เตือนเจ้าหน้าที่ */
+  duplicateOf: {
+    paymentId: string;
+    status: PaymentStatus;
+    stallCode: string;
+    marketDate: string;
+    vendorName: string;
+  } | null;
   /** presigned GET อายุสั้น (สลิป) — เงินสด = null */
   slipUrl: string | null;
   verifiedByName: string | null;

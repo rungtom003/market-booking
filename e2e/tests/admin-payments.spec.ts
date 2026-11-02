@@ -23,12 +23,15 @@ async function adminLogin(page: Page) {
 
 const stall = (page: Page, code: string) => page.locator(`[data-stall-code="${code}"]`);
 
+const rnd = () => Math.floor(Math.random() * 256);
+
 /** อัปโหลดรูปสลิป (PNG เล็กๆ) แล้วกดส่ง */
 async function sendSlip(page: Page) {
   await page.getByLabel('รูปสลิป').setInputFiles({
     name: 'slip.png',
     mimeType: 'image/png',
-    buffer: makePng(40, 60, [30, 120, 200]),
+    // สีสุ่ม = รูปไม่ซ้ำกับสลิปที่เคยอนุมัติ (ระบบปฏิเสธรูปสลิปซ้ำเอง — Phase 11.2)
+    buffer: makePng(40, 60, [rnd(), rnd(), rnd()]),
   });
   await expect(page.getByText('อัปโหลดแล้ว')).toBeVisible();
   await page.getByRole('button', { name: 'ส่งสลิป' }).click();

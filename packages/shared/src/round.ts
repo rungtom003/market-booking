@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { waitingRoomCapacitySchema } from './waiting-room.js';
 import { RoundPhase, RoundStatus } from './enums.js';
 import { priceSchema } from './market.js';
 
@@ -44,6 +45,8 @@ const roundFields = {
     .int('ต้องเป็นจำนวนเต็ม')
     .min(1, 'อย่างน้อย 1 ล็อค')
     .max(50, 'ไม่เกิน 50 ล็อค'),
+  /** Waiting Room: จำนวนผู้ค้าในหน้าจองพร้อมกัน — null = ไม่ใช้ (Phase 11.1) */
+  waitingRoomCapacity: waitingRoomCapacitySchema,
 };
 
 const closeAfterOpen = (v: { openAt?: string; closeAt?: string }) =>
@@ -52,7 +55,11 @@ const CLOSE_AFTER_OPEN = { path: ['closeAt'], message: 'เวลาปิดจ
 
 /** ไม่ระบุ `maxStallsPerVendor` = ใช้ setting `max_stalls_per_vendor_default` */
 export const createRoundSchema = z
-  .object({ ...roundFields, maxStallsPerVendor: roundFields.maxStallsPerVendor.optional() })
+  .object({
+    ...roundFields,
+    maxStallsPerVendor: roundFields.maxStallsPerVendor.optional(),
+    waitingRoomCapacity: roundFields.waitingRoomCapacity.default(null),
+  })
   .refine(closeAfterOpen, CLOSE_AFTER_OPEN);
 export type CreateRoundInput = z.infer<typeof createRoundSchema>;
 
@@ -135,6 +142,8 @@ export interface Round {
   openAt: string;
   closeAt: string;
   maxStallsPerVendor: number;
+  /** null = ไม่ใช้ Waiting Room */
+  waitingRoomCapacity: number | null;
   status: RoundStatus;
   /** คำนวณจากเวลา server ตอนตอบ — `null` ถ้าไม่ใช่ PUBLISHED */
   phase: RoundPhase | null;
@@ -164,6 +173,8 @@ export interface CurrentRound {
   openAt: string;
   closeAt: string;
   maxStallsPerVendor: number;
+  /** ต้องเข้าคิว Waiting Room ก่อนจอง */
+  waitingRoom: boolean;
   phase: typeof RoundPhase.UPCOMING | typeof RoundPhase.OPEN;
   /** วันขายที่ไม่ถูกยกเลิก เรียงตามวันที่ */
   marketDays: { id: string; marketDate: string }[];
