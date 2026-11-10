@@ -86,8 +86,11 @@ export const priceSchema = z
   .number({ error: 'กรุณากรอกตัวเลข' })
   .min(0, 'ราคาต้องไม่ติดลบ')
   .max(1_000_000, 'ราคาสูงเกินไป');
-/** ตำแหน่ง/ขนาดบนผัง (px ของ canvas) */
-const canvasPosSchema = z.number({ error: 'กรุณากรอกตัวเลข' }).min(0).max(100_000);
+/**
+ * ตำแหน่ง/ขนาดบนผัง (px ของ canvas) — ตำแหน่งติดลบได้: จุด (0,0) เป็นแค่มุมของรูปแปลน
+ * ไม่ใช่ขอบผัง (Map Editor ลากชิ้นไปทางซ้าย/บนของจุดนี้ได้ ผู้ชมผังซูมให้พอดีทุกชิ้นเอง)
+ */
+const canvasPosSchema = z.number({ error: 'กรุณากรอกตัวเลข' }).min(-100_000).max(100_000);
 const canvasSizeSchema = z.number({ error: 'กรุณากรอกตัวเลข' }).min(1).max(10_000);
 
 export const stallFields = {

@@ -86,8 +86,6 @@ export function docFromLayout(layout: AdminMapLayout): EditorDoc {
 }
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
-/** API ไม่รับตำแหน่งติดลบ */
-const pos = (n: number) => Math.max(0, r2(n));
 
 export function toSaveInput(doc: EditorDoc, version: number): SaveMapLayoutInput {
   return {
@@ -96,8 +94,8 @@ export function toSaveInput(doc: EditorDoc, version: number): SaveMapLayoutInput
       .filter((s) => !s.isNew)
       .map((s) => ({
         id: s.key,
-        posX: pos(s.posX),
-        posY: pos(s.posY),
+        posX: r2(s.posX),
+        posY: r2(s.posY),
         shapeW: r2(s.w),
         shapeH: r2(s.h),
         rot: r2(s.rot),
@@ -110,8 +108,8 @@ export function toSaveInput(doc: EditorDoc, version: number): SaveMapLayoutInput
         widthM: s.widthM,
         lengthM: s.lengthM,
         price: s.price,
-        posX: pos(s.posX),
-        posY: pos(s.posY),
+        posX: r2(s.posX),
+        posY: r2(s.posY),
         shapeW: r2(s.w),
         shapeH: r2(s.h),
         rot: r2(s.rot),
@@ -121,8 +119,8 @@ export function toSaveInput(doc: EditorDoc, version: number): SaveMapLayoutInput
       ...(f.key.startsWith('new:') ? {} : { id: f.key }),
       kind: f.kind,
       label: f.label?.trim() || null,
-      posX: pos(f.posX),
-      posY: pos(f.posY),
+      posX: r2(f.posX),
+      posY: r2(f.posY),
       width: r2(f.w),
       height: r2(f.h),
       rot: r2(f.rot),

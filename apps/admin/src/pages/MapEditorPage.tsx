@@ -151,8 +151,8 @@ function Inspector({
           <Alert severity="info">ล็อคนี้ปิดใช้งาน — ผู้ค้าไม่เห็นบนผัง</Alert>
         )}
         <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1 }}>
-          <NumberField label="X" value={one.posX} min={0} onCommit={(v) => box({ posX: v })} />
-          <NumberField label="Y" value={one.posY} min={0} onCommit={(v) => box({ posY: v })} />
+          <NumberField label="X" value={one.posX} onCommit={(v) => box({ posX: v })} />
+          <NumberField label="Y" value={one.posY} onCommit={(v) => box({ posY: v })} />
           <NumberField label="กว้าง" value={one.w} min={1} onCommit={(v) => box({ w: v })} />
           <NumberField label="สูง" value={one.h} min={1} onCommit={(v) => box({ h: v })} />
           <NumberField label="หมุน (องศา)" value={one.rot} onCommit={(v) => box({ rot: v })} />
@@ -341,8 +341,8 @@ export function MapEditorPage() {
       type: 'feature',
       kind,
       label: kind === 'LABEL' ? 'ข้อความ' : null,
-      posX: Math.max(0, snapTo(c.x - size.w / 2, snap ? grid : 0)),
-      posY: Math.max(0, snapTo(c.y - size.h / 2, snap ? grid : 0)),
+      posX: snapTo(c.x - size.w / 2, snap ? grid : 0),
+      posY: snapTo(c.y - size.h / 2, snap ? grid : 0),
       w: size.w,
       h: size.h,
       rot: 0,
@@ -404,7 +404,7 @@ export function MapEditorPage() {
       const updates = new Map<string, Partial<EditorItem>>();
       for (const i of itemsOf(history.present)) {
         if (selected.has(i.key)) {
-          updates.set(i.key, { posX: Math.max(0, i.posX + dx), posY: Math.max(0, i.posY + dy) });
+          updates.set(i.key, { posX: i.posX + dx, posY: i.posY + dy });
         }
       }
       history.commit((d) => updateItems(d, updates));

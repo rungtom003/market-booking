@@ -356,9 +356,6 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
       posX = snapTo(posX, grid);
       posY = snapTo(posY, grid);
     }
-    // API ไม่รับตำแหน่งติดลบ — ดันกลับเข้าผังตั้งแต่ตอนวาง ไม่ใช่ไปถูกตัดเงียบๆ ตอนบันทึก
-    posX = Math.max(0, posX);
-    posY = Math.max(0, posY);
     node.position({ x: posX + w / 2, y: posY + h / 2 });
     return { posX, posY, w, h, rot: Math.round(node.rotation() * 100) / 100 };
   };
