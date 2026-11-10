@@ -222,7 +222,8 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
   const [marquee, setMarquee] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(
     null,
   );
-  const dragStart = useRef(new Map<string, { x: number; y: number }>());
+  /** key ของทุกชิ้นที่กำลังลาก (ว่าง = ไม่ได้ลาก) */
+  const dragging = useRef<string[]>([]);
   const fitted = useRef(false);
   const image = useImage(doc.background?.url);
   const items = itemsOf(doc);
@@ -355,46 +356,42 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
       posX = snapTo(posX, grid);
       posY = snapTo(posY, grid);
     }
+    // API ไม่รับตำแหน่งติดลบ — ดันกลับเข้าผังตั้งแต่ตอนวาง ไม่ใช่ไปถูกตัดเงียบๆ ตอนบันทึก
+    posX = Math.max(0, posX);
+    posY = Math.max(0, posY);
     node.position({ x: posX + w / 2, y: posY + h / 2 });
     return { posX, posY, w, h, rot: Math.round(node.rotation() * 100) / 100 };
   };
 
-  const onDragStart = (e: Konva.KonvaEventObject<DragEvent>, key: string) => {
-    const keys = selected.has(key) ? [...selected] : [key];
+  /**
+   * ชิ้นอื่นที่เลือกไว้ Transformer ของ Konva ลากตามให้เอง (มันเรียก startDrag ของชิ้นเหล่านั้น)
+   * — ห้ามขยับซ้ำเอง ไม่งั้นชิ้นอื่นเลื่อนเกินไปเท่าระยะ dragmove แรก ผังที่จัดไว้จะเบี้ยว
+   */
+  const onDragStart = (key: string) => {
+    // dragstart ของชิ้นที่ Transformer ลากตาม ไม่ใช่การลากใหม่
+    if (dragging.current.length > 0) return;
+    dragging.current = selected.has(key) ? [...selected] : [key];
     if (!selected.has(key)) onSelect(new Set([key]));
-    const stage = stageRef.current!;
-    dragStart.current = new Map(
-      keys.map((k) => {
-        const n = k === key ? e.target : nodeOf(stage, k);
-        return [k, { x: n?.x() ?? 0, y: n?.y() ?? 0 }];
-      }),
-    );
   };
 
-  const onDragMove = (e: Konva.KonvaEventObject<DragEvent>, key: string) => {
-    const start = dragStart.current.get(key);
-    if (!start) return;
-    const dx = e.target.x() - start.x;
-    const dy = e.target.y() - start.y;
-    const stage = stageRef.current!;
-    for (const [k, p] of dragStart.current) {
-      if (k === key) continue;
-      nodeOf(stage, k)?.position({ x: p.x + dx, y: p.y + dy });
-    }
-  };
-
+  /** ทุกชิ้นที่ลากส่ง dragend มา — บันทึกครั้งแรกครั้งเดียว (1 การลาก = 1 ขั้นของ undo) */
   const onDragEnd = () => {
+    if (dragging.current.length === 0) return;
     const stage = stageRef.current!;
     const updates = new Map<string, Box>();
-    for (const k of dragStart.current.keys()) {
+    for (const k of dragging.current) {
       const node = nodeOf(stage, k);
       const item = byKey.get(k);
       if (node && item) updates.set(k, boxOf(node, item, false));
     }
-    dragStart.current.clear();
+    dragging.current = [];
     onChange(updates);
   };
 
+  /**
+   * ผูกกับ Transformer (ยิงครั้งเดียว) ไม่ใช่กับแต่ละชิ้น — Konva ยิง transformend ให้ทุกชิ้นที่เลือก
+   * ครั้งที่สองเป็นต้นไปจะเห็น scale = 1 (รีเซ็ตแล้ว) กับขนาดเดิมจาก render ก่อน → ขนาดเด้งกลับและตำแหน่งเลื่อน
+   */
   const onTransformEnd = () => {
     const updates = new Map<string, Box>();
     for (const node of trRef.current?.nodes() ?? []) {
@@ -427,10 +424,8 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
           select(item.key, e.evt.shiftKey || e.evt.ctrlKey || e.evt.metaKey);
         }}
         onTap={() => select(item.key, false)}
-        onDragStart={(e) => onDragStart(e, item.key)}
-        onDragMove={(e) => onDragMove(e, item.key)}
+        onDragStart={() => onDragStart(item.key)}
         onDragEnd={onDragEnd}
-        onTransformEnd={onTransformEnd}
       >
         {item.type === 'stall' ? (
           <StallNode
@@ -537,6 +532,7 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
               rotationSnaps={[0, 45, 90, 135, 180, 225, 270, 315]}
               rotationSnapTolerance={6}
               ignoreStroke
+              onTransformEnd={onTransformEnd}
               boundBoxFunc={(oldBox, newBox) =>
                 Math.abs(newBox.width) < MIN_SIZE || Math.abs(newBox.height) < MIN_SIZE
                   ? oldBox
